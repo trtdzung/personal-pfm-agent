@@ -1149,6 +1149,44 @@ wheels = [
 ]
 
 [[package]]
+name = "personal-card-agent"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "deepagents" },
+    { name = "langchain" },
+    { name = "managed-deepagents" },
+]
+
+[package.optional-dependencies]
+notebook = [
+    { name = "deepagents" },
+    { name = "ipykernel" },
+    { name = "langgraph-sdk" },
+    { name = "python-dotenv" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "deepagents" },
+    { name = "deepagents", marker = "extra == 'notebook'" },
+    { name = "ipykernel", marker = "extra == 'notebook'" },
+    { name = "langchain" },
+    { name = "langgraph-sdk", marker = "extra == 'notebook'" },
+    { name = "managed-deepagents" },
+    { name = "python-dotenv", marker = "extra == 'notebook'" },
+]
+provides-extras = ["notebook"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest" }]
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1574,44 +1612,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/f3/61/d7545dafb7ac2230c
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl", hash = "sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06", size = 54481, upload-time = "2023-05-01T04:11:28.427Z" },
 ]
-
-[[package]]
-name = "research-assistant"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "deepagents" },
-    { name = "langchain" },
-    { name = "managed-deepagents" },
-]
-
-[package.optional-dependencies]
-notebook = [
-    { name = "deepagents" },
-    { name = "ipykernel" },
-    { name = "langgraph-sdk" },
-    { name = "python-dotenv" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "deepagents" },
-    { name = "deepagents", marker = "extra == 'notebook'" },
-    { name = "ipykernel", marker = "extra == 'notebook'" },
-    { name = "langchain" },
-    { name = "langgraph-sdk", marker = "extra == 'notebook'" },
-    { name = "managed-deepagents" },
-    { name = "python-dotenv", marker = "extra == 'notebook'" },
-]
-provides-extras = ["notebook"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest" }]
 
 [[package]]
 name = "six"
