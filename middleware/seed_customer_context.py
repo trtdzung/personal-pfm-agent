@@ -18,6 +18,9 @@ class SeedCustomerContext(AgentMiddleware):
     /memories/agent/customer_budgets.json instead.
     """
 
-    async def abefore_agent(self, state: AgentState, runtime: Runtime) -> dict:
+    def before_agent(self, state: AgentState, runtime: Runtime) -> dict:
         content = CUSTOMER_DATA_PATH.read_text(encoding="utf-8")
         return {"files": {SESSION_FILE_PATH: create_file_data(content)}}
+
+    async def abefore_agent(self, state: AgentState, runtime: Runtime) -> dict:
+        return self.before_agent(state, runtime)
