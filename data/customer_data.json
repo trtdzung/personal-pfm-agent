@@ -1,0 +1,68 @@
+{
+  "customer": {
+    "customer_id": "CUS-000482",
+    "full_name": "Test Customer",
+    "phone": "0901234567"
+  },
+  "chat_memory_example": {
+    "monthly_budget_vnd": 10000000
+  },
+  "cards": [
+    {
+      "card_id": "card_001",
+      "card_name": "Test Card",
+      "card_number_last4": "1234"
+    }
+  ],
+  "statements": [
+    {
+      "statement_id": "stmt_001"
+    }
+  ],
+  "monthly_spending_summary": {
+    "2026-01": {
+      "total_vnd": 3000000,
+      "transaction_count": 3,
+      "by_category_vnd": {
+        "Food": 1000000,
+        "Transport": 1000000,
+        "Shopping": 1000000
+      }
+    },
+    "2026-02": {
+      "total_vnd": 2000000,
+      "transaction_count": 2,
+      "by_category_vnd": {
+        "Food": 1000000,
+        "Transport": 1000000
+      }
+    }
+  },
+  "transactions": [
+    {
+      "date": "2026-01-05",
+      "amount_vnd": 1000000,
+      "category": "Food"
+    },
+    {
+      "date": "2026-01-10",
+      "amount_vnd": 1000000,
+      "category": "Transport"
+    },
+    {
+      "date": "2026-01-15",
+      "amount_vnd": 1000000,
+      "category": "Shopping"
+    },
+    {
+      "date": "2026-02-05",
+      "amount_vnd": 1000000,
+      "category": "Food"
+    },
+    {
+      "date": "2026-02-10",
+      "amount_vnd": 1000000,
+      "category": "Transport"
+    }
+  ]
+}
