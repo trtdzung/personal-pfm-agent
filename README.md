@@ -69,7 +69,7 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 
 ```
 .
-├── agent.py                 # define_deep_agent(): name, model, middleware, checkpointer
+├── agent.py                 # define_deep_agent(): name, model, middleware
 ├── instructions.md          # system prompt -> synced to Context Hub on deploy
 ├── identity.py              # who may call the deployment (LangSmith API key by default)
 ├── memory.py                # durable memory (on) — customer_budgets.json lives here

@@ -47,7 +47,8 @@ CHECKLIST_QUESTIONS = [
     "Tôi nên dùng thẻ tín dụng hay ghi nợ cho khoản chi 5 triệu này?",
     "Ngày sao kê và ngày đến hạn thanh toán của thẻ tôi là khi nào?",
     "Tôi có đang chi tiêu vượt ngân sách tháng này không?",
-    "Ngân sách của tôi là 15 triệu/tháng. Vậy tôi có đang chi tiêu vượt ngân sách tháng này không?",
+    "Ngân sách của tôi là 15 triệu/tháng.",
+    "Vậy tôi có đang chi tiêu vượt ngân sách tháng này không?",
     "Khoá thẻ của tôi giúp tôi.",
 ]
 THREAD_CONFIG = {"configurable": {"thread_id": "script-verify-1"}}

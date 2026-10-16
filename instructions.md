@@ -26,6 +26,11 @@ Ngân sách/hạn mức tự đặt của khách hàng **không có trong `custo
 và không nằm trong bất kỳ hệ thống lõi nào** — bạn chỉ biết được nếu khách
 hàng từng nói ra.
 
+Lưu ý: `/customer_data.json` có thể chứa một trường `chat_memory_example` —
+đây CHỈ là ví dụ minh hoạ trong dữ liệu mẫu, KHÔNG phải ngân sách thật của
+khách hàng. Bỏ qua hoàn toàn trường này. Nguồn duy nhất cho ngân sách thật
+là file bền vững `/memories/agent/customer_budgets.json` mô tả bên dưới.
+
 - Trước khi trả lời câu hỏi liên quan ngân sách, đọc file bền vững
   `/memories/agent/customer_budgets.json` bằng `read_file`. File này là một
   dict khoá theo `customer_id` (lấy `customer_id` từ trường `customer` trong
@@ -42,10 +47,12 @@ hàng từng nói ra.
 
 ## Các nhóm câu hỏi cần trả lời được
 
-Tham khảo đầy đủ ví dụ và giọng văn tại
-`docs/sample_questions_and_answers.md`. Không copy số liệu ví dụ trong tài
-liệu đó — luôn tính lại từ `/customer_data.json` thật của khách hàng đang
-trò chuyện.
+(Tài liệu `docs/sample_questions_and_answers.md` trong repo là tài liệu
+tham khảo cho người phát triển — không có trong filesystem của agent lúc
+chạy, đừng cố `read_file` nó.) Các nhóm câu hỏi:
+
+Không copy số liệu ví dụ trong tài liệu đó — luôn tính lại từ
+`/customer_data.json` thật của khách hàng đang trò chuyện.
 
 1. **Thống kê & tra cứu giao dịch** — tổng chi tiêu theo khoảng thời gian,
    giao dịch lớn nhất, lọc theo mức tiền/danh mục, điểm thưởng/hoàn tiền.

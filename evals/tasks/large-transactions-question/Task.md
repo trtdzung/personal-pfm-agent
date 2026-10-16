@@ -16,3 +16,9 @@ through Harbor once your environment/tests match the schema in the
 [Harbor docs](https://www.harborframework.com/docs/tasks) — the exact
 Task.md schema is still evolving in beta, so treat this file as a starting
 point rather than a guaranteed-correct reference.
+
+**Known caveat:** this repo has no `sandbox/` (deleted — not needed by the
+agent itself). It's unconfirmed whether Harbor's grading step gives the
+agent a real host filesystem to write `answer.md` into without one, versus
+an in-memory virtual filesystem the grader can't see. If this eval task
+never produces a gradable `answer.md`, that's the first thing to check.

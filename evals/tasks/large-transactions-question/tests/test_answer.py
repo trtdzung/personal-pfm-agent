@@ -14,5 +14,6 @@ def test_answer_lists_all_large_july_transactions():
     for merchant in EXPECTED_MERCHANTS:
         assert merchant in text, f"expected answer.md to mention {merchant}"
 
-    # A smaller July transaction that must NOT be listed as if it were > 2tr.
-    assert "Pizza Hut" not in text
+    # A July transaction close to but under the threshold — a meaningful
+    # near-miss check, unlike a transaction far below the threshold.
+    assert "Sushi Tokyo" not in text
