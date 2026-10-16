@@ -1,0 +1,4 @@
+deepagents==0.7.11
+langchain-openai==1.6.0
+fastapi==0.141.1
+uvicorn==0.52.4

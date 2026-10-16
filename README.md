@@ -34,6 +34,36 @@ uv sync
 #    edit .env and set OPENAI_API_KEY and LANGSMITH_API_KEY
 ```
 
+## Testing
+
+```bash
+uv run --group dev pytest tests/ -v
+```
+
+Runs the full suite (agent config, `instructions.md` content, packaging,
+`data/customer_data.json` arithmetic, `text_utils.py`) except
+`tests/test_server.py` — that file needs `fastapi`/`httpx`, which are
+deliberately **not** part of this project's `uv` environment (the
+self-hosted server below is meant to stay isolated from
+`pyproject.toml`/`uv`). `tests/conftest.py` auto-skips it here when
+`fastapi` isn't importable, so the command above still runs cleanly.
+
+To run `tests/test_server.py` itself, use a plain `pip` environment with
+`requirements.txt` (same one the Docker image installs):
+
+```bash
+python -m venv .venv-server
+.venv-server/Scripts/pip install -r requirements.txt pytest httpx   # Windows
+# .venv-server/bin/pip install -r requirements.txt pytest httpx     # macOS/Linux
+
+OPENAI_API_KEY=sk-any-value-here SERVER_API_KEY=test-key .venv-server/Scripts/pytest tests/test_server.py -v
+```
+
+(`OPENAI_API_KEY` just needs to be *present* to satisfy `ChatOpenAI`'s
+constructor — these tests never make a real API call, they swap in a fake
+model. `SERVER_API_KEY` can be any string; it only needs to match what the
+tests send back in the `X-API-Key` header.)
+
 ## Run locally
 
 ```bash
@@ -55,6 +85,50 @@ jupyter notebook notebooks/try_agent.ipynb
 invoke with the OSS `deepagents` library (no `mda` server needed), and a
 call to the real managed agent via a locally running `mda dev .`.
 
+## Self-hosted server (independent of `mda dev`)
+
+`server.py` is a separate, independent deployment path: a plain FastAPI app
+built directly on the OSS `deepagents` library (not `managed_deepagents`),
+so it can run anywhere Docker runs -- no LangSmith account or `mda` CLI
+needed. It shares this repo's `instructions.md` and `middleware/` with the
+main agent, but is otherwise fully isolated: it has its own
+`requirements.txt` (plain `pip`, no `uv`/`pyproject.toml` involvement) and
+its own `Dockerfile`.
+
+**Required environment variables** (the container refuses to start without
+`SERVER_API_KEY`; it crash-loops on the first request without a working
+`OPENAI_API_KEY`):
+
+- `OPENAI_API_KEY` -- passed straight through to `ChatOpenAI`
+- `SERVER_API_KEY` -- shared secret; every `POST /chat` request must send
+  it back in the `X-API-Key` header, or the request is rejected with 401
+
+**Run locally with Docker:**
+
+```bash
+docker build -t personal-card-agent-server .
+docker run -p 8000:8000 \
+    -e OPENAI_API_KEY=sk-... \
+    -e SERVER_API_KEY=choose-a-secret \
+    personal-card-agent-server
+```
+
+**Endpoints:**
+
+- `GET /health` -- no auth, returns `{"status": "ok"}`
+- `POST /chat` -- requires `X-API-Key` header, body
+  `{"message": str, "thread_id": str | null}`, returns
+  `{"answer": str, "thread_id": str}`
+
+**Known limitation:** `thread_id` is accepted and threaded through to the
+agent, but this server has no persistent memory backend wired in yet --
+each request is effectively stateless regardless of `thread_id`. This is a
+deliberate, documented placeholder for a future memory backend, not a bug.
+
+CI (`.github/workflows/docker-build.yml`) runs the server's tests, builds
+the image, and pushes it to `ghcr.io/<owner>/personal-card-agent` on every
+push to `master` (pull requests build and smoke-test only, never push).
+
 ## Deploy
 
 ```bash
@@ -73,11 +147,14 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── instructions.md          # system prompt -> synced to Context Hub on deploy
 ├── identity.py              # who may call the deployment (LangSmith API key by default)
 ├── memory.py                # durable memory (on) — customer_budgets.json lives here
+├── text_utils.py             # extract_final_text() shared by notebook, script, server.py
 ├── pyproject.toml           # dependencies + packaging (includes data/customer_data.json)
 ├── .env                     # OPENAI_API_KEY / LANGSMITH_API_KEY (never committed)
 │
 ├── data/
 │   └── customer_data.json   # sample customer data, re-read into every session
+├── skills/                    # empty — no on-demand skill docs yet, ready for future ones
+├── tools/                     # empty — agent uses only built-in filesystem tools, no custom ones yet
 ├── middleware/
 │   ├── audit.py              # wrap_tool_call middleware that logs every tool call
 │   └── seed_customer_context.py  # before_agent hook that seeds /customer_data.json
@@ -87,12 +164,23 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 │   └── slack.py               # Slack channel stub (needs a real Slack app to work)
 ├── schedules/
 │   └── example.py             # daily cron-triggered run
-├── sandbox/                   # deleted — not used by this agent
+├── sandbox/
+│   └── __init__.py            # presence opts into the managed sandbox (code execution) on deploy
 │
 ├── evals/
 │   └── tasks/                 # Harbor eval tasks, incl. card-agent question checks
-└── notebooks/
-    └── try_agent.ipynb        # run the agent interactively, locally or via `mda dev`
+├── notebooks/
+│   └── try_agent.ipynb        # run the agent interactively, locally or via `mda dev`
+├── tests/
+│   ├── conftest.py            # sys.path fix + skips test_server.py when fastapi is absent
+│   └── test_server.py         # server.py's tests — see "Testing" above for how to run these
+│
+├── server.py                 # self-hosted FastAPI app — see "Self-hosted server" below
+├── requirements.txt          # server.py's own pip-only dependency list (no uv/pyproject.toml)
+├── Dockerfile                 # packages server.py for self-hosting
+├── .dockerignore
+└── .github/workflows/
+    └── docker-build.yml       # test -> build -> smoke-test -> push server.py's image to GHCR
 ```
 
 Notes:
@@ -101,8 +189,13 @@ Notes:
   **not** referenced from `agent.py` — they're illustrative. Wire a
   connector's tools into `agent.py`'s `tools=[...]` once you want the agent
   to actually use it.
-- Delete `memory.py`, `channels/`, `schedules/`, `connectors/`, or `evals/`
-  entirely if you don't need them — they're all opt-in by presence.
+- Delete `memory.py`, `channels/`, `schedules/`, `connectors/`, `tools/`,
+  `skills/`, `sandbox/`, or `evals/` entirely if you don't need them —
+  they're all opt-in by presence. `tools/` and `skills/` are currently
+  empty on purpose (this agent only uses the built-in filesystem tools —
+  see the design spec's "no hardcoded logic" constraint); `sandbox/`'s
+  mere presence turns on the managed code-execution sandbox at deploy
+  time, whether or not anything inside it does anything.
 - `harbor-job.json` isn't checked in here: it's generated by
   `mda evals compile` (run automatically as part of the Harbor eval
   workflow) under `.mda/evals/`, not something you hand-write.
