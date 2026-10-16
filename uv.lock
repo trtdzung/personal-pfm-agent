@@ -1580,6 +1580,7 @@ name = "research-assistant"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "deepagents" },
     { name = "langchain" },
     { name = "managed-deepagents" },
 ]
@@ -1599,6 +1600,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "deepagents" },
     { name = "deepagents", marker = "extra == 'notebook'" },
     { name = "ipykernel", marker = "extra == 'notebook'" },
     { name = "langchain" },
