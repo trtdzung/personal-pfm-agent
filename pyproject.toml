@@ -13,6 +13,7 @@ dependencies = [
 notebook = [
     "deepagents",
     "langgraph-sdk",
+    "langchain-openai",
     "python-dotenv",
     "ipykernel",
 ]
