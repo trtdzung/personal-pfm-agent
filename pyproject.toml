@@ -8,6 +8,14 @@ dependencies = [
     "langchain",
 ]
 
+[project.optional-dependencies]
+notebook = [
+    "deepagents",
+    "langgraph-sdk",
+    "python-dotenv",
+    "ipykernel",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

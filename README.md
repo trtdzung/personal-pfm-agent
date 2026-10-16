@@ -40,6 +40,17 @@ This compiles the project, loads `.env`, starts a local Agent Server, and
 opens LangSmith Studio so you can chat with the agent and inspect tool
 calls. Try asking: *"What is LangChain Managed Deep Agents?"*
 
+## Try it in a notebook
+
+```bash
+uv sync --extra notebook
+jupyter notebook notebooks/try_agent.ipynb
+```
+
+`notebooks/try_agent.ipynb` has two ways to run the agent: a quick local
+invoke with the OSS `deepagents` library (no `mda` server needed), and a
+call to the real managed agent via a locally running `mda dev .`.
+
 ## Deploy
 
 ```bash
@@ -76,8 +87,10 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── sandbox/
 │   └── __init__.py           # presence of this package opts into the managed sandbox
 │
-└── evals/
-    └── tasks/example-task/   # minimal Harbor eval task (instruction, environment, tests)
+├── evals/
+│   └── tasks/example-task/   # minimal Harbor eval task (instruction, environment, tests)
+└── notebooks/
+    └── try_agent.ipynb       # run the agent interactively, locally or via `mda dev`
 ```
 
 Notes:
