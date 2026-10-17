@@ -1,9 +1,29 @@
 ---
 name: spending-jar
-description: Dùng khi nên gợi ý khách hàng tạo mới hoặc chỉnh sửa 1 "hũ chi tiêu" (spending jar) — phân bổ ngân sách theo danh mục/mục tiêu (ví dụ "tạo hũ ăn uống 3 triệu/tháng", "phân bổ chi tiêu theo rule 50/30/20", "đổi hũ tiết kiệm lên 5 triệu"). KHÔNG dùng để thực hiện thao tác tạo/sửa hũ thật — chỉ đề xuất, khách hàng tự xác nhận.
+description: Dùng khi nên gợi ý khách hàng tạo mới hoặc chỉnh sửa 1 "hũ chi tiêu" (spending jar) — phân bổ ngân sách theo danh mục/mục tiêu (ví dụ "tạo hũ ăn uống 3 triệu/tháng", "phân bổ chi tiêu theo rule 50/30/20", "tăng hũ giải trí lên 800 nghìn"). Đây là 1 tag ngân sách nội bộ do khách hàng tự đặt tên, KHÔNG phải sổ/tài khoản tiết kiệm thật của ngân hàng. Skill này CHÍNH LÀ cách xử lý những câu hỏi dạng "tạo giúp tôi...", "tăng... giúp tôi" — dùng skill để đề xuất, đừng từ chối. KHÔNG dùng để thực hiện thao tác tạo/sửa hũ thật — chỉ đề xuất, khách hàng tự xác nhận.
 ---
 
 # Spending jar (hũ chi tiêu — chỉ hiển thị, không thực thi)
+
+## QUAN TRỌNG NHẤT — đọc trước tất cả
+
+**"Hũ chi tiêu" KHÔNG phải sản phẩm ngân hàng thật.** Đây chỉ là 1 tag
+phân bổ ngân sách nội bộ do chính khách hàng đặt tên trong app PFM —
+**hoàn toàn khác** với "sổ tiết kiệm"/"tài khoản tiết kiệm" (1 sản phẩm
+ngân hàng thật, có lãi suất/kỳ hạn, phải mở tại quầy hoặc app ngân hàng
+riêng). Kể cả khi tên 1 hũ chứa chữ "tiết kiệm" (ví dụ hũ "Tiết kiệm khẩn
+cấp" — chỉ là tên khách hàng tự đặt cho 1 mục ngân sách), **đừng suy diễn
+đây là yêu cầu mở/thay đổi 1 sản phẩm ngân hàng thật**.
+
+**Đề xuất `create_jar`/`edit_jar` an toàn tuyệt đối, không phải "hành động
+thật":** chèn khối `ui-json` theo skill này **không khác gì** việc bạn
+viết ra 1 câu trả lời text hay 1 bảng số liệu — bạn không tạo/sửa/gửi bất
+kỳ thứ gì tới hệ thống ngân hàng thật khi làm việc này (xem thêm nguyên
+tắc chung ở đầu `instructions.md`). Khi câu hỏi khớp mô tả skill này (ví
+dụ "tạo giúp tôi hũ...", "tăng hũ... lên..."), đây **chính xác** là lúc
+nên dùng skill — **đừng từ chối, và đừng chỉ trả lời bằng text rồi bỏ qua
+bước chèn khối `ui-json`** (nếu bạn đã tính đủ số liệu để đề xuất, PHẢI
+chèn khối này, không được dừng ở text).
 
 ## Phạm vi hiện tại — QUAN TRỌNG, đọc trước khi dùng skill này
 

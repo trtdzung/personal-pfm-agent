@@ -407,14 +407,52 @@ mua sắm hợp lý mỗi tháng." (3 thread mới, cô lập) sau khi sửa →
 đều trả về đúng `create_jar`**, không còn từ chối. 67/67 test pass
 (`uv run --group dev pytest tests/`).
 
-**Lưu ý còn treo:** đây là fix làm **giảm tần suất**, không đảm bảo 100%
-(bản chất skill-based không có gì enforce cứng, giống mọi non-determinism
-khác đã biết ở chart/transfer_form). Nếu sau này vẫn thấy từ chối tái diễn
-thường xuyên dù đã có ngoại lệ này, cân nhắc: (a) làm rõ hơn nữa ngay trong
-từng `SKILL.md` (nhắc lại "đây không phải hành động thật" ngay đầu file,
-không chỉ dựa vào `instructions.md`), hoặc (b) test với nhiều cách diễn đạt
-câu hỏi khác nhau (ra lệnh trực tiếp vs hỏi tư vấn) để xem cách nào dễ bị
-từ chối hơn.
+**Lưu ý còn treo (đã cập nhật — xem vòng fix thứ 2 bên dưới):** ~~đây là fix
+làm giảm tần suất, không đảm bảo 100%~~.
+
+**Vòng fix thứ 2 (2026-09-09, sau khi bạn test lại trên endpoint thật và
+báo vẫn từ chối cả 2 câu):** fix vòng 1 ở trên (chỉ thêm 1 đoạn "Ngoại lệ
+quan trọng") không đủ mạnh — bạn test lại `create_jar` thì agent chịu tính
+số đúng nhưng vẫn nói "ngoài phạm vi hỗ trợ" và bỏ qua khối `ui-json`
+(`ui: null`); `edit_jar` thì từ chối hoàn toàn, không tính gì, bảo dùng app
+MSB. Viết lại prompt/skill mạnh hơn:
+
+- `instructions.md`: viết lại hẳn đoạn mở đầu — gộp rule "không tự thực
+  hiện hành động thật" với 1 đoạn **BẮT BUỘC ĐỌC** nêu rõ nguyên tắc áp
+  dụng **ngược lại hoàn toàn** khi có skill chuyên biệt (`transfer-form`,
+  `spending-jar`) xử lý đúng yêu cầu — nêu thẳng sai lầm cụ thể đã quan sát
+  được (tính đúng số nhưng bỏ qua khối `ui-json` vì tưởng nhầm là "vượt
+  quyền hạn").
+- `skills/project/spending-jar/SKILL.md`: thêm hẳn 1 mục **"QUAN TRỌNG
+  NHẤT — đọc trước tất cả"** ngay sau tiêu đề, giả thuyết nguyên nhân là
+  model nhầm "hũ chi tiêu" (tag ngân sách nội bộ) với "sổ/tài khoản tiết
+  kiệm" (sản phẩm ngân hàng thật) — nhất là khi tên hũ có chữ "tiết kiệm"
+  (mock data có hũ "Tiết kiệm khẩn cấp"). Nói rõ 2 khái niệm khác nhau hoàn
+  toàn, và chèn `ui-json` an toàn y hệt viết text.
+
+**Verify thật với model VNG (2026-09-09, endpoint local qua `server.py`,
+mỗi câu 1 thread mới cô lập bằng `InMemorySaver`):** chạy lại đúng 2 câu đã
+fail trên production — mỗi câu 2 lần:
+- "Tạo giúp tôi 1 hũ mua sắm hợp lý mỗi tháng." → **2/2 lần đều trả đúng
+  `create_jar`** (`allocation_amount` ~5.400.000đ, có `reason` dựa số liệu
+  thật), không còn từ chối, không còn "ngoài phạm vi hỗ trợ".
+- "Tăng hũ giải trí của tôi lên 800 nghìn được không?" → **2/2 lần đều trả
+  đúng `edit_jar`** (đọc đúng hũ "Giải trí" có sẵn 600.000đ trong `jars`,
+  đề xuất tăng lên 800.000đ), không còn từ chối.
+
+4/4 lần test thật đều đạt, không còn tái hiện triệu chứng đã báo. 67/67
+test pass (`uv run --group dev pytest tests/`).
+
+**Lưu ý còn treo:** đây vẫn là fix ở tầng prompt/skill, không có gì enforce
+cứng bằng code — bản chất non-determinism của model vẫn còn (giống
+chart/transfer_form). 4/4 là mẫu nhỏ; nếu sau này bạn test lại trên
+production và vẫn thấy từ chối tái diễn, cân nhắc thêm: (a) test với nhiều
+cách diễn đạt câu hỏi khác (ra lệnh trực tiếp vs hỏi tư vấn, câu dài/phức
+tạp hơn), (b) áp dụng phòng ngừa tương tự cho `transfer-form/SKILL.md`
+(hiện được báo là đã hoạt động đúng, nhưng cùng chung `instructions.md` nên
+có thể chung rủi ro), (c) nếu tần suất từ chối trên production vẫn cao dù
+đã fix, khả năng phải cân nhắc quay lại dùng tool cho các bước chuẩn bị dữ
+liệu (không chỉ dựa hoàn toàn vào prompt).
 
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
