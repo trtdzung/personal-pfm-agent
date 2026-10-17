@@ -210,6 +210,63 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   (nếu sau này tự quản checkpointer được) lẫn bất kỳ memory backend nào cắm
   vào `server.py` sau này (xem 1.2).
 
+### 1.5. [Đã fix tạm, còn rủi ro tái diễn] Lịch sử cũ trên GreenNode Memory làm crash `/chat` cho MỌI câu hỏi trên 1 thread
+
+**Sự cố (2026-09-03):** production báo lỗi `500` cho **mọi** request `/chat`
+của `user_id=CIF_0001` — kể cả câu đơn giản như "Hello" — ngay sau khi deploy
+commit thêm tính năng chart/skill (`81d0e6f`).
+
+**Đã điều tra + xác nhận nguyên nhân (build lại đúng Docker image, chạy
+local với credentials GreenNode thật, tái hiện thành công):**
+- **Không liên quan** tới tính năng chart/skill/`CompositeBackend` vừa thêm
+  — đã verify riêng bằng model thật, đều chạy đúng.
+- **Không liên quan** version `langchain`/`langchain-core` (dù đã pin cứng
+  2 gói này vào `requirements.txt` như 1 việc nên làm riêng, không phải fix
+  cho sự cố này).
+- Nguyên nhân thật: `thread_id=CIF_0001` là thread **mặc định dùng chung
+  cho mọi lượt chat** của khách hàng này (frontend chưa truyền `thread_id`
+  riêng — xem `docs/api.md`), đã tích luỹ lịch sử qua rất nhiều lần test
+  suốt nhiều tuần của dự án. Lịch sử cũ này được lưu qua checkpointer
+  `AgentBaseMemoryEvents` (GreenNode Memory). Khi agent nạp lại lịch sử đó,
+  LangGraph cố convert từng message cũ thành `BaseMessage` và gặp ít nhất 1
+  message được lưu ở dạng không đúng chuẩn `(role, content)` — traceback
+  thật:
+  ```
+  deepagents/_messages_reducer.py:58, in _messages_delta_reducer
+    convert_to_messages(state or [])
+  langchain_core/messages/utils.py:742
+    raise NotImplementedError("Message as a sequence must be (role string, template)") from e
+  ```
+  → mọi request mới trên thread đó crash ngay khi nạp lại state, bất kể nội
+  dung câu hỏi mới là gì.
+- Sở dĩ ban đầu không tái hiện được: mọi lần test debug đều dùng `thread_id`
+  **mới, ngẫu nhiên** (lịch sử rỗng) — chỉ khi test đúng `thread_id=CIF_0001`
+  (thread thật, có lịch sử cũ) mới lộ ra.
+
+**Đã fix tạm (áp dụng thật trên GreenNode Memory, đã verify hết lỗi):**
+gọi `DELETE /chat/history?user_id=CIF_0001` (endpoint có sẵn) để xoá sạch
+lịch sử cũ bị lỗi của thread này. Sau khi xoá, `/chat` hoạt động lại bình
+thường trên cùng thread.
+
+**Rủi ro còn treo — cần quyết định hướng đi lâu dài:**
+- [ ] Đây gần như chắc chắn là lỗi/tương thích ngược ở tầng
+  `greennode-agent-bridge`'s `AgentBaseMemoryEvents` (serialize message
+  thành dạng LangGraph/langchain hiện tại không đọc lại đúng) — chưa rõ có
+  phải do checkpoint được ghi từ 1 phiên bản `deepagents`/`langgraph` cũ
+  hơn trước đây hay không. Nên báo lại cho phía GreenNode/kiểm tra changelog
+  `greennode-agent-bridge`.
+- [ ] `CIF_0002`/`CIF_0003` nếu cũng từng được test thật nhiều qua các phiên
+  trước có thể đang mang cùng rủi ro (thread mặc định của họ cũng có thể
+  đã tích luỹ lịch sử ở định dạng cũ) — nên chủ động xoá phòng ngừa bằng
+  `DELETE /chat/history` cho cả 2, hoặc theo dõi xem có lỗi tương tự không.
+- [ ] Chưa có cơ chế tự động phát hiện/tự phục hồi khi 1 thread rơi vào
+  trạng thái này trong tương lai (ví dụ agent thật của khách hàng khác cũng
+  tích luỹ đủ lâu rồi gặp lại) — hiện chỉ có thể phát hiện qua log lỗi
+  `500` + xoá tay bằng `DELETE /chat/history`. Cân nhắc: log rõ hơn khi
+  gặp đúng lỗi này (dễ nhận diện hơn generic "Agent failed to process the
+  request"), hoặc tự động catch riêng lỗi này và tự xoá/reset thread thay
+  vì chỉ trả 500.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong
