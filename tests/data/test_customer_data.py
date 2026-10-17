@@ -28,6 +28,7 @@ def test_customer_data_has_required_top_level_keys(customer_id):
         "chat_memory_example",
         "account",
         "jars",
+        "beneficiaries",
         "cards",
         "statements",
         "monthly_spending_summary",
@@ -99,3 +100,17 @@ def test_jars_have_required_fields_and_positive_allocation(customer_id):
         assert isinstance(jar["allocation_amount_vnd"], (int, float)) and jar["allocation_amount_vnd"] > 0
         assert jar["jar_name"] not in seen_names, f"duplicate jar_name: {jar['jar_name']}"
         seen_names.add(jar["jar_name"])
+
+
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_beneficiaries_have_required_fields(customer_id):
+    data = _load(customer_id)
+    beneficiaries = data["beneficiaries"]
+    assert isinstance(beneficiaries, list)
+    seen_names = set()
+    for beneficiary in beneficiaries:
+        for key in ("name", "account_number", "bank_name"):
+            assert key in beneficiary, f"beneficiary missing field: {key}"
+            assert isinstance(beneficiary[key], str) and beneficiary[key]
+        assert beneficiary["name"] not in seen_names, f"duplicate beneficiary name: {beneficiary['name']}"
+        seen_names.add(beneficiary["name"])

@@ -41,6 +41,13 @@
       "created_on": "2026-06-20"
     }
   ],
+  "beneficiaries": [
+    {
+      "name": "Toàn",
+      "account_number": "00012000321",
+      "bank_name": "Techcombank"
+    }
+  ],
   "cards": [
     {
       "card_id": "card_001",

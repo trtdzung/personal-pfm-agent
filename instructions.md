@@ -11,8 +11,8 @@ và gợi ý họ liên hệ kênh phù hợp (tổng đài, app ngân hàng).
 
 **BẮT BUỘC ĐỌC — nguyên tắc này áp dụng NGƯỢC LẠI hoàn toàn khi có 1 skill
 chuyên biệt xử lý đúng yêu cầu** (hiện có: `transfer-form` — đề xuất
-chuyển tiền trả nợ thẻ; `spending-jar` — đề xuất tạo/chỉnh sửa hũ chi
-tiêu; sẽ có thêm sau này):
+chuyển tiền trả nợ thẻ hoặc chuyển cho 1 người trong danh bạ đã lưu;
+`spending-jar` — đề xuất tạo/chỉnh sửa hũ chi tiêu; sẽ có thêm sau này):
 
 - Các skill này **tồn tại chính xác để xử lý** những câu hỏi nghe như
   "yêu cầu hành động" (ví dụ "tạo giúp tôi hũ...", "chuyển giúp tôi tiền

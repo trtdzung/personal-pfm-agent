@@ -28,6 +28,7 @@
     "balance_vnd": 4500000
   },
   "jars": [],
+  "beneficiaries": [],
   "cards": [
     {
       "card_id": "card_001",

@@ -736,6 +736,50 @@ hội thoại cũ, ví dụ mở lại app).
   đúng `MEMORY_ID`/checkpointer thật, không phải mock) nhưng qua code
   chưa build lại Docker image/deploy.
 
+### 1.12. [Đã làm — mở rộng scope] `transfer-form` giờ hỗ trợ thêm chuyển tiền cho 1 người (không chỉ trả nợ thẻ)
+
+**Yêu cầu (2026-09-14, trực tiếp):** trước đó `transfer-form` chỉ hỗ trợ
+trả nợ thẻ tín dụng của chính khách hàng (xem quyết định scope cũ ở trên,
+mục "Phạm vi hiện tại") — bạn muốn mở rộng để hỗ trợ câu như "Chuyển tiền
+cho Toàn 500 nghìn với nội dung Thanh toán tiền ăn" (chuyển P2P cho 1
+người, không phải trả nợ thẻ).
+
+**Vấn đề an toàn đã nêu trước khi làm:** `/customer_data.json` không có
+dữ liệu nào xác nhận 1 người nhận bất kỳ là có thật — nếu agent tự bịa
+`account_number` cho 1 cái tên bất kỳ, rủi ro cao hơn nhiều so với bịa số
+liệu chart (tiền thật có thể chuyển sai người nếu khách hàng không để ý
+mà vẫn bấm xác nhận).
+
+**Quyết định (theo yêu cầu trực tiếp, tạm thời cho demo):**
+- Thêm trường `beneficiaries` (danh bạ người nhận đã lưu) vào
+  `data/customers/CIF_000{1,2,3}.json` — **hardcode tạm thời**, CIF_0001
+  có 1 entry mẫu (`{"name": "Toàn", "account_number": "00012000321",
+  "bank_name": "Techcombank"}`), CIF_0002/0003 để rỗng `[]`.
+- `skills/project/transfer-form/SKILL.md` viết lại — giờ có 2 trường hợp:
+  (A) trả nợ thẻ (như cũ), (B) chuyển cho 1 người — CHỈ đề xuất nếu tên
+  khớp đúng 1 entry trong `beneficiaries`, hoặc khách hàng tự cung cấp đủ
+  số tài khoản/ngân hàng trong câu hỏi. Nếu tên không khớp và khách hàng
+  không tự cho số tài khoản: **không chèn `ui-json`, hỏi lại** — không bao
+  giờ tự bịa.
+- `tests/data/test_customer_data.py` — thêm `beneficiaries` vào top-level
+  key bắt buộc + `test_beneficiaries_have_required_fields`.
+- `docs/transfer-form.md` viết lại (2 trường hợp, cảnh báo rủi ro cao hơn
+  cho trường hợp B) + sync sang `PersonalCardAgentUI/agent_backend_docs/`.
+- **Không cần đổi `text_utils.py`** — schema `transfer_form` (4 field)
+  không đổi, chỉ đổi ý nghĩa `recipient`/`account_number` tuỳ trường hợp.
+- **Verify thật với model VNG (local):** "Chuyển tiền trả nợ thẻ giúp
+  tôi."/"Tôi cần trả nợ thẻ." (trường hợp A, không nêu tên thẻ) → cả 2 lần
+  đều tự đề xuất đúng thẻ Visa Signature ngay, không hỏi lại. 74/74 test
+  pass. **Chưa verify riêng trường hợp (B)** (câu "Chuyển tiền cho Toàn
+  500 nghìn...") bằng model thật — nên test trước khi tin tưởng hoàn toàn.
+
+**⚠️ Việc cần làm sau (đã ghi chú theo đúng yêu cầu, KHÔNG làm ngay bây
+giờ):** `beneficiaries` hiện là danh sách **hardcode tĩnh trong file mock**
+— cần 1 tool đọc danh bạ người nhận **thật, realtime** từ hệ thống PFM/core
+banking ngoài (tương tự `list_existing_jars()` đã note ở mục Roadmap PFM
+cho `spending-jar`) khi có API thật. Khi có tool này: sửa lại `SKILL.md` để
+gọi tool thay vì đọc `beneficiaries` tĩnh trong `/customer_data.json`.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong
