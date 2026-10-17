@@ -210,7 +210,7 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   (nếu sau này tự quản checkpointer được) lẫn bất kỳ memory backend nào cắm
   vào `server.py` sau này (xem 1.2).
 
-### 1.5. [Đã fix tạm, còn rủi ro tái diễn] Lịch sử cũ trên GreenNode Memory làm crash `/chat` cho MỌI câu hỏi trên 1 thread
+### 1.5. [ĐÃ FIX THẬT 2026-09-13 — xem phần "Nguyên nhân gốc thật" ở cuối mục] Crash `/chat` cho MỌI câu hỏi trên 1 thread đã dùng nhiều
 
 **Sự cố (2026-09-03):** production báo lỗi `500` cho **mọi** request `/chat`
 của `user_id=CIF_0001` — kể cả câu đơn giản như "Hello" — ngay sau khi deploy
@@ -266,6 +266,66 @@ thường trên cùng thread.
   gặp đúng lỗi này (dễ nhận diện hơn generic "Agent failed to process the
   request"), hoặc tự động catch riêng lỗi này và tự xoá/reset thread thay
   vì chỉ trả 500.
+
+**NGUYÊN NHÂN GỐC THẬT — tìm ra và fix ngày 2026-09-13 (đã tái hiện được
+100% bằng test tự động, không cần credentials/network):** giả thiết "lịch sử
+cũ / định dạng cũ" ở trên là **SAI**. Lịch sử không hề bị lỗi, và cũng không
+liên quan gì tới việc nó được ghi bởi phiên bản `deepagents`/`langgraph` cũ.
+Lỗi nằm ở chỗ `greennode-agent-bridge` (1.0.5, bản mới nhất) đọc sai chính
+dữ liệu mà **các phiên bản hiện tại** vừa ghi ra:
+
+- Từ `langgraph` 1.1 + `deepagents` 0.7, `messages` nằm trên `DeltaChannel`
+  (`deepagents/graph.py`: `DeltaChannel(_messages_delta_reducer,
+  snapshot_frequency=50)`). Channel này **không** lưu list message vào
+  `channel_values` ở mỗi checkpoint: phần lớn checkpoint không lưu gì (state
+  được dựng lại bằng cách replay writes của tổ tiên qua reducer), và **cứ 50
+  lần cập nhật channel thì lưu 1 snapshot đầy đủ** dưới dạng namedtuple
+  `_DeltaSnapshot(value=[msg, msg, ...])`.
+- `AgentBaseMemoryEvents` kết thúc mỗi lần đọc checkpoint bằng bước "vá tool
+  call mồ côi" (`helpers.patch_orphan_tool_calls`, gọi từ
+  `EventProcessor.build_checkpoint_tuple`) — hàm này **giả định**
+  `channel_values["messages"]` luôn là `list[BaseMessage]` thuần. Gặp
+  `_DeltaSnapshot`, nó duyệt namedtuple đó như 1 list và trả về
+  `[[msg, msg, ...]]` (list message bị lồng thêm 1 cấp).
+- `DeltaChannel.from_checkpoint` không còn nhận ra đó là snapshot, coi như
+  "plain value" thời tiền-delta, và đưa list lồng đó vào reducer làm state
+  tích luỹ → reducer thấy `state[0]` là list chứ không phải `BaseMessage` →
+  fallback `convert_to_messages()` → chết đúng traceback ở trên.
+- Vì thế: thread mới/ít dùng luôn OK (chưa bao giờ ghi snapshot blob), còn
+  thread mặc định dùng chung (`thread_id == user_id`) chạy đủ lâu (≥50 lần
+  cập nhật channel `messages`) rồi đi tiếp qua snapshot đó là **crash mọi
+  request, bất kể câu hỏi gì**. `DELETE /chat/history` "chữa" được đúng vì
+  nó reset về 0 update — nhưng sẽ tái diễn sau ~50 update tiếp theo. Đây
+  chính là lý do sự cố này quay lại nhiều lần.
+
+**Fix (đã áp dụng, ở tầng repo mình, không sửa được package của GreenNode):**
+`checkpointer_delta_snapshot.py` → `patch_preserve_delta_snapshots()` (gọi
+trong `build_agent()` của `server.py`, idempotent): chỉ cho bước vá tool call
+mồ côi của bridge chạy trên giá trị **thật sự là `list`**; mọi thứ khác (hôm
+nay: `_DeltaSnapshot`) trả về nguyên vẹn để `DeltaChannel.from_checkpoint`
+vẫn nhận ra snapshot. Cố ý **không** chọn cách "mở snapshot ra, vá bên trong,
+gói lại": snapshot là seed giữa chuỗi, tool call trông "mồ côi" trong đó
+thường được hoàn tất bởi `ToolMessage` ở write replay sau (snapshot rơi đúng
+biên superstep, và biên ngay sau model node là chỗ tool call chưa có kết
+quả) — vá vào đó sẽ tạo **2 `ToolMessage` cho cùng 1 `tool_call_id`**, tệ
+hơn lỗ hổng nó định bịt. Bỏ hẳn bước vá cho delta snapshot đưa checkpointer
+này về đúng chỗ mọi saver khác của LangGraph đang đứng (`InMemorySaver`,
+`PostgresSaver` không vá gì cả).
+
+**Test bảo vệ:** `tests/test_checkpointer_delta_snapshot.py` (4 test, đã thêm
+vào CI) — gồm 1 test end-to-end chạy `AgentBaseMemoryEvents` thật với
+`_FakeMemoryClient` in-memory (không network), 8 lượt hội thoại vượt qua
+nhiều biên snapshot (`snapshot_frequency=2` để nén lại cái deepagents gặp ở
+50), cộng 1 lần đọc lại bằng checkpointer instance mới (không cache). Đã
+verify: bỏ patch ra thì 2/4 test fail đúng lỗi này, bật lại thì pass hết.
+
+**Việc còn nên làm:**
+- [ ] Báo bug lên phía GreenNode: `patch_orphan_tool_calls` cần
+  `DeltaChannel`-aware (hoặc bỏ hẳn, để LangGraph tự lo). Bỏ
+  `checkpointer_delta_snapshot.py` khi có bản `greennode-agent-bridge` đã fix.
+- [ ] Không cần xoá lịch sử `CIF_0002`/`CIF_0003` nữa (lịch sử của họ không
+  hỏng); nhưng thread nào **đang** ở trạng thái crash thì sau khi deploy fix
+  này sẽ tự chạy lại được, không cần `DELETE /chat/history`.
 
 ### 1.6. [Đã fix] JSON của `ui` lọt thẳng vào `answer` khi model không dùng đúng fence
 

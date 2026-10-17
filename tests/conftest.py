@@ -8,3 +8,8 @@ try:
     import fastapi  # noqa: F401
 except ImportError:
     collect_ignore.append("test_server.py")
+
+try:
+    import greennode_agent_bridge  # noqa: F401
+except ImportError:
+    collect_ignore.append("test_checkpointer_delta_snapshot.py")

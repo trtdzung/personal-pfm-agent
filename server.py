@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from checkpointer_cache import invalidate as invalidate_checkpointer_cache
 from checkpointer_cache import patch_get_events_with_cache
+from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from text_utils import extract_final_text, extract_ui_block
@@ -92,6 +93,16 @@ def build_agent(
     # a thread so each request's first read is still guaranteed fresh --
     # see checkpointer_cache.py and todo.md's performance investigation.
     patch_get_events_with_cache(checkpointer)
+    # Works around a correctness bug in AgentBaseMemoryEvents that breaks
+    # EVERY request on a thread once it is busy enough to have written a
+    # DeltaChannel snapshot blob (~50 updates to the `messages` channel):
+    # the bridge mangles that blob on read, and state reconstruction dies
+    # with "Message as a sequence must be (role string, template)". This is
+    # what todo.md 1.5 recorded as "corrupt old history" -- it is not old
+    # history. Module-level patch on the bridge, idempotent, no-op for
+    # InMemorySaver threads (they never produce such a blob) -- see
+    # checkpointer_delta_snapshot.py.
+    patch_preserve_delta_snapshots()
     return create_deep_agent(
         model=model or _default_model(),
         tools=tools if tools is not None else [remember_preference, recall_preference],

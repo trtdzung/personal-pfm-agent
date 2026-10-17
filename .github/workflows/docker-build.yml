@@ -18,7 +18,7 @@ jobs:
       - name: Run server tests
         env:
           AI_PLATFORM_API_KEY: sk-ci-dummy
-        run: python -m pytest tests/test_server.py tests/test_text_utils.py -v
+        run: python -m pytest tests/test_server.py tests/test_text_utils.py tests/test_checkpointer_cache.py tests/test_checkpointer_delta_snapshot.py -v
 
   build:
     needs: test
