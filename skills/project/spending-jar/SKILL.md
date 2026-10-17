@@ -62,12 +62,14 @@ số.
 
 ## Quy trình bắt buộc — Check trước, Propose sau
 
-1. **Check (bắt buộc):** đọc `/customer_data.json` bằng `read_file`/`grep`
-   — (a) xem `jars` đã có hũ tên đó chưa (để chọn đúng `create_jar` hay
-   `edit_jar`), (b) lấy số liệu chi tiêu thật làm căn cứ đề xuất mức phân
-   bổ (theo danh mục liên quan trong `monthly_spending_summary`, hoặc theo
-   `monthly_income_vnd`/`account.balance_vnd` nếu áp dụng 1 rule phân bổ
-   tổng quát) — không bịa số.
+1. **Check (bắt buộc):** dữ liệu khách hàng (`/customer_data.json`) **đã có
+   sẵn ngay trong system prompt của bạn** — KHÔNG cần gọi `read_file`/`grep`
+   để lấy lại. Chỉ cần đọc trực tiếp từ đó — (a) xem `jars` đã có hũ tên đó
+   chưa (để chọn đúng `create_jar` hay `edit_jar`), (b) lấy số liệu chi tiêu
+   thật làm căn cứ đề xuất mức phân bổ (theo danh mục liên quan trong
+   `monthly_spending_summary`, hoặc theo `monthly_income_vnd`/
+   `account.balance_vnd` nếu áp dụng 1 rule phân bổ tổng quát) — không bịa
+   số.
 2. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời, dùng
    đúng 1 trong 2 type dưới đây.
 

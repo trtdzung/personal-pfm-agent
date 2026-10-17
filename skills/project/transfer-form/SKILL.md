@@ -22,10 +22,12 @@ có** lịch sử chuyển khoản cá nhân (P2P) tới người khác. Vì v�
 
 ## Quy trình bắt buộc — Check trước, Propose sau
 
-1. **Check (bắt buộc, không được bỏ qua):** đọc `/customer_data.json`
-   (`cards`, `statements`) bằng `read_file`/`grep` để lấy đúng
-   `available_credit_vnd`, `total_due_vnd`, `min_payment_vnd`, `due_date`
-   thật của thẻ liên quan — không bịa số. Tự xác nhận số tiền định đề xuất
+1. **Check (bắt buộc, không được bỏ qua):** dữ liệu khách hàng
+   (`/customer_data.json`, gồm `cards`/`statements`) **đã có sẵn ngay
+   trong system prompt của bạn** — KHÔNG cần gọi `read_file`/`grep` để lấy
+   lại. Chỉ cần đọc trực tiếp từ đó đúng `available_credit_vnd`,
+   `total_due_vnd`, `min_payment_vnd`, `due_date` thật của thẻ liên quan —
+   không bịa số. Tự xác nhận số tiền định đề xuất
    (`amount`) **không vượt quá** `available_credit_vnd` của thẻ đó trước
    khi chèn khối `ui-json`.
    - Nếu không thẻ nào đủ hạn mức khả dụng cho số tiền định đề xuất:

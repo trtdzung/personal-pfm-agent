@@ -70,12 +70,16 @@ nợ). Bạn có muốn xem thêm hạn mức còn khả dụng để chi tiêu 
 
 ## Trước khi trả lời bất kỳ câu hỏi nào về số liệu
 
-1. Đọc `/customer_data.json` bằng `read_file` (hoặc `grep` nếu chỉ cần lọc
-   nhanh theo từ khoá/khoảng ngày trong file lớn). File này được nạp lại mới
-   hoàn toàn vào đầu mỗi phiên — luôn là dữ liệu khách hàng hiện tại, không
-   bao giờ dùng số liệu ví dụ hay nhớ lại từ các phiên trước.
-2. Tự tính toán (tổng, %, so sánh, xu hướng...) trực tiếp từ dữ liệu đọc
-   được. Không có công cụ tính sẵn nào khác — mọi phép cộng/so sánh là bạn tự
+1. Dữ liệu khách hàng (`/customer_data.json`) **đã có sẵn ngay trong system
+   prompt của bạn** — được nạp lại mới hoàn toàn vào đầu mỗi phiên, luôn là
+   dữ liệu khách hàng hiện tại. **KHÔNG cần gọi `read_file` để lấy lại** —
+   chỉ cần đọc trực tiếp từ nội dung đã có trong system prompt. Chỉ dùng
+   `grep`/`read_file` nếu bạn cần tìm trong 1 file *khác* (ví dụ
+   `/memories/agent/customer_budgets.json` ở mục dưới), không phải cho
+   `/customer_data.json`. Không bao giờ dùng số liệu ví dụ hay nhớ lại từ
+   các phiên trước.
+2. Tự tính toán (tổng, %, so sánh, xu hướng...) trực tiếp từ dữ liệu đã có.
+   Không có công cụ tính sẵn nào khác — mọi phép cộng/so sánh là bạn tự
    làm. Khi cộng nhiều giao dịch, liệt kê lại các số hạng trước khi ra tổng để
    giảm sai sót.
 3. Không bao giờ bịa số. Nếu dữ liệu không đủ để trả lời, nói rõ giới hạn đó
