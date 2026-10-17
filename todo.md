@@ -413,38 +413,32 @@ cân nhắc quay lại dùng tool.
 
 ## 3. Việc nhỏ còn treo (đã ghi nhận, không chặn, làm khi rảnh)
 
-- [ ] **Câu trả lời của agent đang bị dài quá mức cần thiết** —
-  `instructions.md` hiện **không có bất kỳ hướng dẫn nào** về độ dài/phong
-  cách trả lời (đã grep xác nhận: không có từ khoá "ngắn gọn"/"súc tích"/
-  "concise" nào trong file). Hệ quả quan sát được thật (verify với model VNG
-  qua `server.py`): hỏi 1 câu đơn giản kiểu "Danh mục chi tiêu lớn nhất của
-  tôi là gì?" nhưng agent tự động:
-  - Tự diễn giải câu hỏi theo **2 cách** (tháng hiện tại vs tổng 3 tháng)
-    dù không được hỏi, rồi trả lời **cả hai**.
-  - Hiện **bảng breakdown đầy đủ 6 danh mục** cho cả 2 cách hiểu, thay vì
-    chỉ nói tên danh mục lớn nhất.
-  - Hiện luôn phép **kiểm tra tổng** (`16.280.000 + ... = 50.332.000 ✓`) —
-    lộ luôn "chain of thought" tính toán ra ngoài câu trả lời.
-  - Tự thêm 1 câu **gợi ý chủ động** không được hỏi ("Bạn có muốn mình gợi ý
-    cách tối ưu...") ở cuối.
-  - Toàn bộ chỉ để trả lời đúng 1 từ: "Mua sắm".
-  - **Việc cần làm:** thêm 1 mục mới vào `instructions.md` (ví dụ đặt gần
-    đầu file, cạnh mục "Trước khi trả lời...") hướng dẫn rõ:
-    1. Trả lời **thẳng vào câu hỏi trước**, ngắn gọn — chỉ mở rộng
-       chi tiết/bảng số liệu khi được hỏi thêm hoặc khi câu hỏi thật sự cần
-       (ví dụ "phân tích chi tiết", "so sánh theo tháng").
-    2. Chỉ tự diễn giải nhiều cách hiểu khi câu hỏi **thực sự mơ hồ** — mặc
-       định chọn cách hiểu hợp lý nhất (ví dụ "tháng này" cho câu hỏi không
-       ghi rõ mốc thời gian) thay vì trả lời cả 2 phương án.
-    3. Không hiện phép tính trung gian/bước kiểm tra tổng ra câu trả lời
-       cuối cùng cho khách hàng — đó là việc nội bộ của agent (dùng
-       `read_file`/tính toán trong quá trình suy luận), không phải nội
-       dung cần hiện cho người dùng.
-    4. Không tự động thêm câu gợi ý/hỏi thêm ở cuối trừ khi thực sự liên
-       quan trực tiếp và ngắn gọn — không biến mỗi câu trả lời thành 1
-       đoạn văn dài có kết luận + gợi ý bán chéo.
-  - Cân nhắc thêm ví dụ minh hoạ "trước/sau" ngay trong `instructions.md`
-    để agent dễ bắt chước đúng độ dài mong muốn.
+- [x] **Câu trả lời của agent đang bị dài quá mức cần thiết — Đã fix
+  (2026-09-07).**
+  `instructions.md` trước đó **không có bất kỳ hướng dẫn nào** về độ dài/
+  phong cách trả lời. Hệ quả quan sát được thật (2 lần, cách nhau — cùng 1
+  vấn đề gặp lại):
+  - Lần 1: hỏi "Danh mục chi tiêu lớn nhất của tôi là gì?" → agent tự diễn
+    giải 2 cách hiểu (tháng hiện tại vs 3 tháng), hiện bảng breakdown đầy
+    đủ 6 danh mục cho cả 2, lộ luôn phép kiểm tra tổng, tự thêm gợi ý bán
+    chéo — chỉ để trả lời đúng 1 từ "Mua sắm".
+  - Lần 2: hỏi "Số dư của tôi là bao nhiêu?" → agent tự diễn giải "số dư"
+    theo cả 2 nghĩa (dư nợ vs hạn mức khả dụng), trả lời **2 bảng số liệu
+    đầy đủ theo từng thẻ** + 1 đoạn "Lưu ý" phân tích thêm — quá dài, chỉ
+    cần 1 câu.
+  - **Đã làm:** thêm mục mới "Trả lời ngắn gọn, đúng trọng tâm" vào
+    `instructions.md` (ngay trước mục "Trước khi trả lời..."), có ví dụ
+    minh hoạ trước/sau dùng đúng ví dụ "số dư" ở trên. 4 nguyên tắc: (1)
+    trả lời thẳng vào câu hỏi, chỉ mở rộng khi được hỏi thêm; (2) câu hỏi
+    có nhiều nghĩa → chọn nghĩa phổ biến nhất trả lời ngắn gọn rồi hỏi lại
+    ngắn 1 câu, không liệt kê hết mọi cách hiểu; (3) không hiện phép tính
+    trung gian ra câu trả lời cuối; (4) không tự thêm gợi ý mở rộng trừ
+    khi thực sự ngắn gọn và liên quan trực tiếp.
+  - **Verify thật với model VNG** (không chỉ đọc code): hỏi lại đúng câu
+    "số dư" → trả lời 177 ký tự, đúng số, kết bằng 1 câu hỏi gợi mở ngắn
+    (đúng mẫu mong muốn). Test thêm 2 câu khác ("danh mục chi tiêu lớn
+    nhất", "tháng này chi tiêu bao nhiêu") → đều ngắn gọn, đúng trọng tâm
+    (150–225 ký tự, trước đây dài hơn nhiều).
 - [ ] `data/customer_data.json`'s `_meta.as_of_date` sẽ tiếp tục lệch ngày
   thật mỗi lần demo — cân nhắc cập nhật định kỳ hoặc bỏ trường này.
 - [x] ~~`README.md` còn 2 dòng cũ chưa dọn (mục Deploy nhắc `skills/`, mục
