@@ -56,13 +56,14 @@ python -m venv .venv-server
 .venv-server/Scripts/pip install -r requirements.txt pytest httpx   # Windows
 # .venv-server/bin/pip install -r requirements.txt pytest httpx     # macOS/Linux
 
-OPENAI_API_KEY=sk-any-value-here SERVER_API_KEY=test-key .venv-server/Scripts/pytest tests/test_server.py -v
+SERVER_API_KEY=test-key .venv-server/Scripts/pytest tests/test_server.py -v
 ```
 
-(`OPENAI_API_KEY` just needs to be *present* to satisfy `ChatOpenAI`'s
-constructor — these tests never make a real API call, they swap in a fake
-model. `SERVER_API_KEY` can be any string; it only needs to match what the
-tests send back in the `X-API-Key` header.)
+(These tests never make a real API call, they swap in a fake model.
+`SERVER_API_KEY` can be any string; it only needs to match what the tests
+send back in the `X-API-Key` header. `tests/test_server.py` sets its own
+`AI_PLATFORM_API_KEY`/`MEMORY_ID`/`USER_PREFERENCE_STRATEGY_ID` internally,
+so you don't need to pass those.)
 
 ## Run locally
 
@@ -99,10 +100,15 @@ its own `Dockerfile`.
 [`docs/api.md`](docs/api.md).
 
 **Required environment variables** (the container refuses to start without
-`SERVER_API_KEY`, `MEMORY_ID`, or `USER_PREFERENCE_STRATEGY_ID`; it
-crash-loops on the first request without a working `OPENAI_API_KEY`):
+`SERVER_API_KEY`, `MEMORY_ID`, `USER_PREFERENCE_STRATEGY_ID`, or
+`AI_PLATFORM_API_KEY`):
 
-- `OPENAI_API_KEY` -- passed straight through to `ChatOpenAI`
+- `AI_PLATFORM_API_KEY` -- API key for GreenNode's VNG Cloud AI Platform
+  (Model-as-a-Service) endpoint, used via `ChatOpenAI(base_url=..., api_key=...)`
+  pointed at `https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1` (OpenAI-compatible).
+  Get it from the GreenNode console's API key / Model as a Service section.
+- `LLM_MODEL` -- optional, model path passed to the MaaS endpoint. Defaults
+  to `z-ai/glm-5.2-hackathon` if unset.
 - `SERVER_API_KEY` -- shared secret; every `POST /chat` request must send
   it back in the `X-API-Key` header, or the request is rejected with 401
 - `MEMORY_ID` -- id of a GreenNode AgentBase Memory resource used for both
@@ -127,11 +133,14 @@ crash-loops on the first request without a working `OPENAI_API_KEY`):
   Memory client uses to authenticate. **On GreenNode AgentBase Runtime these
   are injected automatically** -- only set them yourself when running
   locally/Docker outside GreenNode. To get them: open
-  `https://aiplatform.console.greennode.ai/access-control`, click
-  **"Create Identity"**, name it (e.g. `personal-card-agent-local`), then
-  copy the `client_id`/`client_secret` shown for that identity. `gab identity
-  login` will prompt for both and cache them in `.greennode.json` (gitignored
-  and dockerignored) so you don't have to export them by hand every time.
+  `https://iam.console.greennode.ai/service-accounts` (a separate console
+  from `aiplatform.console.greennode.ai` -- NOT the AgentBase "Access
+  Control" page, which is unrelated to these credentials), create a
+  **Service Account**. The client secret is shown **only once** at creation
+  time -- copy it immediately. The client ID can be found later under that
+  Service Account's **"Security credentials"** tab. `gab identity login`
+  will prompt for both and cache them in `.greennode.json` (gitignored and
+  dockerignored) so you don't have to export them by hand every time.
   (`GREENNODE_AGENT_IDENTITY`, which GreenNode also injects at runtime, is
   unrelated to Memory -- it's only used by the SDK's separate LLM-provider-key
   federation feature, which this server doesn't use.)
@@ -141,7 +150,7 @@ crash-loops on the first request without a working `OPENAI_API_KEY`):
 ```bash
 docker build -t personal-card-agent-server .
 docker run -p 8080:8080 \
-    -e OPENAI_API_KEY=sk-... \
+    -e AI_PLATFORM_API_KEY=sk-... \
     -e SERVER_API_KEY=choose-a-secret \
     -e MEMORY_ID=<memory id from gab memory create> \
     -e USER_PREFERENCE_STRATEGY_ID=<ltms-... id from gab memory strategies list> \

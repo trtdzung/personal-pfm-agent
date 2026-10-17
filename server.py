@@ -6,8 +6,10 @@ from pathlib import Path
 from deepagents import create_deep_agent
 from fastapi import FastAPI, Header, HTTPException
 from greennode_agent_bridge import AgentBaseMemoryEvents
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import BaseTool
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel
 
@@ -36,15 +38,29 @@ if not MEMORY_ID:
         "to be stored (create one with `gab memory create`)."
     )
 
+AI_PLATFORM_API_KEY = os.environ.get("AI_PLATFORM_API_KEY")
+if not AI_PLATFORM_API_KEY:
+    raise RuntimeError(
+        "AI_PLATFORM_API_KEY is not set. Refusing to start without an API key "
+        "for GreenNode's VNG Cloud AI Platform (Model-as-a-Service) endpoint."
+    )
+
+LLM_BASE_URL = "https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1"
+LLM_MODEL = os.environ.get("LLM_MODEL") or "z-ai/glm-5.2-hackathon"
+
+
+def _default_model() -> BaseChatModel:
+    return ChatOpenAI(base_url=LLM_BASE_URL, api_key=AI_PLATFORM_API_KEY, model=LLM_MODEL)
+
 
 def build_agent(
-    model: object = "openai:gpt-5.5",
+    model: object | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
     tools: list[BaseTool] | None = None,
 ):
     instructions = (REPO_ROOT / "instructions.md").read_text(encoding="utf-8")
     return create_deep_agent(
-        model=model,
+        model=model or _default_model(),
         tools=tools if tools is not None else [remember_preference, recall_preference],
         middleware=[log_tool_calls, SeedCustomerContext()],
         system_prompt=instructions,

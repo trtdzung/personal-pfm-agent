@@ -17,7 +17,7 @@ jobs:
         run: pip install -r requirements.txt pytest httpx
       - name: Run server tests
         env:
-          OPENAI_API_KEY: sk-ci-dummy
+          AI_PLATFORM_API_KEY: sk-ci-dummy
         run: python -m pytest tests/test_server.py tests/test_text_utils.py -v
 
   build:
@@ -45,7 +45,7 @@ jobs:
       - name: Smoke test image
         run: |
           docker run -d --name smoketest -p 18080:8080 \
-            -e OPENAI_API_KEY=sk-ci-dummy \
+            -e AI_PLATFORM_API_KEY=sk-ci-dummy \
             -e SERVER_API_KEY=ci-dummy \
             -e MEMORY_ID=ci-dummy-memory-id \
             -e USER_PREFERENCE_STRATEGY_ID=ci-dummy-strategy-id \

@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage
 os.environ["SERVER_API_KEY"] = "test-key-for-pytest"
 os.environ["MEMORY_ID"] = "test-memory-id-for-pytest"
 os.environ["USER_PREFERENCE_STRATEGY_ID"] = "test-strategy-id-for-pytest"
+os.environ["AI_PLATFORM_API_KEY"] = "test-ai-platform-key-for-pytest"
 
 import server  # noqa: E402
 import tools.memory_tools as memory_tools  # noqa: E402
@@ -414,7 +415,6 @@ def test_recall_preference_tool_reports_no_match(monkeypatch):
 def test_server_refuses_to_start_without_user_preference_strategy_id():
     env = dict(os.environ)
     env.pop("USER_PREFERENCE_STRATEGY_ID", None)
-    env.setdefault("OPENAI_API_KEY", "sk-test-dummy-value")
     repo_root = Path(__file__).resolve().parent.parent
     result = subprocess.run(
         [sys.executable, "-c", "import server"],
@@ -430,7 +430,6 @@ def test_server_refuses_to_start_without_user_preference_strategy_id():
 def test_server_refuses_to_start_without_server_api_key():
     env = dict(os.environ)
     env.pop("SERVER_API_KEY", None)
-    env.setdefault("OPENAI_API_KEY", "sk-test-dummy-value")
     repo_root = Path(__file__).resolve().parent.parent
     result = subprocess.run(
         [sys.executable, "-c", "import server"],
@@ -446,7 +445,6 @@ def test_server_refuses_to_start_without_server_api_key():
 def test_server_refuses_to_start_without_memory_id():
     env = dict(os.environ)
     env.pop("MEMORY_ID", None)
-    env.setdefault("OPENAI_API_KEY", "sk-test-dummy-value")
     repo_root = Path(__file__).resolve().parent.parent
     result = subprocess.run(
         [sys.executable, "-c", "import server"],
@@ -457,6 +455,21 @@ def test_server_refuses_to_start_without_memory_id():
     )
     assert result.returncode != 0
     assert "MEMORY_ID" in result.stderr
+
+
+def test_server_refuses_to_start_without_ai_platform_api_key():
+    env = dict(os.environ)
+    env.pop("AI_PLATFORM_API_KEY", None)
+    repo_root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [sys.executable, "-c", "import server"],
+        cwd=str(repo_root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "AI_PLATFORM_API_KEY" in result.stderr
 
 
 def test_chat_endpoint_masks_internal_error_details(monkeypatch):

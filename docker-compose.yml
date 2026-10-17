@@ -8,10 +8,12 @@ services:
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in your environment or .env file}
+      AI_PLATFORM_API_KEY: ${AI_PLATFORM_API_KEY:?Set AI_PLATFORM_API_KEY (VNG Cloud AI Platform / MaaS key) in your environment or .env file}
       SERVER_API_KEY: ${SERVER_API_KEY:?Set SERVER_API_KEY in your environment or .env file}
       MEMORY_ID: ${MEMORY_ID:?Set MEMORY_ID (create one with `gab memory create`) in your environment or .env file}
       USER_PREFERENCE_STRATEGY_ID: ${USER_PREFERENCE_STRATEGY_ID:?Set USER_PREFERENCE_STRATEGY_ID (a USER_PREFERENCE long-term memory strategy on MEMORY_ID) in your environment or .env file}
+      # Optional -- defaults to z-ai/glm-5.2-hackathon (server.py) if unset.
+      LLM_MODEL: ${LLM_MODEL:-}
       # Only needed to run locally -- GreenNode AgentBase Runtime injects these
       # automatically for you when deployed there.
       GREENNODE_CLIENT_ID: ${GREENNODE_CLIENT_ID:-}
