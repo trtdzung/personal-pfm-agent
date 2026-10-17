@@ -17,11 +17,11 @@ lịch sử chuyển khoản cá nhân đáng tin cậy để đối chiếu ng�
 - Giống hệt `chart`: agent tự quyết định có nên đề xuất hay không (skill
   `skills/project/transfer-form/`), chèn 1 khối JSON vào cuối câu trả lời,
   `server.py` tách ra thành field `ui` riêng.
-- **Khác `chart` ở 1 điểm quan trọng:** trước khi đề xuất, agent **bắt
-  buộc** gọi 1 tool nội bộ (`check_available_balance_or_credit`) để xác
-  nhận số tiền đề xuất không vượt hạn mức khả dụng thật của khách hàng —
-  đây là bước kiểm tra tính khả thi, không phải thứ frontend cần quan tâm
-  (frontend chỉ nhận kết quả cuối qua field `ui`).
+- Trước khi đề xuất, agent tự đọc `/customer_data.json` (`cards`,
+  `statements`) để xác nhận số tiền đề xuất không vượt hạn mức khả dụng
+  thật của khách hàng — đây là bước kiểm tra nội bộ của agent (không dùng
+  tool riêng), không phải thứ frontend cần quan tâm (frontend chỉ nhận kết
+  quả cuối qua field `ui`).
 - **Đây chỉ là đề xuất hiển thị — agent KHÔNG thực hiện chuyển tiền.**
   Việc chuyển tiền thật (nếu khách hàng đồng ý) diễn ra qua 1 luồng xác
   thực ngân hàng hoàn toàn tách biệt, do hệ thống PFM/core banking khác

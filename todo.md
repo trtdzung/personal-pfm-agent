@@ -344,6 +344,36 @@ cập nhật 2 test cũ đang assert cứng shape `messages[]` (thiếu field `u
 không cần copy lại). **Còn treo:** báo lại FE về thay đổi hợp đồng này
 (chưa phải việc code, chỉ là communication — người dùng tự làm).
 
+### 1.8. [Đã làm — đảo ngược quyết định trước] Bỏ tool `check_available_balance_or_credit`
+
+**Quyết định (2026-09-07, theo yêu cầu trực tiếp):** bỏ hẳn tool
+`check_available_balance_or_credit` khỏi luồng `transfer_form` — **đảo
+ngược lại lý do đã lập luận khi thêm tool này** ("nên làm tool riêng thay
+vì để agent tự tính bằng free-text, vì đây là điều kiện chặn cứng"). Giờ
+agent tự đọc `/customer_data.json` (`cards`) bằng `read_file` để đối
+chiếu `amount` với `available_credit_vnd`, giống hệt cách đối chiếu
+`recipient`/`account_number` đã làm từ đầu — không còn enforcement bằng
+code, hoàn toàn dựa vào agent tuân theo hướng dẫn skill.
+
+**Đã làm:**
+- Xoá hẳn `tools/transfer_tools.py` + `tests/test_transfer_tools.py`.
+- `server.py` — bỏ import + bỏ khỏi `tools=[...]` mặc định của
+  `build_agent()`.
+- `skills/project/transfer-form/SKILL.md` — gộp bước Check thành 1 bước
+  "tự đọc `/customer_data.json` rồi tự đối chiếu", bỏ mọi nhắc tới tool.
+- `docs/transfer-form.md` — cập nhật lại phần "Cơ chế" cho khớp.
+- `tests/test_server.py` — đơn giản hoá test end-to-end (không còn mô
+  phỏng tool call, chỉ cần fake model trả thẳng khối `ui-json`).
+- Verify thật với model VNG (không dùng tool): agent tự gọi `read_file`
+  (4 lần) thay vì gọi tool, vẫn sinh đúng `transfer_form` hợp lệ. 56/56
+  test pass (`uv run --group dev pytest tests/`).
+
+**Rủi ro cần lưu ý (do đảo ngược quyết định):** không còn gì ở tầng code
+chặn cứng việc agent tính sai/đề xuất vượt hạn mức — hoàn toàn phụ thuộc
+vào agent tuân theo `SKILL.md` (giống rủi ro đã ghi ở mục 1.3 cho ngân
+sách). Nếu sau này phát hiện agent hay tính sai hạn mức trong thực tế,
+cân nhắc quay lại dùng tool.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

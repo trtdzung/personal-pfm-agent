@@ -135,28 +135,16 @@ def test_chat_endpoint_splits_ui_json_chart_block_into_ui_field(monkeypatch):
 
 
 def test_chat_endpoint_splits_ui_json_transfer_form_block_into_ui_field(monkeypatch):
-    # Simulates the skill's required flow: the model calls
-    # check_available_balance_or_credit (a real tool -- reads the real
-    # CIF_0001 fixture, not mocked) before emitting the transfer_form block.
-    messages = iter(
-        [
-            AIMessage(
-                content="",
-                tool_calls=[
-                    {"name": "check_available_balance_or_credit", "args": {"amount_vnd": 910000}, "id": "call1"}
-                ],
-            ),
-            AIMessage(
-                content=(
-                    "Kỳ sao kê đến hạn 10/07/2026, mức thanh toán tối thiểu là 910.000đ.\n\n"
-                    '```ui-json\n{"type": "transfer_form", "recipient": "MSB Visa Signature", '
-                    '"account_number": "card_001", "amount": 910000, '
-                    '"note": "Thanh toan du no the ky sao ke den han 2026-07-10"}\n```'
-                )
-            ),
-        ]
+    # No tool call to simulate anymore -- the skill now tells the model to
+    # verify available credit itself by reading /customer_data.json
+    # (read_file, already always bound), not via a dedicated tool.
+    transfer_answer = (
+        "Kỳ sao kê đến hạn 10/07/2026, mức thanh toán tối thiểu là 910.000đ.\n\n"
+        '```ui-json\n{"type": "transfer_form", "recipient": "MSB Visa Signature", '
+        '"account_number": "card_001", "amount": 910000, '
+        '"note": "Thanh toan du no the ky sao ke den han 2026-07-10"}\n```'
     )
-    fake_model = _ToolCallingFakeChatModel(messages=messages)
+    fake_model = _ToolCapableFakeChatModel(responses=[transfer_answer])
     fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
     monkeypatch.setattr(server, "agent", fake_agent)
 

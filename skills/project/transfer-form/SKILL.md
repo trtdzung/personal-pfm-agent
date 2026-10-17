@@ -22,17 +22,16 @@ có** lịch sử chuyển khoản cá nhân (P2P) tới người khác. Vì v�
 
 ## Quy trình bắt buộc — Check trước, Propose sau
 
-1. **Check (bắt buộc, không được bỏ qua):** gọi tool
-   `check_available_balance_or_credit(amount_vnd=...)` với số tiền định đề
-   xuất, **trước khi** chèn khối `ui-json`. Không tự tính hạn mức khả dụng
-   bằng suy luận free-text — đây là điều kiện chặn cứng, sai 1 lần là đề
-   xuất số tiền không thực hiện được.
-   - Nếu tool báo KHÔNG đủ hạn mức ở mọi thẻ: **đừng chèn `transfer_form`**,
-     chỉ trả lời bằng text giải thích giới hạn thật.
-2. Đọc `/customer_data.json` (`cards`, `statements`) để lấy đúng
-   `total_due_vnd`/`min_payment_vnd`/`due_date` thật của thẻ liên quan —
-   không bịa số.
-3. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời:
+1. **Check (bắt buộc, không được bỏ qua):** đọc `/customer_data.json`
+   (`cards`, `statements`) bằng `read_file`/`grep` để lấy đúng
+   `available_credit_vnd`, `total_due_vnd`, `min_payment_vnd`, `due_date`
+   thật của thẻ liên quan — không bịa số. Tự xác nhận số tiền định đề xuất
+   (`amount`) **không vượt quá** `available_credit_vnd` của thẻ đó trước
+   khi chèn khối `ui-json`.
+   - Nếu không thẻ nào đủ hạn mức khả dụng cho số tiền định đề xuất:
+     **đừng chèn `transfer_form`**, chỉ trả lời bằng text giải thích giới
+     hạn thật.
+2. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời:
 
 ```ui-json
 {"type": "transfer_form", "recipient": "...", "account_number": "...", "amount": 0, "note": "..."}
@@ -56,8 +55,8 @@ có** lịch sử chuyển khoản cá nhân (P2P) tới người khác. Vì v�
 
 ## PHẢI (bắt buộc — sai 1 điều là toàn bộ đề xuất bị huỷ)
 
-1. Đã gọi `check_available_balance_or_credit` với đúng `amount` định đề
-   xuất và nhận kết quả ĐỦ hạn mức trước khi chèn khối này.
+1. Đã tự đối chiếu `amount` với `available_credit_vnd` đọc được từ
+   `/customer_data.json` và xác nhận đủ hạn mức trước khi chèn khối này.
 2. JSON thật (dấu nháy kép), không phải Python dict repr.
 3. `account_number` PHẢI trùng khớp 1 `card_id`/`card_number_last4` có thật
    trong `cards` của khách hàng đang trò chuyện (đọc từ
@@ -75,8 +74,8 @@ có** lịch sử chuyển khoản cá nhân (P2P) tới người khác. Vì v�
   tại" ở trên).
 - KHÔNG tự thêm field ngoài 5 field đã định nghĩa (`type`, `recipient`,
   `account_number`, `amount`, `note`).
-- KHÔNG chèn khối này nếu chưa gọi `check_available_balance_or_credit`
-  hoặc tool báo không đủ hạn mức.
+- KHÔNG chèn khối này nếu chưa tự xác nhận đủ hạn mức khả dụng theo đúng
+  bước Check ở trên.
 - KHÔNG khẳng định việc chuyển tiền đã xảy ra — đây chỉ là 1 form điền sẵn
   để khách hàng tự xem và tự bấm xác nhận trên UI, việc chuyển tiền thật
   (nếu có) diễn ra hoàn toàn bên ngoài cuộc hội thoại này.
@@ -85,8 +84,9 @@ có** lịch sử chuyển khoản cá nhân (P2P) tới người khác. Vì v�
 
 Khách hỏi: "Tôi nên trả nợ thẻ Visa Signature bao nhiêu?"
 
-Bước 1 (bắt buộc): gọi `check_available_balance_or_credit(amount_vnd=910000)`
-(giả sử `min_payment_vnd` đọc được là 910.000đ) → tool xác nhận đủ hạn mức.
+Bước 1 (bắt buộc): đọc `/customer_data.json`, thấy thẻ MSB Visa Signature
+có `available_credit_vnd` đủ cho `min_payment_vnd` 910.000đ của kỳ sao kê
+liên quan.
 
 Phần text trả lời: "Kỳ sao kê thẻ MSB Visa Signature đến hạn 10/07/2026,
 mức thanh toán tối thiểu là 910.000đ (đã trả 50%, còn dư nợ 18.200.000đ)."

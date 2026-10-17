@@ -18,7 +18,6 @@ from middleware.audit import log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from text_utils import extract_final_text, extract_ui_block
 from tools.memory_tools import recall_preference, remember_preference
-from tools.transfer_tools import check_available_balance_or_credit
 
 logger = logging.getLogger("personal-card-agent")
 
@@ -64,9 +63,7 @@ def build_agent(
     instructions = (REPO_ROOT / "instructions.md").read_text(encoding="utf-8")
     return create_deep_agent(
         model=model or _default_model(),
-        tools=tools
-        if tools is not None
-        else [remember_preference, recall_preference, check_available_balance_or_credit],
+        tools=tools if tools is not None else [remember_preference, recall_preference],
         middleware=[log_tool_calls, SeedCustomerContext()],
         system_prompt=instructions,
         checkpointer=checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID),
