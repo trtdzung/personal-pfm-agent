@@ -14,6 +14,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel
 
+from checkpointer_cache import invalidate as invalidate_checkpointer_cache
+from checkpointer_cache import patch_get_events_with_cache
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from text_utils import extract_final_text, extract_ui_block
@@ -78,12 +80,24 @@ def build_agent(
     tools: list[BaseTool] | None = None,
 ):
     instructions = (REPO_ROOT / "instructions.md").read_text(encoding="utf-8")
+    checkpointer = checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID)
+    # Works around a real perf bug in AgentBaseMemoryEvents: LangGraph's
+    # get_state()/invoke() call checkpointer.get_tuple() once per
+    # accumulated checkpoint (the `messages` channel needs the whole chain
+    # walked to reduce), and each call re-fetches ALL events over the
+    # network from scratch instead of reusing what it just fetched --
+    # ~111 network round-trips (~65s) on a well-used thread vs. ~1s with
+    # this cache. No-op for InMemorySaver (tests/notebooks). Request
+    # handlers below call invalidate_checkpointer_cache() before touching
+    # a thread so each request's first read is still guaranteed fresh --
+    # see checkpointer_cache.py and todo.md's performance investigation.
+    patch_get_events_with_cache(checkpointer)
     return create_deep_agent(
         model=model or _default_model(),
         tools=tools if tools is not None else [remember_preference, recall_preference],
         middleware=[log_tool_calls, log_model_calls, SeedCustomerContext()],
         system_prompt=instructions,
-        checkpointer=checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID),
+        checkpointer=checkpointer,
         # StateBackend stays the default for everything (per-thread, isolates
         # customers' data -- see SeedCustomerContext) so only /skills/ is
         # routed to a real-disk FilesystemBackend, scoped to the skills/ dir
@@ -151,6 +165,7 @@ def chat(
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
     thread_id = request.thread_id or _default_thread_id(request.user_id)
+    invalidate_checkpointer_cache(agent.checkpointer, thread_id, request.user_id)
     try:
         result = agent.invoke(
             {"messages": [{"role": "user", "content": request.message}]},
@@ -175,6 +190,7 @@ def chat_history(
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
     thread_id = thread_id or _default_thread_id(user_id)
+    invalidate_checkpointer_cache(agent.checkpointer, thread_id, user_id)
     try:
         state = agent.get_state(config={"configurable": {"thread_id": thread_id, "actor_id": user_id}})
     except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
@@ -215,10 +231,12 @@ def delete_chat_history(
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
     thread_id = thread_id or _default_thread_id(user_id)
+    invalidate_checkpointer_cache(agent.checkpointer, thread_id, user_id)
     try:
         agent.checkpointer.delete_thread(thread_id, user_id)
     except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
         logger.exception("checkpointer.delete_thread failed for thread_id=%s", thread_id)
         raise HTTPException(status_code=500, detail="Failed to delete conversation history") from exc
+    invalidate_checkpointer_cache(agent.checkpointer, thread_id, user_id)
 
     return DeleteHistoryResponse(thread_id=thread_id, status="deleted")

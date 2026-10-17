@@ -529,11 +529,13 @@ liệu tính đúng; câu hỏi Q&A vẫn trả lời chính xác, ngắn gọn 
   mất trong 1 lần revert khác trong session này — chưa đo lại được mức cải
   thiện thật cho trường hợp nặng nhất (dự kiến cải thiện còn lớn hơn nhiều
   so với `create_jar` vì tỉ lệ nghịch với số `read_file` đã tiết kiệm được).
-- [ ] Chưa test A/B thật với LangSmith bật/tắt để đo overhead thật của
-  tracing (bạn thêm `LANGSMITH_TRACING=true` nhưng `LANGSMITH_API_KEY` hiện
-  đang trả `401 Unauthorized` khi gửi trace — cần kiểm tra lại giá trị key).
-  Điểm tích cực đã quan sát được: dù gửi trace fail liên tục, response vẫn
-  nhanh bình thường — xác nhận tracing chạy nền, không chặn response chính.
+- [x] **[Đã fix]** LangSmith đã hoạt động đúng sau khi bạn cập nhật lại
+  `LANGSMITH_API_KEY` (lỗi `401` trước đó do key sai/thiếu, không phải do
+  code). Verify: request thật gửi trace thành công tới project
+  `pfm-agent-local` (local) và `pfm-agent-prod` (bạn tự thêm biến môi
+  trường cho GreenNode Runtime, không do mình làm) — cả 2 đều nhận trace
+  bình thường, không thấy tracing làm chậm response (thời gian
+  `TOTAL`/`Model call` khớp với baseline không bật tracing).
 - [x] **[Đã test] Đánh giá việc tắt "thinking" có ảnh hưởng chất lượng
   không — so sánh trực tiếp thinking BẬT vs TẮT trên 3 câu khó hơn**
   (`transfer_form` — trả nợ 20 triệu; `chart` — phân tích chi tiêu; so sánh
@@ -567,6 +569,112 @@ liệu tính đúng; câu hỏi Q&A vẫn trả lời chính xác, ngắn gọn 
     thống kê) — không loại trừ hoàn toàn khả năng có trường hợp phức tạp
     hơn mà reasoning giúp tránh sai sót. Nên tiếp tục quan sát trên
     production sau khi deploy, đặc biệt câu hỏi nhiều bước tính toán hơn.
+
+### 1.11. [Đã fix — quan trọng nhất trong đợt tối ưu hiệu năng] `checkpointer.get_tuple()` bị gọi lặp 100+ lần mỗi request trên thread đã dùng lâu
+
+**Phát hiện (2026-09-13, từ chính trace LangSmith bạn gửi):** 1 câu "Xin
+chào" đơn giản trên thread `CIF_0001` thật (đã tích luỹ nhiều lịch sử qua
+cả phiên làm việc này) mất **57.41s** theo LangSmith, nhưng `model` (lời
+gọi LLM thật) chỉ chiếm **6.27s**. ~50.77s còn lại nằm **trước cả
+`before_agent` hook đầu tiên** — tức ngoài mọi span được trace, xảy ra
+ngay trong bước LangGraph tự load state của thread trước khi graph bắt
+đầu chạy.
+
+**Điều tra sâu (đo trực tiếp, không phải suy đoán):**
+- `agent.get_state(config)` trên `CIF_0001` (51 message tích luỹ): **65.92s**.
+- Instrumented `agent.checkpointer.get_tuple`: được gọi **111 lần** trong
+  đúng 1 lần `get_state()` (hoặc `invoke()`) — khớp với 111 checkpoint đã
+  tích luỹ trên thread này qua cả phiên. Tổng 64.43s, trung bình ~0.55-1.0s
+  mỗi lần.
+- Vì sao cần gọi nhiều lần: kênh `messages` trong LangGraph dùng cơ chế
+  reducer (accumulate qua nhiều checkpoint) — không có 1 checkpoint đơn lẻ
+  nào chứa đủ danh sách message đầy đủ (đã verify: quét cả 116 checkpoint,
+  0 checkpoint nào có `messages` trong `channel_values` riêng lẻ) — về
+  nguyên tắc LangGraph cần duyệt cả chuỗi để reduce lại. **Đây không phải
+  bug của LangGraph.**
+- **Bug thật nằm ở `AgentBaseMemoryEvents.get_tuple()`** (package
+  `greennode-agent-bridge`): mỗi lần được gọi trong chuỗi 111 lần đó, nó
+  lại tự `get_events()` **fetch lại TOÀN BỘ 460 events từ network + parse
+  lại từ đầu**, dù dữ liệu không đổi giữa các lần gọi liên tiếp này. Có
+  sẵn cơ chế `_local_cache` (TTL 30s) trong code nhưng KHÔNG được dùng để
+  bỏ qua bước fetch — chỉ dùng để so sánh "cái nào mới hơn". Verify: fetch
+  1 lần duy nhất (460 events, 5 trang phân trang) chỉ mất **0.95-1.16s** —
+  network/GreenNode Memory tự nó không chậm, vấn đề là gọi lặp 111 lần một
+  cách lãng phí.
+
+**Đã fix (trong repo, không cần sửa gì phía GreenNode):** `checkpointer_cache.py`
+(mới) — bọc `checkpointer.checkpoint_event_client.get_events` bằng cache
+TTL rất ngắn (2 giây, chặt hơn nhiều so với TTL 30s mặc định của GreenNode
+Memory nên không tăng thêm rủi ro đọc dữ liệu cũ giữa các request thật
+khác nhau — chỉ đủ để hấp thụ 111 lần gọi dồn dập trong CÙNG 1 lần
+`invoke()`/`get_state()`, vốn hoàn tất trong &lt;1s sau khi cache). Gắn vào
+`server.py`'s `build_agent()` ngay sau khi tạo checkpointer — no-op an
+toàn với `InMemorySaver` (test/notebook, không có
+`checkpoint_event_client`). 4 test mới trong
+`tests/test_checkpointer_cache.py` (no-op khi thiếu attribute, cache
+đúng theo TTL, tách cache theo từng thread/actor, hết hạn đúng lúc). 71/71
+test pass.
+
+**Kết quả verify thật (qua đúng `server.build_agent()`, trên `CIF_0001`
+thật, 51 message tích luỹ, KHÔNG xoá lịch sử):**
+
+| | Trước | Sau |
+|---|---|---|
+| `GET /chat/history` (`get_state`) | 65.92s | **0.97s** (~68 lần) |
+| `POST /chat` (`invoke`) | ~70s | **6.17s** (~11 lần, về đúng mức baseline thread mới) |
+
+Dữ liệu vẫn đúng cả 2 (51 message giữ nguyên, câu trả lời hợp lý) — đây là
+**mức cải thiện lớn nhất trong toàn bộ đợt tối ưu hiệu năng này**, vì nó
+giải quyết đúng phần chiếm 88-90% tổng thời gian trên thread đã dùng lâu —
+lớn hơn nhiều so với việc gộp system-prompt (~13-40%) hay tắt reasoning
+(~2.4x-5.1x, nhưng đo trên thread ít lịch sử).
+
+**[Cập nhật 2026-09-13] Đã nâng cấp từ TTL cố định sang cache theo phạm vi
+request** (đúng hướng "tốt hơn" đã đề xuất trong
+[`docs/incidents/2026-09-13-greennode-memory-checkpointer-perf.md`](docs/incidents/2026-09-13-greennode-memory-checkpointer-perf.md)):
+`checkpointer_cache.py` viết lại — bỏ TTL 2 giây "đoán", thay bằng
+`invalidate(checkpointer, session_id, actor_id)` gọi rõ ràng ở đầu cả 3
+handler (`POST /chat`, `GET /chat/history`, `DELETE /chat/history`) trong
+`server.py`, xoá đúng cache của thread đó trước khi đọc/ghi — đảm bảo lần
+fetch đầu tiên mỗi request luôn thật, không còn phải đoán "bao nhiêu giây
+là đủ". Vẫn giữ TTL 60s làm lưới an toàn cho nơi nào lỡ quên gọi
+`invalidate()`. 74/74 test pass (6 test mới, bao gồm test riêng cho
+`invalidate()`).
+
+Verify lại trên `CIF_0001` thật (qua đúng `invalidate()` + `get_state()`/
+`invoke()` như handler thật làm): `GET /chat/history` **1.19s** (từ
+~65.92s), `POST /chat` **6.71s** (từ ~70s) — giữ nguyên mức cải thiện,
+đúng dữ liệu.
+
+**Phát hiện thêm trong lúc verify (KHÔNG phải do fix này gây ra — là hạn
+chế có sẵn của GreenNode Memory, chỉ vô tình bị lộ rõ hơn):** gọi
+`GET /chat/history` **ngay lập tức** (dưới 1 giây) sau 1 `POST /chat` vừa
+ghi xong có lúc tạm thời **thiếu đúng 2 tin nhắn vừa ghi** — dù đã
+`invalidate()` đúng, ép fetch 100% từ network (không phải do cache phía
+mình). Thử lại vài giây sau (tiến trình khác) thấy đủ dữ liệu, ổn định.
+→ GreenNode Memory có độ trễ ghi→đọc (write-then-read lag) ngắn — cùng
+bản chất với race condition 30 giây đã ghi nhận riêng cho `DELETE` ở mục
+1.5, giờ xác nhận **cũng ảnh hưởng cả luồng ghi/đọc bình thường**.
+**Khuyến nghị cho frontend:** sau `POST /chat` thành công, hiển thị trực
+tiếp `answer` từ chính response đó — không gọi lại `GET /chat/history`
+ngay sau để refresh (chỉ dùng `GET /chat/history` cho việc mở lại 1 cuộc
+hội thoại cũ, ví dụ mở lại app).
+
+**Lưu ý còn treo:**
+- [ ] Đây vẫn là workaround, không phải fix triệt để — bug gốc nằm trong
+  package `greennode-agent-bridge` (không cache fetch giữa các lần gọi
+  liên tiếp trong `get_tuple()`) VÀ độ trễ ghi→đọc nằm ở chính backend
+  GreenNode Memory (không sửa được từ client). Nên báo GreenNode biết cả
+  2 vấn đề để họ tự fix ở tầng SDK/backend; nếu họ fix, cân nhắc gỡ
+  workaround `checkpointer_cache.py` sau.
+- [ ] Concurrency edge case chưa test: 2 request thật đến gần như đồng
+  thời trên CÙNG thread (ví dụ user bấm gửi 2 tin nhắn rất nhanh) — về lý
+  thuyết `invalidate()` của request sau có thể xoá cache ngay giữa lúc
+  request trước đang fetch, gây fetch thừa (không sai dữ liệu, chỉ lãng
+  phí nhẹ) — chấp nhận được, chưa cần xử lý thêm.
+- [ ] Chưa deploy lên GreenNode Runtime — số liệu trên đo local (dùng
+  đúng `MEMORY_ID`/checkpointer thật, không phải mock) nhưng qua code
+  chưa build lại Docker image/deploy.
 
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
