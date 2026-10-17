@@ -5,9 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py text_utils.py instructions.md ./
-COPY middleware/ ./middleware/
-COPY data/ ./data/
+COPY . .
 
 EXPOSE 8000
 
