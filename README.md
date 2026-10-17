@@ -96,12 +96,42 @@ main agent, but is otherwise fully isolated: it has its own
 its own `Dockerfile`.
 
 **Required environment variables** (the container refuses to start without
-`SERVER_API_KEY`; it crash-loops on the first request without a working
-`OPENAI_API_KEY`):
+`SERVER_API_KEY`, `MEMORY_ID`, or `USER_PREFERENCE_STRATEGY_ID`; it
+crash-loops on the first request without a working `OPENAI_API_KEY`):
 
 - `OPENAI_API_KEY` -- passed straight through to `ChatOpenAI`
 - `SERVER_API_KEY` -- shared secret; every `POST /chat` request must send
   it back in the `X-API-Key` header, or the request is rejected with 401
+- `MEMORY_ID` -- id of a GreenNode AgentBase Memory resource used for both
+  (a) short-term conversation history per `(thread_id, user_id)` (see
+  below) and (b) long-term memory records (customer preferences). A
+  long-term memory strategy can **only** be attached at creation time --
+  there's no update endpoint -- so create it with the strategy included:
+  ```bash
+  pip install greennode-agentbase
+  gab memory create -n "personal-card-agent" -e 2592000 \
+    -S '{"name":"customer-preferences","type":"USER_PREFERENCE","namespaceTemplate":"actors/{actorId}"}'
+  ```
+  (`-e` is the event retention window **in seconds** -- 2592000 = 30 days.)
+  Copy the returned `id` into `MEMORY_ID`.
+- `USER_PREFERENCE_STRATEGY_ID` -- id of the `USER_PREFERENCE` long-term
+  memory strategy created above (different from `MEMORY_ID` -- looks like
+  `ltms-...`). Get it with `gab memory strategies list <MEMORY_ID>`. Used
+  by the `remember_preference`/`recall_preference` tools (see
+  `tools/memory_tools.py`) to let the agent remember durable customer facts
+  (e.g. a stated budget) across threads.
+- `GREENNODE_CLIENT_ID` / `GREENNODE_CLIENT_SECRET` -- IAM credentials the
+  Memory client uses to authenticate. **On GreenNode AgentBase Runtime these
+  are injected automatically** -- only set them yourself when running
+  locally/Docker outside GreenNode. To get them: open
+  `https://aiplatform.console.greennode.ai/access-control`, click
+  **"Create Identity"**, name it (e.g. `personal-card-agent-local`), then
+  copy the `client_id`/`client_secret` shown for that identity. `gab identity
+  login` will prompt for both and cache them in `.greennode.json` (gitignored
+  and dockerignored) so you don't have to export them by hand every time.
+  (`GREENNODE_AGENT_IDENTITY`, which GreenNode also injects at runtime, is
+  unrelated to Memory -- it's only used by the SDK's separate LLM-provider-key
+  federation feature, which this server doesn't use.)
 
 **Run locally with Docker:**
 
@@ -110,6 +140,10 @@ docker build -t personal-card-agent-server .
 docker run -p 8080:8080 \
     -e OPENAI_API_KEY=sk-... \
     -e SERVER_API_KEY=choose-a-secret \
+    -e MEMORY_ID=<memory id from gab memory create> \
+    -e USER_PREFERENCE_STRATEGY_ID=<ltms-... id from gab memory strategies list> \
+    -e GREENNODE_CLIENT_ID=... \
+    -e GREENNODE_CLIENT_SECRET=... \
     personal-card-agent-server
 ```
 
@@ -117,13 +151,24 @@ docker run -p 8080:8080 \
 
 - `GET /health` -- no auth, returns `{"status": "ok"}`
 - `POST /chat` -- requires `X-API-Key` header, body
-  `{"message": str, "thread_id": str | null}`, returns
+  `{"message": str, "user_id": str, "thread_id": str | null}`, returns
   `{"answer": str, "thread_id": str}`
+- `GET /chat/history?user_id=...&thread_id=...` -- requires `X-API-Key`
+  header, returns `{"thread_id": str, "messages": [{"role": "user" | "assistant", "content": str}]}`.
+  Reads straight from the same GreenNode Memory checkpointer `/chat` writes
+  to (via `agent.get_state()`) -- no separate storage needed to show a past
+  conversation on the UI. An unknown `(thread_id, user_id)` pair returns an
+  empty `messages` list, not an error.
 
-**Known limitation:** `thread_id` is accepted and threaded through to the
-agent, but this server has no persistent memory backend wired in yet --
-each request is effectively stateless regardless of `thread_id`. This is a
-deliberate, documented placeholder for a future memory backend, not a bug.
+**Multi-user conversation history:** each `(thread_id, user_id)` pair gets
+its own conversation history, persisted in GreenNode AgentBase Memory (via
+`AgentBaseMemoryEvents`, a LangGraph checkpointer) instead of in-process RAM
+-- history survives container restarts/redeploys and different `user_id`s
+never see each other's history even if they reuse the same `thread_id`.
+`user_id` is supplied by the caller (this server does not attempt to derive
+it from GreenNode's injected `X-GreenNode-AgentBase-User-Id` header, since
+this deployment authenticates callers via a single Auth0 machine-to-machine
+client rather than per-end-user tokens).
 
 CI (`.github/workflows/docker-build.yml`) runs the server's tests, builds,
 and smoke-tests the image on every push and pull request. On push to
@@ -158,7 +203,8 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── data/
 │   └── customer_data.json   # sample customer data, re-read into every session
 ├── skills/                    # empty — no on-demand skill docs yet, ready for future ones
-├── tools/                     # empty — agent uses only built-in filesystem tools, no custom ones yet
+├── tools/
+│   └── memory_tools.py         # remember_preference/recall_preference — server.py's long-term memory tools (not used by agent.py)
 ├── middleware/
 │   ├── audit.py              # wrap_tool_call middleware that logs every tool call
 │   └── seed_customer_context.py  # before_agent hook that seeds /customer_data.json
@@ -195,11 +241,18 @@ Notes:
   to actually use it.
 - Delete `memory.py`, `channels/`, `schedules/`, `connectors/`, `tools/`,
   `skills/`, `sandbox/`, or `evals/` entirely if you don't need them —
-  they're all opt-in by presence. `tools/` and `skills/` are currently
-  empty on purpose (this agent only uses the built-in filesystem tools —
-  see the design spec's "no hardcoded logic" constraint); `sandbox/`'s
-  mere presence turns on the managed code-execution sandbox at deploy
-  time, whether or not anything inside it does anything.
+  they're all opt-in by presence for the `mda`/`agent.py` deployment path.
+  `skills/` is currently empty on purpose (this agent only uses the
+  built-in filesystem tools -- see the design spec's "no hardcoded logic"
+  constraint); `sandbox/`'s mere presence turns on the managed
+  code-execution sandbox at deploy time, whether or not anything inside it
+  does anything. `tools/memory_tools.py` is a **real dependency of
+  `server.py`** (not `agent.py`, which still only uses built-in filesystem
+  tools) -- if `mda dev`/`mda deploy` auto-imports every file under
+  `tools/` regardless of whether `agent.py` references it, this file would
+  break that path too (it raises at import time without
+  `MEMORY_ID`/`USER_PREFERENCE_STRATEGY_ID`/`GREENNODE_CLIENT_ID` set) --
+  verify this before relying on the `mda` path again.
 - `harbor-job.json` isn't checked in here: it's generated by
   `mda evals compile` (run automatically as part of the Harbor eval
   workflow) under `.mda/evals/`, not something you hand-write.

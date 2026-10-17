@@ -31,6 +31,26 @@ Lưu ý: `/customer_data.json` có thể chứa một trường `chat_memory_exa
 khách hàng. Bỏ qua hoàn toàn trường này. Nguồn duy nhất cho ngân sách thật
 là file bền vững `/memories/agent/customer_budgets.json` mô tả bên dưới.
 
+Bạn có thể có 1 trong 2 cơ chế ghi nhớ ngân sách dưới đây tuỳ nơi bạn đang
+chạy — dùng đúng cơ chế tương ứng với tool/file thực sự có sẵn cho bạn, đừng
+giả định cả hai đều tồn tại cùng lúc:
+
+**Nếu bạn có tool `recall_preference`/`remember_preference`:** ngân sách tự
+đặt là 1 dạng **User Preference** ("khách hàng thích/muốn gì" — ở đây là mục
+tiêu chi tiêu tự đặt ra), không phải Semantic Memory ("khách hàng có gì" —
+tình hình tài chính khách quan). Nếu sau này bạn có thêm tool
+`remember_fact`/`recall_fact` (Semantic Memory), KHÔNG dùng chúng cho ngân
+sách — vẫn dùng đúng `remember_preference`/`recall_preference`.
+- Trước khi trả lời câu hỏi liên quan ngân sách, gọi `recall_preference` với
+  câu hỏi kiểu "ngân sách hàng tháng của khách hàng" để tìm lại ngân sách đã
+  từng ghi nhớ.
+- Nếu không tìm thấy gì liên quan: nói rõ bạn chưa biết ngân sách của khách
+  hàng và hỏi lại — không giả định con số.
+- Nếu khách hàng cho biết ngân sách (mới hoặc cập nhật) trong hội thoại, gọi
+  `remember_preference` với nội dung cụ thể (ví dụ: "Ngân sách ăn uống hàng
+  tháng: 2.000.000 VND, nói vào 2026-08-30") để ghi lại.
+
+**Nếu bạn không có 2 tool trên (chỉ có `read_file`/`write_file`/`edit_file`):**
 - Trước khi trả lời câu hỏi liên quan ngân sách, đọc file bền vững
   `/memories/agent/customer_budgets.json` bằng `read_file`. File này là một
   dict khoá theo `customer_id` (lấy `customer_id` từ trường `customer` trong

@@ -10,6 +10,12 @@ services:
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in your environment or .env file}
       SERVER_API_KEY: ${SERVER_API_KEY:?Set SERVER_API_KEY in your environment or .env file}
+      MEMORY_ID: ${MEMORY_ID:?Set MEMORY_ID (create one with `gab memory create`) in your environment or .env file}
+      USER_PREFERENCE_STRATEGY_ID: ${USER_PREFERENCE_STRATEGY_ID:?Set USER_PREFERENCE_STRATEGY_ID (a USER_PREFERENCE long-term memory strategy on MEMORY_ID) in your environment or .env file}
+      # Only needed to run locally -- GreenNode AgentBase Runtime injects these
+      # automatically for you when deployed there.
+      GREENNODE_CLIENT_ID: ${GREENNODE_CLIENT_ID:-}
+      GREENNODE_CLIENT_SECRET: ${GREENNODE_CLIENT_SECRET:-}
       PORT: ${PORT:-8080}
     env_file:
       - path: .env

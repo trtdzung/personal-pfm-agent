@@ -218,6 +218,19 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   thật tính năng managed sandbox** khi `mda deploy` (ảnh hưởng chi phí/hành
   vi). Nếu không thật sự cần chạy code trên nền tảng, cân nhắc xoá lại
   trước khi deploy thật lần đầu với thư mục này.
+- [ ] **Kích hoạt Semantic Memory** (`tools/memory_tools.py` — cặp
+  `remember_fact`/`recall_fact` cho strategy `ltms-2038ab25-bb1b-4148-ba48-c4435e0333e7`,
+  hiện đang comment out có chủ đích). Phạm vi Semantic ("khách hàng có gì?"):
+  sản phẩm/dịch vụ đang sở hữu, tình hình tài chính khách quan, sự kiện đời
+  sống, hành vi quan sát được, lịch sử tương tác — khác với User Preference
+  ("khách hàng thích gì?") đang dùng cho ngân sách tự đặt. Khi làm: thêm env
+  var `SEMANTIC_STRATEGY_ID` (fail-fast giống `USER_PREFERENCE_STRATEGY_ID`),
+  uncomment tool + thêm vào `build_agent()`'s `tools=[...]`, viết test tương
+  tự `test_remember_preference_tool_inserts_under_actor_namespace`/
+  `test_recall_preference_tool_searches_under_actor_namespace`, cập nhật
+  `docker-compose.yml`/CI workflow/README với biến env mới, và bổ sung
+  `instructions.md` hướng dẫn khi nào dùng `remember_fact`/`recall_fact` thay
+  vì `remember_preference`/`recall_preference`.
 
 ## 4. Việc người dùng tự quyết định
 

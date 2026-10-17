@@ -47,6 +47,8 @@ jobs:
           docker run -d --name smoketest -p 18080:8080 \
             -e OPENAI_API_KEY=sk-ci-dummy \
             -e SERVER_API_KEY=ci-dummy \
+            -e MEMORY_ID=ci-dummy-memory-id \
+            -e USER_PREFERENCE_STRATEGY_ID=ci-dummy-strategy-id \
             ${{ steps.tags.outputs.sha_tag }}
           for i in $(seq 1 40); do
             if curl -fsS http://localhost:18080/health; then
