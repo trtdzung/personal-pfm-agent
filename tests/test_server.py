@@ -601,6 +601,14 @@ def test_server_refuses_to_start_without_ai_platform_api_key():
 
 def test_chat_endpoint_masks_internal_error_details(monkeypatch):
     class _RaisingAgent:
+        # /chat reads agent.checkpointer (to invalidate the request-scoped
+        # events cache) before it calls invoke(), so the fake has to expose
+        # one or the handler dies on AttributeError instead of exercising
+        # the error masking this test is about. None is fine:
+        # checkpointer_cache.invalidate() is a no-op for anything that was
+        # never patched.
+        checkpointer = None
+
         def invoke(self, *args, **kwargs):
             raise RuntimeError("secret internal detail")
 
