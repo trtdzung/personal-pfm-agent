@@ -1,0 +1,23 @@
+services:
+  personal-card-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: personal-card-agent-server
+    container_name: personal-card-agent
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in your environment or .env file}
+      SERVER_API_KEY: ${SERVER_API_KEY:?Set SERVER_API_KEY in your environment or .env file}
+      PORT: ${PORT:-8080}
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT', '8080') + '/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped

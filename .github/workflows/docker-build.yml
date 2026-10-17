@@ -44,17 +44,17 @@ jobs:
             vcr.vngcloud.vn/111480-abp114564/pca-agent:latest
       - name: Smoke test image
         run: |
-          docker run -d --name smoketest -p 18000:8000 \
+          docker run -d --name smoketest -p 18080:8080 \
             -e OPENAI_API_KEY=sk-ci-dummy \
             -e SERVER_API_KEY=ci-dummy \
             ${{ steps.tags.outputs.sha_tag }}
           for i in $(seq 1 40); do
-            if curl -fsS http://localhost:18000/health; then
+            if curl -fsS http://localhost:18080/health; then
               break
             fi
             sleep 2
           done
-          curl -f http://localhost:18000/health
+          curl -f http://localhost:18080/health
       - name: Show container logs on failure
         if: failure()
         run: docker logs smoketest || true

@@ -107,7 +107,7 @@ its own `Dockerfile`.
 
 ```bash
 docker build -t personal-card-agent-server .
-docker run -p 8000:8000 \
+docker run -p 8080:8080 \
     -e OPENAI_API_KEY=sk-... \
     -e SERVER_API_KEY=choose-a-secret \
     personal-card-agent-server
