@@ -128,7 +128,7 @@ deliberate, documented placeholder for a future memory backend, not a bug.
 CI (`.github/workflows/docker-build.yml`) runs the server's tests, builds,
 and smoke-tests the image on every push and pull request. On push to
 `master` it also pushes the image to a private registry:
-`vcr.vngcloud.vn/wefi/pca-agent:sha-<7-char commit sha>` and `:latest`
+`vcr.vngcloud.vn/111480-abp114564/pca-agent:sha-<7-char commit sha>` and `:latest`
 (pull requests build and smoke-test only, never push). Requires two repo
 secrets set in GitHub (`VCR_USERNAME`, `VCR_PASSWORD`) for `docker login
 vcr.vngcloud.vn`.

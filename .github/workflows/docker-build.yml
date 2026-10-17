@@ -31,7 +31,7 @@ jobs:
       - name: Compute image tags
         id: tags
         run: |
-          SHA_TAG="vcr.vngcloud.vn/wefi/pca-agent:sha-$(echo ${{ github.sha }} | cut -c1-7)"
+          SHA_TAG="vcr.vngcloud.vn/111480-abp114564/pca-agent:sha-$(echo ${{ github.sha }} | cut -c1-7)"
           echo "sha_tag=$SHA_TAG" >> "$GITHUB_OUTPUT"
       - name: Build image
         uses: docker/build-push-action@v6
@@ -41,7 +41,7 @@ jobs:
           load: true
           tags: |
             ${{ steps.tags.outputs.sha_tag }}
-            vcr.vngcloud.vn/wefi/pca-agent:latest
+            vcr.vngcloud.vn/111480-abp114564/pca-agent:latest
       - name: Smoke test image
         run: |
           docker run -d --name smoketest -p 18000:8000 \
@@ -72,4 +72,4 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           docker push ${{ steps.tags.outputs.sha_tag }}
-          docker push vcr.vngcloud.vn/wefi/pca-agent:latest
+          docker push vcr.vngcloud.vn/111480-abp114564/pca-agent:latest
