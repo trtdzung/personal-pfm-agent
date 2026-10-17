@@ -1,21 +1,28 @@
 import json
 from pathlib import Path
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "customer_data.json"
+import pytest
+
+CUSTOMERS_DIR = Path(__file__).resolve().parents[2] / "data" / "customers"
+CUSTOMER_IDS = ["CIF_0001", "CIF_0002", "CIF_0003"]
 
 
-def _load():
-    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+def _load(customer_id: str) -> dict:
+    path = CUSTOMERS_DIR / f"{customer_id}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_customer_data_file_exists_and_valid_json():
-    assert DATA_PATH.exists(), "expected data/customer_data.json to exist"
-    data = _load()
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_customer_data_file_exists_and_valid_json(customer_id):
+    path = CUSTOMERS_DIR / f"{customer_id}.json"
+    assert path.exists(), f"expected data/customers/{customer_id}.json to exist"
+    data = _load(customer_id)
     assert isinstance(data, dict)
 
 
-def test_customer_data_has_required_top_level_keys():
-    data = _load()
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_customer_data_has_required_top_level_keys(customer_id):
+    data = _load(customer_id)
     for key in (
         "customer",
         "chat_memory_example",
@@ -27,13 +34,16 @@ def test_customer_data_has_required_top_level_keys():
         assert key in data, f"missing top-level key: {key}"
 
 
-def test_customer_has_customer_id():
-    data = _load()
-    assert "customer_id" in data["customer"]
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_customer_has_customer_id_and_gender(customer_id):
+    data = _load(customer_id)
+    assert data["customer"]["customer_id"] == customer_id
+    assert data["customer"]["gender"] in ("Nam", "Nữ")
 
 
-def test_monthly_totals_match_summed_transactions():
-    data = _load()
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_monthly_totals_match_summed_transactions(customer_id):
+    data = _load(customer_id)
     totals_by_month: dict[str, int] = {}
     counts_by_month: dict[str, int] = {}
     for txn in data["transactions"]:
@@ -54,8 +64,9 @@ def test_monthly_totals_match_summed_transactions():
         )
 
 
-def test_category_breakdown_sums_to_month_total():
-    data = _load()
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_category_breakdown_sums_to_month_total(customer_id):
+    data = _load(customer_id)
     for month, summary in data["monthly_spending_summary"].items():
         if month.startswith("_"):
             continue

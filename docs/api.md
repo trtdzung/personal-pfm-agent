@@ -76,9 +76,28 @@ gateway** (không phải từ app) — body lỗi sẽ khác định dạng
 
 ## Mô hình `user_id` / `thread_id`
 
-- `user_id` — định danh **cố định** của 1 khách hàng (ví dụ mã khách hàng),
-  **bắt buộc** ở mọi endpoint.
+- `user_id` — định danh **cố định** của 1 khách hàng (mã CIF), **bắt buộc**
+  ở mọi endpoint.
 - `thread_id` — định danh 1 cuộc hội thoại, **luôn optional**.
+
+**Quan trọng — `user_id` cho `POST /chat` phải là 1 mã khách hàng có thật.**
+Agent đọc đúng dữ liệu tài chính của khách hàng đó dựa trên `user_id` — hiện
+có đúng 3 khách hàng mẫu:
+
+| `user_id` | Tên |
+|---|---|
+| `CIF_0001` | Ly Lã |
+| `CIF_0002` | Trần Toàn |
+| `CIF_0003` | Đào Nguyên |
+
+Gửi `POST /chat` với `user_id` **không khớp 1 trong 3 giá trị trên** sẽ trả
+về `500` (agent không tìm được dữ liệu khách hàng tương ứng, lỗi bị mask
+giống mọi lỗi nội bộ khác — xem bảng lỗi ở mục `/chat` bên dưới).
+
+**Ràng buộc này KHÔNG áp dụng cho `GET`/`DELETE /chat/history`** — 2
+endpoint đó chỉ thao tác trên lịch sử hội thoại (không đọc dữ liệu tài
+chính khách hàng), nên chấp nhận `user_id` bất kỳ; `user_id` không có thật
+chỉ đơn giản trả về lịch sử rỗng, không phải lỗi.
 
 **Hiện tại frontend chỉ truyền `user_id`, không truyền `thread_id`.** Khi bỏ
 qua `thread_id`, server tự dùng **chính `user_id`** làm `thread_id` mặc định

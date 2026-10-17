@@ -94,18 +94,80 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
 ### 1.1. Đa người dùng (multi-customer)
 - `identity.py` hiện chỉ xác thực bằng **1 LangSmith API key dùng chung cho cả
   workspace** (`auth.langsmith_api_key()`) — không có khái niệm "khách hàng A"
-  khác "khách hàng B" ở tầng xác thực. `server.py` (đường tự host) cũng
-  **chưa có khái niệm khách hàng** — chỉ 1 `SERVER_API_KEY` dùng chung, không
-  phải xác thực theo từng người dùng.
-- `data/customer_data.json` là **1 file tĩnh duy nhất**, dùng chung cho cả
-  `agent.py` lẫn `server.py` — muốn nhiều khách hàng thật cần: (a) nguồn dữ
-  liệu theo từng `customer_id` (DB/API thay vì 1 file JSON), (b)
-  `SeedCustomerContext` đọc đúng dữ liệu của khách hàng đang chat (cần biết
-  "đang chat với ai" — phụ thuộc việc xác thực ở mục trên).
-- **Việc cần làm:** đổi `identity.py` sang `auth.supabase(...)` (README đã gợi
-  ý) hoặc cơ chế xác thực theo người dùng thật; thiết kế lại nguồn dữ liệu
-  khách hàng theo `customer_id`; nếu giữ `server.py`, cũng cần nghĩ xác thực
-  theo người dùng thay vì 1 `SERVER_API_KEY` dùng chung.
+  khác "khách hàng B" ở tầng xác thực.
+- **Cập nhật (đã làm ở phiên GreenNode Memory):** `server.py` giờ **đã có**
+  `user_id` trên mỗi request (bắt buộc, dùng làm `actor_id` cho GreenNode
+  Memory) — nhưng đây chỉ là giá trị **client tự khai báo và server tin
+  tưởng**, không có xác thực thật theo từng người dùng (vẫn chỉ 1
+  `SERVER_API_KEY` dùng chung cho mọi caller). Không phải bug cần sửa ngay
+  (frontend hiện đang là backend nội bộ đáng tin cậy), nhưng cần nhớ đây
+  chưa phải xác thực đầu-cuối thật nếu sau này mở API cho client ít tin
+  cậy hơn.
+- `data/customer_data.json` là **1 file tĩnh duy nhất**, chỉ có 1 khách hàng
+  (`CUS-000482`), dùng chung cho cả `agent.py` lẫn `server.py`, và
+  `SeedCustomerContext` load file này **bất kể `user_id` là ai** — mọi
+  khách hàng hiện đang thấy chung 1 bộ dữ liệu. Xem mục 1.1.1 ngay dưới đây
+  — đã có yêu cầu cụ thể để giải quyết phần này trước.
+- **Việc cần làm (phần xác thực, vẫn mở):** đổi `identity.py` sang
+  `auth.supabase(...)` (README đã gợi ý) hoặc cơ chế xác thực theo người
+  dùng thật cho `agent.py`; với `server.py`, cân nhắc xác thực `user_id`
+  thật (không chỉ tin client) nếu mở ra ngoài phạm vi backend nội bộ.
+
+#### 1.1.1. Dữ liệu khách hàng theo `user_id` — 3 khách hàng: `CIF_0001`, `CIF_0002`, `CIF_0003`
+
+**Đã triển khai xong (server.py):**
+- [x] 3 khách hàng mới hoàn toàn (không tái dùng `CUS-000482` cũ, đã xoá
+  `data/customer_data.json`): `data/customers/CIF_0001.json` (Ly Lã, Nữ),
+  `CIF_0002.json` (Trần Toàn, Nam), `CIF_0003.json` (Đào Nguyên, Nam) — mỗi
+  file thêm field `gender` mới, nội bộ nhất quán (tổng giao dịch khớp
+  `monthly_spending_summary`, verify bằng script).
+- [x] `middleware/seed_customer_context.py` — `SeedCustomerContext` giờ đọc
+  `actor_id` qua `langgraph.config.get_config()["configurable"]["actor_id"]`
+  rồi load đúng `data/customers/<customer_id>.json`. 3 trường hợp:
+  - Có `actor_id` khớp 1 trong 3 → load đúng khách hàng đó (verify bằng
+    request thật qua `create_deep_agent` + fake model, và qua `uvicorn`
+    thật với credentials GreenNode thật — request cho `CIF_0001`/`CIF_0003`
+    đều vượt qua middleware đúng, chỉ fail sau đó ở bước gọi OpenAI vì lỗi
+    401 thiếu scope đã biết từ trước, không liên quan).
+  - Có `actor_id` nhưng không khớp khách nào → raise `UnknownCustomerError`
+    rõ ràng (verify: request `user_id` rác → lỗi đúng tại middleware, không
+    kịp gọi OpenAI) — tự nổi thành `500` đã mask sẵn ở `/chat`, không cần
+    sửa gì thêm ở `server.py`.
+  - Không có `actor_id`/không có runnable context (gọi middleware trực
+    tiếp trong unit test, hoặc `agent.py` không set `actor_id`) → fallback
+    `DEFAULT_CUSTOMER_ID = "CIF_0001"`, giữ nguyên hành vi cũ của `agent.py`
+    không bị vỡ.
+- [x] `instructions.md` — ví dụ ngân sách đổi từ `CUS-000482` sang
+  `CIF_0001`.
+- [x] `pyproject.toml` + `tests/test_packaging.py` — đóng gói 3 file mới
+  thay vì 1 file cũ, verify bằng `uv build --wheel` thật.
+- [x] `tests/data/test_customer_data.py` — tổng quát hoá (parametrize) chạy
+  trên cả 3 file.
+- [x] `tests/middleware/test_seed_customer_context.py` — thêm 3 test:
+  fallback khi không có context, load đúng khách hàng theo `actor_id`, và
+  raise lỗi khi `actor_id` không khớp khách nào.
+- [x] `tests/test_server.py` — đổi toàn bộ `user_id` giả (`u1`, `alice`,
+  `customer-42`...) sang `CIF_0001`/`CIF_0002` thật (bắt buộc vì middleware
+  giờ raise nếu không khớp khách nào).
+- [x] `CLAUDE.md` (file mới) — chỉ dẫn không tự ý `git commit`/`git push`.
+- 88/88 test pass xuyên suốt (`uv run --group dev pytest tests/` = 35 pass
+  + `tests/test_server.py` qua venv riêng = 53 pass, không tính trùng).
+
+**Chưa làm / cân nhắc sau:**
+- [ ] `docs/sample_questions_and_answers.md` — chưa kiểm tra có tham chiếu
+  số liệu `CUS-000482` cũ không (không chặn, chỉ là doc tham khảo dev, agent
+  không đọc lúc chạy).
+- [ ] 2 Harbor eval task (`evals/tasks/spending-total-question`,
+  `large-transactions-question`) đang hard-code số liệu theo `CUS-000482`
+  cũ — theo yêu cầu, **giữ nguyên không sửa lần này**, sẽ sai/lỗi thời nếu
+  chạy Harbor thật với data mới. Cần cập nhật lại theo 1 trong 3 khách hàng
+  mới khi có nhu cầu chạy Harbor eval thật.
+- [ ] `agent.py`/đường `mda`: xác nhận có cơ chế tương đương để biết
+  "`user_id` nào đang chat" hay không — hiện tại đường này **luôn fallback
+  về `CIF_0001`** (không có `actor_id` trong config của
+  `managed_deepagents.define_deep_agent`), nghĩa là mọi cuộc hội thoại qua
+  `agent.py` đều thấy dữ liệu của Ly Lã, không phân biệt được người gọi
+  thật. Việc này **chỉ áp dụng đúng nghĩa cho `server.py`** hiện tại.
 
 ### 1.2. Lịch sử hội thoại ngắn hạn (trong 1 phiên chat)
 - `agent.py` (agent **thật**, deploy qua `managed_deepagents.define_deep_agent`)

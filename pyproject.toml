@@ -29,4 +29,6 @@ build-backend = "hatchling.build"
 packages = ["middleware"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"data/customer_data.json" = "data/customer_data.json"
+"data/customers/CIF_0001.json" = "data/customers/CIF_0001.json"
+"data/customers/CIF_0002.json" = "data/customers/CIF_0002.json"
+"data/customers/CIF_0003.json" = "data/customers/CIF_0003.json"

@@ -62,7 +62,7 @@ def test_health_endpoint_requires_no_auth():
 
 def test_chat_endpoint_rejects_missing_api_key():
     client = TestClient(server.app)
-    response = client.post("/chat", json={"message": "hi", "user_id": "u1"})
+    response = client.post("/chat", json={"message": "hi", "user_id": "CIF_0001"})
     assert response.status_code == 401
 
 
@@ -70,7 +70,7 @@ def test_chat_endpoint_rejects_wrong_api_key():
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "hi", "user_id": "u1"},
+        json={"message": "hi", "user_id": "CIF_0001"},
         headers={"X-API-Key": "wrong-key"},
     )
     assert response.status_code == 401
@@ -94,7 +94,7 @@ def test_chat_endpoint_returns_answer_with_correct_api_key(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "Tháng này tôi đã chi tiêu bao nhiêu?", "user_id": "u1", "thread_id": "t1"},
+        json={"message": "Tháng này tôi đã chi tiêu bao nhiêu?", "user_id": "CIF_0001", "thread_id": "t1"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
@@ -111,16 +111,16 @@ def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "hi", "user_id": "u1"},
+        json={"message": "hi", "user_id": "CIF_0001"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
-    assert response.json()["thread_id"] == "u1"
+    assert response.json()["thread_id"] == "CIF_0001"
 
 
 def test_chat_history_rejects_missing_api_key():
     client = TestClient(server.app)
-    response = client.get("/chat/history", params={"user_id": "u1", "thread_id": "t1"})
+    response = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"})
     assert response.status_code == 401
 
 
@@ -132,7 +132,7 @@ def test_chat_history_empty_for_unknown_thread(monkeypatch):
     client = TestClient(server.app)
     response = client.get(
         "/chat/history",
-        params={"user_id": "u1", "thread_id": "never-chatted-before"},
+        params={"user_id": "CIF_0001", "thread_id": "never-chatted-before"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
@@ -146,12 +146,12 @@ def test_chat_history_returns_prior_turns_for_same_thread(monkeypatch):
 
     client = TestClient(server.app)
     headers = {"X-API-Key": "test-key-for-pytest"}
-    client.post("/chat", json={"message": "hello", "user_id": "u1", "thread_id": "t1"}, headers=headers)
-    client.post("/chat", json={"message": "how are you", "user_id": "u1", "thread_id": "t1"}, headers=headers)
+    client.post("/chat", json={"message": "hello", "user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+    client.post("/chat", json={"message": "how are you", "user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
 
     response = client.get(
         "/chat/history",
-        params={"user_id": "u1", "thread_id": "t1"},
+        params={"user_id": "CIF_0001", "thread_id": "t1"},
         headers=headers,
     )
     assert response.status_code == 200
@@ -174,12 +174,12 @@ def test_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
     headers = {"X-API-Key": "test-key-for-pytest"}
     # No thread_id on either call -- both must resolve to the same default
     # thread (== user_id) for the GET to find what the POST wrote.
-    client.post("/chat", json={"message": "hello", "user_id": "u1"}, headers=headers)
+    client.post("/chat", json={"message": "hello", "user_id": "CIF_0001"}, headers=headers)
 
-    response = client.get("/chat/history", params={"user_id": "u1"}, headers=headers)
+    response = client.get("/chat/history", params={"user_id": "CIF_0001"}, headers=headers)
     assert response.status_code == 200
     body = response.json()
-    assert body["thread_id"] == "u1"
+    assert body["thread_id"] == "CIF_0001"
     assert body["messages"] == [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "ok"}]
 
 
@@ -191,17 +191,17 @@ def test_delete_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypa
 
     client = TestClient(server.app)
     headers = {"X-API-Key": "test-key-for-pytest"}
-    client.post("/chat", json={"message": "hello", "user_id": "u1"}, headers=headers)
+    client.post("/chat", json={"message": "hello", "user_id": "CIF_0001"}, headers=headers)
 
-    response = client.delete("/chat/history", params={"user_id": "u1"}, headers=headers)
+    response = client.delete("/chat/history", params={"user_id": "CIF_0001"}, headers=headers)
     assert response.status_code == 200
-    assert response.json() == {"thread_id": "u1", "status": "deleted"}
-    assert ("u1", "u1") in tracking_saver.deleted_calls
+    assert response.json() == {"thread_id": "CIF_0001", "status": "deleted"}
+    assert ("CIF_0001", "CIF_0001") in tracking_saver.deleted_calls
 
 
 def test_delete_chat_history_rejects_missing_api_key():
     client = TestClient(server.app)
-    response = client.delete("/chat/history", params={"user_id": "u1", "thread_id": "t1"})
+    response = client.delete("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"})
     assert response.status_code == 401
 
 
@@ -230,17 +230,17 @@ def test_delete_chat_history_removes_thread(monkeypatch):
 
     client = TestClient(server.app)
     headers = {"X-API-Key": "test-key-for-pytest"}
-    client.post("/chat", json={"message": "hello", "user_id": "u1", "thread_id": "t1"}, headers=headers)
+    client.post("/chat", json={"message": "hello", "user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
 
-    before = client.get("/chat/history", params={"user_id": "u1", "thread_id": "t1"}, headers=headers)
+    before = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
     assert before.json()["messages"]  # has history before delete
 
-    response = client.delete("/chat/history", params={"user_id": "u1", "thread_id": "t1"}, headers=headers)
+    response = client.delete("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
     assert response.status_code == 200
     assert response.json() == {"thread_id": "t1", "status": "deleted"}
-    assert ("t1", "u1") in tracking_saver.deleted_calls
+    assert ("t1", "CIF_0001") in tracking_saver.deleted_calls
 
-    after = client.get("/chat/history", params={"user_id": "u1", "thread_id": "t1"}, headers=headers)
+    after = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
     assert after.json()["messages"] == []  # gone after delete
 
 
@@ -274,11 +274,11 @@ def test_chat_history_passes_user_id_as_actor_id(monkeypatch):
     client = TestClient(server.app)
     response = client.get(
         "/chat/history",
-        params={"user_id": "customer-42", "thread_id": "t1"},
+        params={"user_id": "CIF_0002", "thread_id": "t1"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
-    assert "customer-42" in recording_saver.actor_ids_seen
+    assert "CIF_0002" in recording_saver.actor_ids_seen
 
 
 class _ActorIdRecordingSaver(InMemorySaver):
@@ -308,11 +308,11 @@ def test_chat_endpoint_passes_user_id_as_actor_id(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "hi", "user_id": "customer-42", "thread_id": "t1"},
+        json={"message": "hi", "user_id": "CIF_0002", "thread_id": "t1"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
-    assert "customer-42" in recording_saver.actor_ids_seen
+    assert "CIF_0002" in recording_saver.actor_ids_seen
 
 
 def test_remember_preference_tool_inserts_under_actor_namespace(monkeypatch):
@@ -335,14 +335,14 @@ def test_remember_preference_tool_inserts_under_actor_namespace(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "ngân sách ăn uống của tôi là 2 triệu/tháng", "user_id": "alice", "thread_id": "t1"},
+        json={"message": "ngân sách ăn uống của tôi là 2 triệu/tháng", "user_id": "CIF_0001", "thread_id": "t1"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
     assert len(fake_memory_client.insert_calls) == 1
     call = fake_memory_client.insert_calls[0]
     assert call["id"] == "test-memory-id-for-pytest"
-    assert call["namespace"] == "/strategies/test-strategy-id-for-pytest/actors/alice"
+    assert call["namespace"] == "/strategies/test-strategy-id-for-pytest/actors/CIF_0001"
     assert call["request"].memory_records == ["Ngân sách ăn uống: 2 triệu/tháng"]
 
 
@@ -368,14 +368,14 @@ def test_recall_preference_tool_searches_under_actor_namespace(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "ngân sách ăn uống của tôi là bao nhiêu?", "user_id": "alice", "thread_id": "t1"},
+        json={"message": "ngân sách ăn uống của tôi là bao nhiêu?", "user_id": "CIF_0001", "thread_id": "t1"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
     assert len(fake_memory_client.search_calls) == 1
     call = fake_memory_client.search_calls[0]
     assert call["id"] == "test-memory-id-for-pytest"
-    assert call["namespace"] == "/strategies/test-strategy-id-for-pytest/actors/alice"
+    assert call["namespace"] == "/strategies/test-strategy-id-for-pytest/actors/CIF_0001"
     assert call["request"].query == "ngân sách ăn uống"
     assert response.json()["answer"] == "Ngân sách ăn uống của bạn là 2 triệu/tháng."
 
@@ -400,12 +400,12 @@ def test_recall_preference_tool_reports_no_match(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "ngân sách của tôi là bao nhiêu?", "user_id": "alice", "thread_id": "t1"},
+        json={"message": "ngân sách của tôi là bao nhiêu?", "user_id": "CIF_0001", "thread_id": "t1"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
     tool_messages = [
-        m for m in fake_agent.get_state({"configurable": {"thread_id": "t1", "actor_id": "alice"}}).values["messages"]
+        m for m in fake_agent.get_state({"configurable": {"thread_id": "t1", "actor_id": "CIF_0001"}}).values["messages"]
         if type(m).__name__ == "ToolMessage"
     ]
     assert any("Không tìm thấy" in m.content for m in tool_messages)
@@ -469,7 +469,7 @@ def test_chat_endpoint_masks_internal_error_details(monkeypatch):
     client = TestClient(server.app)
     response = client.post(
         "/chat",
-        json={"message": "hi", "user_id": "u1"},
+        json={"message": "hi", "user_id": "CIF_0001"},
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 500

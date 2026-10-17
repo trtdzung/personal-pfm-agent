@@ -1,0 +1,679 @@
+{
+  "_meta": {
+    "purpose": "Dữ liệu khách hàng mẫu (mock) dùng để agent trả lời các câu hỏi tư vấn tài chính. Số liệu là ví dụ minh hoạ nhưng nội bộ nhất quán (tổng chi tiêu = tổng các giao dịch liệt kê bên dưới) để có thể trả lời trực tiếp từ dữ liệu, không cần bịa thêm số.",
+    "as_of_date": "2026-08-29",
+    "currency": "VND"
+  },
+  "customer": {
+    "customer_id": "CIF_0001",
+    "full_name": "Ly Lã",
+    "gender": "Nữ",
+    "phone": "091xxxxxxx",
+    "customer_since": "2021-05-10",
+    "monthly_income_vnd": 42000000,
+    "credit_profile": {
+      "credit_utilization_percent": 45,
+      "on_time_payment_rate_last_12_cycles": "11/12 kỳ đúng hạn (1 kỳ trễ)"
+    }
+  },
+  "chat_memory_example": {
+    "_note": "KHÔNG phải dữ liệu hệ thống — đây là ví dụ về thông tin agent chỉ biết được nếu khách hàng từng nói ra trong hội thoại trước đó. Hệ thống hiện không có tính năng lưu ngân sách trong file này (xem remember_preference/recall_preference hoặc customer_budgets.json), nên trường này có thể rỗng/null nếu khách hàng chưa từng đề cập.",
+    "monthly_budget_vnd": 25000000,
+    "mentioned_on": "2026-07-15",
+    "mentioned_in_message": "Mình muốn giữ chi tiêu thẻ dưới 25 triệu mỗi tháng để dành tiền du lịch cuối năm"
+  },
+  "cards": [
+    {
+      "card_id": "card_001",
+      "card_name": "MSB Visa Signature",
+      "card_number_last4": "3391",
+      "card_type": "credit",
+      "credit_limit_vnd": 80000000,
+      "current_balance_vnd": 34500000,
+      "available_credit_vnd": 45500000,
+      "annual_fee_vnd": 1200000,
+      "interest_rate_annual_percent": 26.4,
+      "statement_closing_day": 20,
+      "payment_due_days_after_statement": 20,
+      "min_payment_percent": 5,
+      "reward_program": {
+        "type": "points",
+        "earn_rate": "1 điểm / 20.000 VNĐ chi tiêu (mặc định); 1 điểm / 10.000 VNĐ cho nhóm Mua sắm và Di chuyển",
+        "points_balance": 3120,
+        "point_value_vnd": 100,
+        "points_earned_this_month": 1450,
+        "points_expiry": "2027-12-31"
+      }
+    },
+    {
+      "card_id": "card_002",
+      "card_name": "MSB Visa Classic",
+      "card_number_last4": "6602",
+      "card_type": "credit",
+      "credit_limit_vnd": 30000000,
+      "current_balance_vnd": 0,
+      "available_credit_vnd": 30000000,
+      "annual_fee_vnd": 400000,
+      "interest_rate_annual_percent": 27.5,
+      "statement_closing_day": 20,
+      "payment_due_days_after_statement": 20,
+      "min_payment_percent": 5,
+      "reward_program": {
+        "type": "cashback",
+        "cashback_rules": [
+          {
+            "category": "Mua sắm",
+            "percent": 3,
+            "cap_monthly_vnd": 300000
+          },
+          {
+            "category": "default",
+            "percent": 0.5,
+            "cap_monthly_vnd": null
+          }
+        ],
+        "note": "Thẻ phụ, hiện chưa phát sinh giao dịch (dư nợ 0) — dùng để so sánh tối ưu hoàn tiền với card_001."
+      }
+    }
+  ],
+  "statements": [
+    {
+      "card_id": "card_001",
+      "period_start": "2026-05-21",
+      "period_end": "2026-06-20",
+      "total_due_vnd": 18200000,
+      "due_date": "2026-07-10",
+      "min_payment_vnd": 910000,
+      "amount_paid_vnd": 9100000,
+      "paid_percent": 50,
+      "interest_charged_next_cycle_vnd": 245000,
+      "status": "paid_partial"
+    },
+    {
+      "card_id": "card_001",
+      "period_start": "2026-06-21",
+      "period_end": "2026-07-20",
+      "total_due_vnd": 21400000,
+      "due_date": "2026-08-10",
+      "min_payment_vnd": 1070000,
+      "amount_paid_vnd": 0,
+      "paid_percent": 0,
+      "interest_charged_next_cycle_vnd": null,
+      "status": "current_unpaid"
+    }
+  ],
+  "monthly_spending_summary": {
+    "_note": "Tổng hợp từ mảng transactions bên dưới, theo tháng dương lịch (không theo kỳ sao kê).",
+    "2026-06": {
+      "total_vnd": 15334000,
+      "transaction_count": 22,
+      "by_category_vnd": {
+        "Ăn uống": 3015000,
+        "Giải trí": 599000,
+        "Di chuyển": 2430000,
+        "Mua sắm": 5420000,
+        "Hoá đơn": 870000,
+        "Siêu thị": 3000000
+      }
+    },
+    "2026-07": {
+      "total_vnd": 20814000,
+      "transaction_count": 22,
+      "by_category_vnd": {
+        "Ăn uống": 3465000,
+        "Giải trí": 599000,
+        "Di chuyển": 7100000,
+        "Mua sắm": 5730000,
+        "Hoá đơn": 930000,
+        "Siêu thị": 2990000
+      }
+    },
+    "2026-08": {
+      "total_vnd": 14184000,
+      "transaction_count": 21,
+      "by_category_vnd": {
+        "Ăn uống": 2585000,
+        "Giải trí": 599000,
+        "Di chuyển": 2100000,
+        "Mua sắm": 5130000,
+        "Hoá đơn": 900000,
+        "Siêu thị": 2870000
+      },
+      "note": "Tính đến 2026-08-29, tháng chưa kết thúc"
+    }
+  },
+  "transactions": [
+    {
+      "id": "txn-2026-06-001",
+      "date": "2026-06-01",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 95000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-002",
+      "date": "2026-06-01",
+      "merchant": "Spotify Premium",
+      "category": "Giải trí",
+      "amount_vnd": 99000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-06-003",
+      "date": "2026-06-02",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 145000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-004",
+      "date": "2026-06-03",
+      "merchant": "Zara",
+      "category": "Mua sắm",
+      "amount_vnd": 2450000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-005",
+      "date": "2026-06-04",
+      "merchant": "EVN Điện lực",
+      "category": "Hoá đơn",
+      "amount_vnd": 620000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-06-006",
+      "date": "2026-06-04",
+      "merchant": "FPT Telecom",
+      "category": "Hoá đơn",
+      "amount_vnd": 250000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-06-007",
+      "date": "2026-06-06",
+      "merchant": "Vinmart",
+      "category": "Siêu thị",
+      "amount_vnd": 1150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-008",
+      "date": "2026-06-07",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 75000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-009",
+      "date": "2026-06-08",
+      "merchant": "Vietjet Air",
+      "category": "Di chuyển",
+      "amount_vnd": 1850000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-010",
+      "date": "2026-06-09",
+      "merchant": "Nhà hàng Hải Sản Ven Sông",
+      "category": "Ăn uống",
+      "amount_vnd": 1450000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-011",
+      "date": "2026-06-10",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 145000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-012",
+      "date": "2026-06-11",
+      "merchant": "Sephora",
+      "category": "Mua sắm",
+      "amount_vnd": 1680000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-013",
+      "date": "2026-06-13",
+      "merchant": "CGV Cinemas",
+      "category": "Giải trí",
+      "amount_vnd": 240000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-014",
+      "date": "2026-06-14",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 220000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-015",
+      "date": "2026-06-16",
+      "merchant": "Vinmart",
+      "category": "Siêu thị",
+      "amount_vnd": 980000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-016",
+      "date": "2026-06-17",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 145000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-017",
+      "date": "2026-06-18",
+      "merchant": "H&M",
+      "category": "Mua sắm",
+      "amount_vnd": 1290000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-018",
+      "date": "2026-06-20",
+      "merchant": "Nhà hàng Ý Luna",
+      "category": "Ăn uống",
+      "amount_vnd": 980000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-019",
+      "date": "2026-06-22",
+      "merchant": "Netflix",
+      "category": "Giải trí",
+      "amount_vnd": 260000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-06-020",
+      "date": "2026-06-24",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 145000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-021",
+      "date": "2026-06-25",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 195000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-06-022",
+      "date": "2026-06-27",
+      "merchant": "Coopmart",
+      "category": "Siêu thị",
+      "amount_vnd": 870000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-001",
+      "date": "2026-07-01",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 95000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-002",
+      "date": "2026-07-01",
+      "merchant": "Spotify Premium",
+      "category": "Giải trí",
+      "amount_vnd": 99000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-07-003",
+      "date": "2026-07-02",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-004",
+      "date": "2026-07-03",
+      "merchant": "Uniqlo",
+      "category": "Mua sắm",
+      "amount_vnd": 1850000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-005",
+      "date": "2026-07-04",
+      "merchant": "EVN Điện lực",
+      "category": "Hoá đơn",
+      "amount_vnd": 680000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-07-006",
+      "date": "2026-07-04",
+      "merchant": "FPT Telecom",
+      "category": "Hoá đơn",
+      "amount_vnd": 250000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-07-007",
+      "date": "2026-07-06",
+      "merchant": "Bamboo Airways",
+      "category": "Di chuyển",
+      "amount_vnd": 2450000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-008",
+      "date": "2026-07-07",
+      "merchant": "Vinmart",
+      "category": "Siêu thị",
+      "amount_vnd": 1080000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-009",
+      "date": "2026-07-08",
+      "merchant": "Nhà hàng Nhật Sakura",
+      "category": "Ăn uống",
+      "amount_vnd": 1650000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-010",
+      "date": "2026-07-09",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 75000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-011",
+      "date": "2026-07-10",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-012",
+      "date": "2026-07-11",
+      "merchant": "L'Occitane",
+      "category": "Mua sắm",
+      "amount_vnd": 2100000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-013",
+      "date": "2026-07-13",
+      "merchant": "CGV Cinemas",
+      "category": "Giải trí",
+      "amount_vnd": 240000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-014",
+      "date": "2026-07-14",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 235000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-015",
+      "date": "2026-07-16",
+      "merchant": "Resort Phú Quốc",
+      "category": "Di chuyển",
+      "amount_vnd": 4200000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-016",
+      "date": "2026-07-18",
+      "merchant": "Coopmart",
+      "category": "Siêu thị",
+      "amount_vnd": 920000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-017",
+      "date": "2026-07-19",
+      "merchant": "Zara",
+      "category": "Mua sắm",
+      "amount_vnd": 1780000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-018",
+      "date": "2026-07-21",
+      "merchant": "Nhà hàng Buffet Sen",
+      "category": "Ăn uống",
+      "amount_vnd": 1200000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-019",
+      "date": "2026-07-23",
+      "merchant": "Netflix",
+      "category": "Giải trí",
+      "amount_vnd": 260000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-07-020",
+      "date": "2026-07-25",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-021",
+      "date": "2026-07-27",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 210000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-07-022",
+      "date": "2026-07-29",
+      "merchant": "Vinmart",
+      "category": "Siêu thị",
+      "amount_vnd": 990000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-001",
+      "date": "2026-08-01",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 95000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-002",
+      "date": "2026-08-01",
+      "merchant": "Spotify Premium",
+      "category": "Giải trí",
+      "amount_vnd": 99000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-08-003",
+      "date": "2026-08-02",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-004",
+      "date": "2026-08-03",
+      "merchant": "Charles & Keith",
+      "category": "Mua sắm",
+      "amount_vnd": 1590000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-005",
+      "date": "2026-08-04",
+      "merchant": "EVN Điện lực",
+      "category": "Hoá đơn",
+      "amount_vnd": 650000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-08-006",
+      "date": "2026-08-04",
+      "merchant": "FPT Telecom",
+      "category": "Hoá đơn",
+      "amount_vnd": 250000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-08-007",
+      "date": "2026-08-06",
+      "merchant": "Vinmart",
+      "category": "Siêu thị",
+      "amount_vnd": 1020000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-008",
+      "date": "2026-08-07",
+      "merchant": "Nhà hàng Hàn Quốc Seoul",
+      "category": "Ăn uống",
+      "amount_vnd": 890000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-009",
+      "date": "2026-08-08",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 75000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-010",
+      "date": "2026-08-09",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-011",
+      "date": "2026-08-11",
+      "merchant": "Sephora",
+      "category": "Mua sắm",
+      "amount_vnd": 1340000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-012",
+      "date": "2026-08-13",
+      "merchant": "CGV Cinemas",
+      "category": "Giải trí",
+      "amount_vnd": 240000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-013",
+      "date": "2026-08-14",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 225000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-015",
+      "date": "2026-08-16",
+      "merchant": "Coopmart",
+      "category": "Siêu thị",
+      "amount_vnd": 900000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-016",
+      "date": "2026-08-18",
+      "merchant": "Vietjet Air",
+      "category": "Di chuyển",
+      "amount_vnd": 1650000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-017",
+      "date": "2026-08-19",
+      "merchant": "Nhà hàng Buffet Sen",
+      "category": "Ăn uống",
+      "amount_vnd": 1100000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-018",
+      "date": "2026-08-21",
+      "merchant": "Netflix",
+      "category": "Giải trí",
+      "amount_vnd": 260000,
+      "card_id": "card_001",
+      "is_recurring": true
+    },
+    {
+      "id": "txn-2026-08-019",
+      "date": "2026-08-22",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 150000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-020",
+      "date": "2026-08-24",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 200000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-021",
+      "date": "2026-08-26",
+      "merchant": "Vinmart",
+      "category": "Siêu thị",
+      "amount_vnd": 950000,
+      "card_id": "card_001"
+    },
+    {
+      "id": "txn-2026-08-022",
+      "date": "2026-08-27",
+      "merchant": "Zara",
+      "category": "Mua sắm",
+      "amount_vnd": 2200000,
+      "card_id": "card_001"
+    }
+  ]
+}

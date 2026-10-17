@@ -20,4 +20,5 @@ def test_wheel_includes_customer_data_json(tmp_path):
     assert wheels, "expected `uv build --wheel` to produce a .whl file"
     with zipfile.ZipFile(wheels[-1]) as archive:
         names = archive.namelist()
-        assert any(name.endswith("customer_data.json") for name in names), names
+        for customer_id in ("CIF_0001", "CIF_0002", "CIF_0003"):
+            assert any(name.endswith(f"{customer_id}.json") for name in names), names

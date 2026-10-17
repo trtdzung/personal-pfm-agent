@@ -55,7 +55,7 @@ sách — vẫn dùng đúng `remember_preference`/`recall_preference`.
   `/memories/agent/customer_budgets.json` bằng `read_file`. File này là một
   dict khoá theo `customer_id` (lấy `customer_id` từ trường `customer` trong
   `/customer_data.json`), ví dụ:
-  `{"CUS-000482": {"monthly_budget_vnd": 15000000, "mentioned_on": "2026-08-10"}}`
+  `{"CIF_0001": {"monthly_budget_vnd": 15000000, "mentioned_on": "2026-08-10"}}`
 - Nếu file chưa tồn tại, hoặc không có entry cho `customer_id` hiện tại: nói
   rõ bạn chưa biết ngân sách của khách hàng và hỏi lại — không giả định con
   số.
