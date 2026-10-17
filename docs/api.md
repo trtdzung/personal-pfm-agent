@@ -152,17 +152,29 @@ Content-Type: application/json
 {
   "answer": "Tháng này bạn đã chi tiêu 4.250.000 VND...",
   "thread_id": "CUS-000482",
-  "chart": null
+  "ui": null
 }
 ```
 `thread_id` trả về là giá trị **thực sự đã dùng** (bằng `user_id` nếu bạn
 không truyền) — không bắt buộc phải lưu lại trừ khi bạn chủ động muốn quản
 lý nhiều thread.
 
-`chart` là `null` ở hầu hết câu trả lời. Với một số câu hỏi mang tính phân
-tích/so sánh, agent tự quyết định kèm theo 1 object mô tả biểu đồ để
-frontend vẽ — xem chi tiết schema + cách render trong
-[`docs/chart-visualization.md`](./chart-visualization.md).
+**⚠️ Breaking change (2026-09-03):** field này trước đây tên là `chart`
+(`chart: dict | null`, chỉ chứa dữ liệu biểu đồ). Đã đổi thành `ui`
+(`ui: dict | null`) — 1 envelope chung cho mọi loại UI có cấu trúc agent có
+thể trả ra, phân biệt bằng field `type` bên trong. **Frontend cần đổi code
+đọc `body.chart` sang `body.ui`, và luôn kiểm tra `ui.type` trước khi đọc
+các field còn lại.**
+
+`ui` là `null` ở hầu hết câu trả lời. Hiện có 2 loại `ui.type`:
+
+- `"chart"` — biểu đồ cho câu hỏi phân tích/so sánh, xem
+  [`docs/chart-visualization.md`](./chart-visualization.md).
+- `"transfer_form"` — đề xuất trả nợ thẻ tín dụng điền sẵn, xem
+  [`docs/transfer-form.md`](./transfer-form.md).
+
+Sau này có thêm loại khác, frontend chỉ cần thêm nhánh xử lý theo `ui.type`
+mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.
 
 **Lỗi:**
 | Status | Khi nào |
@@ -249,6 +261,20 @@ tự xoá cache khi gọi xoá. Sau 30 giây, `GET` sẽ trả về đúng kết
 **Gợi ý cho frontend:** sau khi gọi `DELETE` thành công, tự xoá luôn đoạn
 chat khỏi UI phía client (đừng gọi lại `GET` ngay để "xác nhận" — có thể gây
 hiểu nhầm là xoá thất bại).
+
+**⚠️ Nghiêm trọng hơn — gọi `POST /chat` quá sớm có thể LÀM MẤT TÁC DỤNG
+của lệnh xoá (đã verify thật, không chỉ là đọc nhầm):** nếu gọi `POST /chat`
+trong vòng ~30 giây sau `DELETE` (không chỉ `GET`), agent có thể đọc phải
+state **cũ** (trước khi xoá) do cùng cơ chế cache ở trên, rồi **ghi tin
+nhắn mới đè lên trên lịch sử cũ đó** — kết quả là lịch sử cũ bị "hồi sinh"
+lẫn với tin nhắn mới, thay vì bắt đầu từ rỗng như mong đợi. Đây không chỉ
+là hiển thị sai tạm thời — dữ liệu cũ thực sự quay lại.
+**Bắt buộc với frontend/backend nào tự động hoá việc xoá:** sau khi gọi
+`DELETE /chat/history` thành công, **đợi tối thiểu 30 giây** trước khi gọi
+`POST /chat` hoặc `GET /chat/history` tiếp theo trên cùng `thread_id`. Nút
+"Xoá cuộc trò chuyện" trên UI nên khoá tạm thời ô nhập chat (hoặc chỉ cho
+phép "New chat" bằng `thread_id` mới) trong khoảng thời gian này để tránh
+race condition.
 
 **Lỗi:**
 | Status | Khi nào |

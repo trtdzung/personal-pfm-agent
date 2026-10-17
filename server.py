@@ -16,8 +16,9 @@ from pydantic import BaseModel
 
 from middleware.audit import log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
-from text_utils import extract_chart_block, extract_final_text
+from text_utils import extract_final_text, extract_ui_block
 from tools.memory_tools import recall_preference, remember_preference
+from tools.transfer_tools import check_available_balance_or_credit
 
 logger = logging.getLogger("personal-card-agent")
 
@@ -63,7 +64,9 @@ def build_agent(
     instructions = (REPO_ROOT / "instructions.md").read_text(encoding="utf-8")
     return create_deep_agent(
         model=model or _default_model(),
-        tools=tools if tools is not None else [remember_preference, recall_preference],
+        tools=tools
+        if tools is not None
+        else [remember_preference, recall_preference, check_available_balance_or_credit],
         middleware=[log_tool_calls, SeedCustomerContext()],
         system_prompt=instructions,
         checkpointer=checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID),
@@ -98,7 +101,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     thread_id: str
-    chart: dict | None = None
+    ui: dict | None = None
 
 
 class HistoryMessage(BaseModel):
@@ -143,8 +146,8 @@ def chat(
         raise HTTPException(status_code=500, detail="Agent failed to process the request") from exc
 
     answer = extract_final_text(result["messages"][-1].content)
-    answer, chart = extract_chart_block(answer)
-    return ChatResponse(answer=answer, thread_id=thread_id, chart=chart)
+    answer, ui = extract_ui_block(answer)
+    return ChatResponse(answer=answer, thread_id=thread_id, ui=ui)
 
 
 @app.get("/chat/history", response_model=ChatHistoryResponse)
@@ -173,7 +176,7 @@ def chat_history(
             continue  # skip tool/system messages -- not meant for a chat UI transcript
 
         text = extract_final_text(message.content)
-        text, _ = extract_chart_block(text)
+        text, _ = extract_ui_block(text)
         if not text:
             continue  # e.g. an AIMessage whose only content was a tool call
 

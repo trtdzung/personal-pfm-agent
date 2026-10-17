@@ -102,13 +102,13 @@ def test_chat_endpoint_returns_answer_with_correct_api_key(monkeypatch):
     body = response.json()
     assert body["answer"] == "Đây là câu trả lời giả."
     assert body["thread_id"] == "t1"
-    assert body["chart"] is None
+    assert body["ui"] is None
 
 
-def test_chat_endpoint_splits_chart_json_block_into_chart_field(monkeypatch):
+def test_chat_endpoint_splits_ui_json_chart_block_into_ui_field(monkeypatch):
     chart_answer = (
         "Tháng này bạn chi nhiều nhất cho Mua sắm.\n\n"
-        '```chart-json\n{"chart_type": "pie", "title": "Chi tiêu theo danh mục", '
+        '```ui-json\n{"type": "chart", "chart_type": "pie", "title": "Chi tiêu theo danh mục", '
         '"labels": ["Mua sắm", "Ăn uống"], "series": [{"name": "VND", "data": [16280000, 10500000]}]}\n```'
     )
     fake_model = _ToolCapableFakeChatModel(responses=[chart_answer])
@@ -124,12 +124,58 @@ def test_chat_endpoint_splits_chart_json_block_into_chart_field(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["answer"] == "Tháng này bạn chi nhiều nhất cho Mua sắm."
-    assert "```chart-json" not in body["answer"]
-    assert body["chart"] == {
+    assert "```ui-json" not in body["answer"]
+    assert body["ui"] == {
+        "type": "chart",
         "chart_type": "pie",
         "title": "Chi tiêu theo danh mục",
         "labels": ["Mua sắm", "Ăn uống"],
         "series": [{"name": "VND", "data": [16280000, 10500000]}],
+    }
+
+
+def test_chat_endpoint_splits_ui_json_transfer_form_block_into_ui_field(monkeypatch):
+    # Simulates the skill's required flow: the model calls
+    # check_available_balance_or_credit (a real tool -- reads the real
+    # CIF_0001 fixture, not mocked) before emitting the transfer_form block.
+    messages = iter(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "check_available_balance_or_credit", "args": {"amount_vnd": 910000}, "id": "call1"}
+                ],
+            ),
+            AIMessage(
+                content=(
+                    "Kỳ sao kê đến hạn 10/07/2026, mức thanh toán tối thiểu là 910.000đ.\n\n"
+                    '```ui-json\n{"type": "transfer_form", "recipient": "MSB Visa Signature", '
+                    '"account_number": "card_001", "amount": 910000, '
+                    '"note": "Thanh toan du no the ky sao ke den han 2026-07-10"}\n```'
+                )
+            ),
+        ]
+    )
+    fake_model = _ToolCallingFakeChatModel(messages=messages)
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "Tôi nên trả nợ thẻ Visa Signature bao nhiêu?", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Kỳ sao kê đến hạn 10/07/2026, mức thanh toán tối thiểu là 910.000đ."
+    assert "```ui-json" not in body["answer"]
+    assert body["ui"] == {
+        "type": "transfer_form",
+        "recipient": "MSB Visa Signature",
+        "account_number": "card_001",
+        "amount": 910000,
+        "note": "Thanh toan du no the ky sao ke den han 2026-07-10",
     }
 
 

@@ -513,6 +513,297 @@ thường trên cùng thread.
     cần, phải đổi cách lưu (hiện history được tái tạo từ text message của
     checkpointer, không có chỗ lưu `chart` riêng).
 
+- [x] **Form chuyển tiền điền sẵn (`transfer_form`) qua skill — agent chỉ
+  điền form, KHÔNG tự thực hiện giao dịch** (khớp đúng nguyên tắc gốc của
+  `instructions.md`: agent chỉ tư vấn/cung cấp thông tin, không hành động).
+  **Đã triển khai xong (2026-09-03).**
+  - **Phạm vi thu hẹp lại khi implement (khác giả định ban đầu):** chỉ hỗ
+    trợ **trả nợ thẻ tín dụng của chính khách hàng** — KHÔNG hỗ trợ chuyển
+    tiền cho người khác/merchant như todo gốc từng gợi ý ("chuyển cho
+    người nhận đã từng giao dịch"). Lý do: `transactions` trong
+    `/customer_data.json` chỉ là lịch sử **chi tiêu thẻ** (mua hàng tại
+    merchant), không có lịch sử **chuyển khoản P2P** nào để đối chiếu — đề
+    xuất chuyển tiền cho 1 người/merchant bất kỳ sẽ không có cách nào xác
+    minh account_number là thật, rủi ro bịa thông tin nguy hiểm hơn nhiều
+    so với chart. `recipient`/`account_number` bây giờ luôn là ngân hàng
+    phát hành + `card_id` thật của chính khách hàng (lấy từ
+    `cards`/`statements`).
+  - **Đã làm:**
+    1. `text_utils.py` — thêm `_is_valid_transfer_form()`, đăng ký vào
+       `_UI_VALIDATORS["transfer_form"]` (tái dùng `extract_ui_block()`
+       chung, không cần hàm extract riêng — đúng lợi ích của việc đã gộp
+       `chart`/`transfer_form` vào 1 envelope `ui` trước đó).
+    2. `tools/transfer_tools.py` (file mới) — tool
+       `check_available_balance_or_credit(amount_vnd)`: đọc thật
+       `data/customers/<actor_id>.json` (cùng pattern resolve customer_id
+       như `SeedCustomerContext`, fallback `CIF_0001` khi không có
+       `actor_id`), trả về từng thẻ có đủ hạn mức khả dụng hay không —
+       **tool thật, không phải chỉ đọc file qua `read_file`**, vì đây là
+       điều kiện chặn cứng cần enforce bằng code (đúng quyết định ở mục
+       Scope bên dưới).
+    3. `skills/project/transfer-form/SKILL.md` — mô tả rõ phạm vi thu hẹp
+       ở trên ngay đầu file, bắt buộc gọi
+       `check_available_balance_or_credit` **trước** khi chèn khối
+       `ui-json`, schema `{"type": "transfer_form", "recipient", "account_number", "amount", "reason", "note"?}`,
+       ví dụ ĐÚNG/SAI theo đúng văn phong `data-visualization/SKILL.md`.
+    4. `server.py` — thêm `check_available_balance_or_credit` vào
+       `tools=[...]` mặc định của `build_agent()`.
+    5. `docs/transfer-form.md` (file mới) + cập nhật `docs/api.md` (liệt
+       kê 2 giá trị `ui.type` hiện có: `"chart"`, `"transfer_form"`).
+    6. Test: `tests/test_transfer_tools.py` (file mới, unit test tool —
+       đủ hạn mức/không đủ hạn mức), `tests/test_text_utils.py` (5 test
+       mới cho `_is_valid_transfer_form` qua `extract_ui_block`),
+       `tests/test_server.py` (1 test end-to-end: fake model gọi tool rồi
+       trả khối `ui-json` transfer_form, verify `/chat` tách đúng). **58/58
+       test pass** (`uv run --group dev pytest tests/`).
+    7. **Verify thật với model VNG thật** (không chỉ fake model) — hỏi
+       "Tôi nên trả nợ thẻ Visa Signature bao nhiêu?" qua `CIF_0001`: model
+       tự đọc data, gọi đúng tool check trước, phát hiện đúng 1 kỳ sao kê
+       **đã quá hạn thật** (đúng hơn cả giả định ban đầu khi viết ví dụ),
+       sinh đúng `transfer_form` hợp lệ với số liệu khớp `statements` thật.
+       Đã xoá thread test debug sau khi verify xong.
+  - **Quyết định kiến trúc đã chốt (thảo luận 2026-09-03):**
+    1. **Skill, không dùng tool** — cùng lý do đã chọn cho chart: skill chỉ
+       tải vào system prompt khi thật sự cần (progressive disclosure), còn
+       tool (function-calling) thì schema của nó luôn hiện diện ở mọi lượt
+       gọi model dù câu hỏi có liên quan hay không, tốn token đều đặn. Vì
+       `transfer_form` cũng chỉ là gợi ý hiển thị (không có side-effect
+       thật qua `/chat`), ưu điểm validate-tự-động của tool
+       không đủ bù chi phí token luôn tải — **cập nhật sau khi migrate
+       `chart` → `ui` (xem mục Roadmap PFM bên dưới):** tái dùng đúng
+       envelope `ui`/fence ` ```ui-json ``` ` đã có sẵn trong
+       `text_utils.py`, chỉ cần thêm `_is_valid_transfer_form()` +
+       đăng ký vào `_UI_VALIDATORS["transfer_form"]` (không cần hàm
+       `extract_*` riêng — `extract_ui_block()` đã dùng chung cho mọi
+       type), theo đúng nguyên tắc Phần B đã áp dụng cho chart: chỉ
+       validate, không tự sửa/tự điền — sai schema thì trả `ui: null`,
+       không tự "vá" dữ liệu agent sinh sai.
+    2. **Đã chốt: gộp** — dùng chung 1 field `ui: {"type": "chart"|"transfer_form", ...}`,
+       1 fence ` ```ui-json ``` ` chung (mỗi type có skill riêng dạy đúng
+       schema của mình, không phải 1 skill dạy cả 2). Đã migrate `chart` →
+       `ui` xong trước khi implement `transfer_form` (xem mục "Việc frontend
+       đã làm..." ở Roadmap PFM bên dưới) nên `transfer_form` chỉ cần đăng
+       ký thêm 1 validator, không cần đổi lại cơ chế lần nữa.
+  - **Việc cần làm khi implement (dù chọn gộp hay tách):**
+    1. Định nghĩa schema `transfer_form` cụ thể (chưa bàn tới): tối thiểu
+       cần `recipient`/`account_number`/`amount`/`note`/`reason`(lý do gợi
+       ý) — cần thảo luận thêm field nào bắt buộc.
+    2. Viết skill mới dạy agent khi nào nên gợi ý transfer form (ví dụ:
+       khách hỏi "tôi nên trả nợ thẻ bao nhiêu", "chuyển tiền cho X như mọi
+       tháng") + format khối JSON, theo đúng văn phong PHẢI/KHÔNG ĐƯỢC như
+       `skills/project/data-visualization/SKILL.md` đang có.
+    3. Validator riêng cho `transfer_form` (giống `_is_valid_chart` trong
+       `text_utils.py`) — cân nhắc thêm ràng buộc riêng cho tiền: ví dụ
+       `amount` phải là số dương hợp lý, `recipient`/`account_number` nên
+       đối chiếu được với dữ liệu giao dịch thật của khách trong
+       `/customer_data.json` (không cho agent tự bịa người nhận mới hoàn
+       toàn chưa từng xuất hiện trong lịch sử giao dịch) — cần bàn kỹ vì
+       đây là rủi ro cao hơn chart nhiều (dù chỉ hiển thị, số liệu sai vẫn
+       có thể khiến khách bấm nhầm).
+    4. Cập nhật `docs/api.md` + viết `docs/transfer-form.md` (hoặc gộp vào
+       `docs/chart-visualization.md` nếu chọn gộp field `ui`) cho frontend.
+    5. Test tương tự pattern chart: parser/validator trong
+       `tests/test_text_utils.py`, end-to-end trong `tests/test_server.py`.
+  - **Scope đầy đủ (bổ sung 2026-09-03) — "gửi form" chỉ là 1 bước, không
+    phải toàn bộ:** trước khi hiện form, agent cần **check** tính khả thi,
+    nếu không sẽ đề xuất số tiền/người nhận vô lý (vượt hạn mức, người nhận
+    bịa ra). 3 bước rõ ràng:
+    1. **Check (tool)** — verify trước khi đề xuất:
+       - `check_available_balance_or_credit` (**tool mới đề xuất**) — xác
+         nhận số tiền định đề xuất không vượt quá `available_credit_vnd`
+         (hoặc số dư khả dụng tương ứng) của khách — nên làm **tool riêng**
+         thay vì để agent tự tính bằng free-text, vì đây là điều kiện chặn
+         cứng (sai 1 lần là đề xuất số tiền không thực hiện được, làm mất
+         tin tưởng), không nên phó mặc cho model tự cộng trừ.
+       - Đối chiếu `recipient`/`account_number` với lịch sử giao dịch thật
+         — dùng `read_file`/`grep` đã có sẵn (không cần tool riêng, agent tự
+         đọc `/customer_data.json` là đủ, trừ khi sau này cần logic đối
+         chiếu phức tạp hơn).
+    2. **Propose** — hiện `transfer_form` (đã thiết kế ở trên).
+    3. **Execute** — **không có** ở tầng agent/`server.py`; hệ thống PFM/core
+       banking khác thực hiện khi user bấm xác nhận (đã chốt ở mục Roadmap
+       PFM bên dưới).
+
+- [ ] **Roadmap PFM (`Roadmap.png`, MSB — thảo luận 2026-09-03) — rà lại
+  toàn bộ tính năng agent cần tham gia, map sang output có cấu trúc.**
+  Roadmap gồm 4 MVP theo quý (Q2/2026 → Q1/2027); các ô tô xanh trong file
+  là tính năng agent tham gia. **Phạm vi đã chốt: thiết kế cho cả 4 MVP**
+  (chưa implement hết, chỉ MVP1+2 có data sẵn sàng để code ngay).
+
+  **Nguyên tắc mới (áp dụng từ 2026-09-03 trở đi):** trước khi bắt tay code
+  **bất kỳ mục nào** trong danh sách roadmap này, phải viết rõ **Scope** —
+  liệt kê đủ 3 phần: (1) **Check** — tool/bước kiểm tra tính khả thi cần
+  chạy TRƯỚC khi đề xuất (tool đã có sẵn như `read_file`, hay cần tool mới
+  hoàn toàn), (2) **Propose** — output có cấu trúc hiện cho user xem, (3)
+  **Execute** — xác nhận rõ có/không có hành động ghi thật ở tầng agent.
+  "Gửi form" (Propose) chỉ là 1 trong 3 bước, không phải toàn bộ tính năng
+  — mỗi mục dưới đây đã được viết lại theo đúng khung này.
+
+  **Quyết định kiến trúc chung áp dụng cho mọi tính năng "hành động" dưới
+  đây (không riêng `transfer_form`):** agent chỉ **tạo đề xuất có cấu
+  trúc** → gửi cho user xem/xác nhận trên UI → **user tự bấm "Đồng ý"** →
+  lúc đó hành động thật (tạo hũ, đặt ngân sách, tạo mục tiêu tiết kiệm...)
+  mới được thực thi. Ví dụ cụ thể bạn nêu: agent tạo đề xuất hũ chi tiêu,
+  gửi cho user xem, user bấm OK thì **backend** mới tạo hũ mới — agent
+  không bao giờ tự ý tạo/ghi qua `/chat`.
+  - **Đã xác nhận nơi thực thi hành động thật:** một **hệ thống khác** (core
+    T24 / backend PFM riêng của MSB) thực hiện việc tạo hũ/đặt ngân
+    sách/tạo mục tiêu khi user xác nhận — **`server.py` (repo này) không
+    cần tự xây endpoint CRUD nào** (không cần `POST /jars`,
+    `POST /budgets`...). Việc của repo này chỉ dừng ở: agent sinh đúng
+    schema đề xuất, frontend tự gọi sang hệ thống PFM/core banking khác khi
+    user xác nhận.
+  - **Chưa chốt (giống câu hỏi đã nêu ở mục `transfer_form`):** có nên gộp
+    tất cả loại đề xuất hành động này vào 1 field chung dạng
+    `action_proposal: {"action_type": "set_budget"|"create_savings_goal"|"create_jar"|"transfer"|..., "payload": {...}}`
+    (1 pattern chung, dễ scale) hay vẫn tách riêng field/skill cho từng
+    loại như `chart`/`transfer_form` hiện tại? Cần chốt trước khi bắt đầu
+    code loạt tính năng dưới đây.
+  - [x] **Đã chốt + migrate xong (2026-09-03):** đổi `chart` → **`ui`**
+    (envelope chung, phân biệt bằng `ui.type` — hiện chỉ có `"chart"`).
+    Quyết định: **đổi thẳng ngay** (không giữ `chart` song song để
+    deprecate dần), dù `docs/chart-output-rules.md` (frontend tự viết) nói
+    đã render thật bằng Recharts theo field `chart` cũ — **đây là breaking
+    change thật, frontend cần cập nhật code đọc `body.ui` +
+    `ui.type === "chart"` thay vì `body.chart`.**
+    - `text_utils.py`: `extract_chart_block()` → `extract_ui_block()`;
+      thêm `_UI_VALIDATORS` (dispatch theo `type`) + `_is_valid_ui()`,
+      `_is_valid_chart()` giữ nguyên logic cũ (không còn tự check `type`,
+      dispatcher lo việc đó). Fence đổi từ ` ```chart-json ``` ` sang
+      ` ```ui-json ``` `.
+    - `server.py`: `ChatResponse.chart` → `ChatResponse.ui`; `/chat` và
+      `GET /chat/history` dùng `extract_ui_block` thay vì
+      `extract_chart_block`.
+    - `skills/project/data-visualization/SKILL.md`: viết lại theo fence
+      `ui-json` + field `type: "chart"` bắt buộc, cập nhật toàn bộ ví dụ
+      ĐÚNG/SAI (thêm ví dụ SAI mới: thiếu field `type`).
+    - `docs/api.md`, `docs/chart-visualization.md`: cập nhật field
+      `chart` → `ui` + ghi rõ breaking change ở đầu mục liên quan.
+    - `docs/chart-output-rules.md` (tài liệu frontend viết): cập nhật lại
+      toàn bộ theo field `ui`/`type`, và **nhân tiện sửa luôn 1 điểm không
+      nhất quán phát hiện được**: B.MUST-4 bản cũ nói backend PHẢI tự cắt
+      `series` của `pie` còn `series[0]` khi agent lỡ sinh nhiều hơn 1 —
+      nhưng code thật (`_is_valid_chart`) đã **reject hoàn toàn** (fallback
+      `null`) theo đúng quyết định "chỉ validate, không tự sửa" đã chốt
+      trước đó — rule doc giờ khớp đúng code. Mục "Việc frontend đã làm"
+      cuối file đã đổi thành cảnh báo cần frontend tự xác nhận lại (tuyên
+      bố "không cần đổi gì" viết trước khi có breaking change này không
+      còn đúng).
+    - Test: `tests/test_text_utils.py` (đổi hết sang
+      `extract_ui_block`/fence `ui-json`, thêm 2 test mới: thiếu `type`,
+      `type` lạ), `tests/test_server.py` (đổi `body["chart"]` →
+      `body["ui"]`). **51/51 test pass** (`uv run --group dev pytest tests/`).
+
+  **MVP1 — Quý 2/2026 (Quản lý thu-chi):**
+  - [ ] **Thiết lập ngân sách** (cài đặt hạn mức ngày/tháng, cảnh báo
+    ngưỡng chi tiêu)
+    - **Check:** đọc lịch sử chi tiêu theo danh mục/kỳ liên quan để đề
+      xuất mức hạn mức hợp lý — dùng `read_file`/`grep` có sẵn, không cần
+      tool mới.
+    - **Cân nhắc tool mới:** `check_budget_against_income(category,
+      proposed_amount)` — enforce 1 rule cứng (ví dụ không đề xuất ngân
+      sách 1 danh mục vượt quá X% thu nhập `monthly_income_vnd`) bằng code
+      thay vì để model tự tính bằng free-text (dễ sai/không nhất quán giữa
+      các lượt trả lời).
+    - **Propose:** `set_budget` (category, period, amount,
+      threshold_alert_percent).
+    - **Execute:** không — phần lưu ngân sách hiện đã có sẵn qua
+      `remember_preference` (khác cơ chế PFM ngoài của các mục dưới, vì
+      đây vốn là cơ chế nội bộ đã có từ trước); chỉ thiếu bước UI đề xuất +
+      xác nhận trước khi gọi `remember_preference`.
+  - [ ] **Tiết kiệm mục tiêu** (gợi ý tích luỹ theo balance)
+    - **Cần làm rõ trước (chặn implement):** "balance" là số dư khả dụng
+      thẻ tín dụng (đã có `cards[].available_credit_vnd`) hay số dư tài
+      khoản thanh toán (hiện `customer_data.json` chưa có loại dữ liệu
+      này)?
+    - **Cân nhắc tool mới:** `check_existing_savings_goals()` — đọc danh
+      sách mục tiêu tiết kiệm **hiện có** để tránh đề xuất trùng lặp/mâu
+      thuẫn. Lưu ý: mục tiêu tiết kiệm **không có** trong
+      `customer_data.json` — nếu hệ thống PFM ngoài quản lý dữ liệu này,
+      tool này phải gọi API hệ thống ngoài (tích hợp thật, không phải chỉ
+      đọc file tĩnh) — **chi phí lớn hơn nhiều** so với các tool chỉ đọc
+      `customer_data.json`, cần đánh giá riêng trước khi nhận việc.
+    - **Propose:** `create_savings_goal` (name, target_amount,
+      monthly_contribution, timeline).
+    - **Execute:** không — hệ thống PFM ngoài xử lý khi user xác nhận.
+
+  **MVP2 — Quý 3/2026 (Tự động hoá & Báo cáo):**
+  - [x] Báo cáo dòng tiền thu-chi (biểu đồ, theo danh mục) → **đã làm xong,
+    chính là tính năng `chart` ở mục ngay trên.**
+  - [ ] **Hũ chi tiêu** (tạo hũ, phân bổ quỹ tuỳ chỉnh, gợi ý phân bổ theo
+    rule)
+    - **Cân nhắc tool mới:** `list_existing_jars()` — đọc danh sách hũ chi
+      tiêu **hiện có** từ hệ thống PFM ngoài (`customer_data.json` không có
+      khái niệm "hũ") để: (a) tránh đề xuất tạo hũ trùng tên, (b) tính đúng
+      % còn lại có thể phân bổ nếu tổng % các hũ phải ≤100%. Cùng loại rủi
+      ro chi phí tích hợp như `check_existing_savings_goals()` ở trên —
+      cần API thật từ hệ thống PFM ngoài, chưa có trong repo này.
+    - **Check khác:** đọc lịch sử chi tiêu theo danh mục (đã có qua
+      `read_file`) để gợi ý phân bổ theo rule (ví dụ 50/30/20) — không cần
+      tool mới cho phần này.
+    - **Propose:** `create_jar` (jar_name, allocation_amount hoặc
+      allocation_percent, rule_used) — có thể kèm `chart` (pie) minh hoạ
+      trực quan phần phân bổ đề xuất.
+    - **Execute:** không — hệ thống PFM ngoài xử lý khi user xác nhận
+      (đúng ví dụ bạn nêu: agent gửi thông tin hũ, user bấm OK, **backend**
+      mới tạo hũ mới).
+
+  **MVP3 — Quý 4/2026 (Quản lý tài sản & dư nợ):** không có mục nào tô
+  xanh trong roadmap — agent không tham gia MVP3.
+
+  **MVP4 — Quý 1/2027 (Tư vấn tài chính & AI cá nhân hoá):**
+  - [ ] **Trợ lý tài chính AI — tư vấn tối ưu danh mục tích luỹ**
+    - **Chưa đủ thông tin để viết Scope đầy đủ** — "danh mục tích luỹ"
+      (portfolio tích luỹ/tiết kiệm) chưa có trong `customer_data.json`,
+      chưa rõ nguồn dữ liệu. Cần làm rõ trước: đây là danh mục các hũ/mục
+      tiêu tiết kiệm đã tạo ở MVP1/2 (nếu vậy **Check** sẽ cần tool đọc dữ
+      liệu đó từ hệ thống PFM ngoài, giống `list_existing_jars()` ở trên),
+      hay 1 loại dữ liệu tích luỹ/đầu tư hoàn toàn khác?
+    - **Propose:** tạm để ngỏ dạng `adjust_allocation` hoặc chỉ text/chart
+      tư vấn (chưa có hành động ghi cụ thể nào được xác nhận).
+    - **Execute:** cần xác nhận có hành động ghi thật nào không, hay chỉ
+      tư vấn thuần (giống chart, không có Propose dạng "confirm rồi thực
+      thi").
+  - [ ] **Trợ lý tài chính AI — cảnh báo chi tiêu bất thường dựa trên lịch
+    sử hành vi → `anomaly_alert`. TẠM THỜI CHƯA LÀM (theo yêu cầu
+    2026-09-03), chỉ ghi lại thiết kế để không bị quên:**
+    - Đây là tính năng **chủ động** (agent tự phát hiện bất thường và chủ
+      động gửi cảnh báo cho user), **không** phải trả lời theo câu hỏi qua
+      `/chat` — khác hẳn bản chất mọi tính năng khác trong repo này (đều
+      là request/response thuần: user hỏi → agent trả lời).
+    - Kiến trúc `/chat` hiện tại (FastAPI thuần, không có scheduler/job
+      nền, không có cơ chế push) **không hỗ trợ** việc này — cần thiết kế
+      hạ tầng mới hoàn toàn (ví dụ: 1 job định kỳ tự chạy agent kiểm tra
+      giao dịch mới + so với hành vi lịch sử, rồi gửi cảnh báo qua kênh
+      riêng — push notification/tin nhắn app — không phải qua `POST /chat`
+      của user).
+    - Việc tương tự "Cảnh báo ngưỡng chi tiêu" ở MVP1 (`Thiết lập ngân
+      sách`) nhiều khả năng cũng cùng bản chất chủ động này — cần rà lại
+      khi tới lượt implement MVP1.
+    - **Việc cần làm khi quay lại:** chọn cơ chế trigger (cron job gọi
+      `agent.invoke()` định kỳ theo từng khách hàng, hay event-driven theo
+      giao dịch mới phát sinh), chọn kênh gửi cảnh báo (không phải response
+      của `/chat` vì không có request tương ứng từ user tại thời điểm đó),
+      và thiết kế lại hoàn toàn phần này — không tái dùng được pattern
+      `action_proposal`/skill hiện tại (pattern đó giả định luôn có 1 câu
+      hỏi của user đi trước).
+  - [ ] **Gợi ý tích luỹ & đầu tư — công cụ tư vấn đầu tư tự động**
+    - **Cân nhắc tool mới:** `check_risk_profile()`/đọc `credit_profile`
+      hiện có trong `customer_data.json` (`customer.credit_profile`) —
+      chưa chắc đủ để đánh giá khẩu vị rủi ro đầu tư, cần xác nhận có
+      trường dữ liệu "risk profile" riêng cho đầu tư hay tái dùng
+      `credit_profile` hiện tại.
+    - **Propose:** tạm để ngỏ dạng `create_investment_order`? — cần dữ
+      liệu sản phẩm đầu tư (chưa có trong `customer_data.json`) trước khi
+      định hình schema cụ thể.
+    - **⚠️ Lưu ý riêng, quan trọng hơn schema:** đây là tư vấn đầu tư cá
+      nhân hoá, nên xác nhận với team compliance/pháp lý MSB trước khi
+      triển khai (khác hẳn tư vấn ngân sách/chi tiêu thông thường về mặt
+      quy định) — **cần chốt trước khi viết Scope đầy đủ cho mục này.**
+  - [ ] Gợi ý tích luỹ & đầu tư — báo cáo hiệu suất sinh lời định kỳ → có
+    thể tái dùng thẳng `chart` (line/bar theo thời gian), không cần type
+    output mới.
+
 ## 4. Việc người dùng tự quyết định
 
 - [ ] `git push` lên `origin/master` (https://github.com/Daonguyen2401/personal-card-agent.git)
