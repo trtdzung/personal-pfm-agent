@@ -22,6 +22,25 @@
     "mentioned_on": "2026-07-15",
     "mentioned_in_message": "Mình muốn giữ chi tiêu thẻ dưới 25 triệu mỗi tháng để dành tiền du lịch cuối năm"
   },
+  "account": {
+    "account_number": "0011000123456",
+    "account_type": "Tài khoản thanh toán",
+    "balance_vnd": 12500000
+  },
+  "jars": [
+    {
+      "jar_id": "jar_001",
+      "jar_name": "Giải trí",
+      "allocation_amount_vnd": 600000,
+      "created_on": "2026-07-05"
+    },
+    {
+      "jar_id": "jar_002",
+      "jar_name": "Tiết kiệm khẩn cấp",
+      "allocation_amount_vnd": 5000000,
+      "created_on": "2026-06-20"
+    }
+  ],
   "cards": [
     {
       "card_id": "card_001",

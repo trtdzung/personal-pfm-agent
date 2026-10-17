@@ -167,6 +167,34 @@ def test_chat_endpoint_splits_ui_json_transfer_form_block_into_ui_field(monkeypa
     }
 
 
+def test_chat_endpoint_splits_ui_json_create_jar_block_into_ui_field(monkeypatch):
+    jar_answer = (
+        "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng.\n\n"
+        '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, '
+        '"reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng"}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[jar_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "Tạo giúp tôi 1 hũ ăn uống hợp lý.", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng."
+    assert "```ui-json" not in body["answer"]
+    assert body["ui"] == {
+        "type": "create_jar",
+        "jar_name": "Ăn uống",
+        "allocation_amount": 3000000,
+        "reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng",
+    }
+
+
 def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
     fake_model = _ToolCapableFakeChatModel(responses=["ok"])
     fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())

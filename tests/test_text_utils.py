@@ -235,3 +235,54 @@ def test_extract_ui_block_rejects_transfer_form_with_stringified_amount():
     )
     _, ui = extract_ui_block(text)
     assert ui is None
+
+
+def test_extract_ui_block_splits_out_valid_create_jar_block():
+    text = (
+        "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng.\n\n"
+        '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, '
+        '"reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng"}\n```'
+    )
+    cleaned, ui = extract_ui_block(text)
+    assert cleaned == "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng."
+    assert ui == {
+        "type": "create_jar",
+        "jar_name": "Ăn uống",
+        "allocation_amount": 3000000,
+        "reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng",
+    }
+
+
+def test_extract_ui_block_splits_out_valid_edit_jar_block():
+    text = (
+        '```ui-json\n{"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": 4000000, '
+        '"reason": "Khách hàng yêu cầu tăng hũ Ăn uống lên 4.000.000đ/tháng"}\n```'
+    )
+    _, ui = extract_ui_block(text)
+    assert ui == {
+        "type": "edit_jar",
+        "jar_name": "Ăn uống",
+        "allocation_amount": 4000000,
+        "reason": "Khách hàng yêu cầu tăng hũ Ăn uống lên 4.000.000đ/tháng",
+    }
+
+
+def test_extract_ui_block_rejects_jar_missing_reason():
+    text = '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000}\n```'
+    _, ui = extract_ui_block(text)
+    assert ui is None
+
+
+def test_extract_ui_block_rejects_jar_with_non_positive_allocation_amount():
+    text = '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 0, "reason": "x"}\n```'
+    _, ui = extract_ui_block(text)
+    assert ui is None
+
+
+def test_extract_ui_block_rejects_jar_with_stringified_allocation_amount():
+    text = (
+        '```ui-json\n{"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": "4000000", '
+        '"reason": "x"}\n```'
+    )
+    _, ui = extract_ui_block(text)
+    assert ui is None

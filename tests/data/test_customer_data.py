@@ -26,6 +26,8 @@ def test_customer_data_has_required_top_level_keys(customer_id):
     for key in (
         "customer",
         "chat_memory_example",
+        "account",
+        "jars",
         "cards",
         "statements",
         "monthly_spending_summary",
@@ -75,3 +77,25 @@ def test_category_breakdown_sums_to_month_total(customer_id):
             f"{month}: category breakdown sums to {category_sum} != "
             f"total_vnd {summary['total_vnd']}"
         )
+
+
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_account_balance_is_a_non_negative_number(customer_id):
+    data = _load(customer_id)
+    account = data["account"]
+    assert isinstance(account["account_number"], str) and account["account_number"]
+    assert isinstance(account["balance_vnd"], (int, float)) and account["balance_vnd"] >= 0
+
+
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_jars_have_required_fields_and_positive_allocation(customer_id):
+    data = _load(customer_id)
+    jars = data["jars"]
+    assert isinstance(jars, list)
+    seen_names = set()
+    for jar in jars:
+        for key in ("jar_id", "jar_name", "allocation_amount_vnd", "created_on"):
+            assert key in jar, f"jar missing field: {key}"
+        assert isinstance(jar["allocation_amount_vnd"], (int, float)) and jar["allocation_amount_vnd"] > 0
+        assert jar["jar_name"] not in seen_names, f"duplicate jar_name: {jar['jar_name']}"
+        seen_names.add(jar["jar_name"])

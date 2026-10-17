@@ -22,6 +22,12 @@
     "mentioned_on": "2026-08-05",
     "mentioned_in_message": "Mình đang cố giữ chi tiêu ăn uống với giải trí dưới 6 triệu/tháng"
   },
+  "account": {
+    "account_number": "0011000345678",
+    "account_type": "Tài khoản thanh toán",
+    "balance_vnd": 4500000
+  },
+  "jars": [],
   "cards": [
     {
       "card_id": "card_001",

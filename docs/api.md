@@ -166,12 +166,14 @@ thể trả ra, phân biệt bằng field `type` bên trong. **Frontend cần đ
 đọc `body.chart` sang `body.ui`, và luôn kiểm tra `ui.type` trước khi đọc
 các field còn lại.**
 
-`ui` là `null` ở hầu hết câu trả lời. Hiện có 2 loại `ui.type`:
+`ui` là `null` ở hầu hết câu trả lời. Hiện có 4 loại `ui.type`:
 
 - `"chart"` — biểu đồ cho câu hỏi phân tích/so sánh, xem
   [`docs/chart-visualization.md`](./chart-visualization.md).
 - `"transfer_form"` — đề xuất trả nợ thẻ tín dụng điền sẵn, xem
   [`docs/transfer-form.md`](./transfer-form.md).
+- `"create_jar"` / `"edit_jar"` — đề xuất tạo mới/chỉnh sửa 1 hũ chi tiêu,
+  xem [`docs/spending-jar.md`](./spending-jar.md).
 
 Sau này có thêm loại khác, frontend chỉ cần thêm nhánh xử lý theo `ui.type`
 mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.

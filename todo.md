@@ -813,10 +813,10 @@ cân nhắc quay lại dùng tool.
       đây vốn là cơ chế nội bộ đã có từ trước); chỉ thiếu bước UI đề xuất +
       xác nhận trước khi gọi `remember_preference`.
   - [ ] **Tiết kiệm mục tiêu** (gợi ý tích luỹ theo balance)
-    - **Cần làm rõ trước (chặn implement):** "balance" là số dư khả dụng
-      thẻ tín dụng (đã có `cards[].available_credit_vnd`) hay số dư tài
-      khoản thanh toán (hiện `customer_data.json` chưa có loại dữ liệu
-      này)?
+    - **[Đã gỡ chặn 2026-09-07]** "balance" giờ có thể hiểu là số dư tài
+      khoản thanh toán — `customer_data.json` đã có field `account.balance_vnd`
+      (thêm cùng lúc với `jars`, xem mục Hũ chi tiêu bên dưới). Không còn
+      lý do "thiếu data" để trì hoãn implement mục này nữa.
     - **Cân nhắc tool mới:** `check_existing_savings_goals()` — đọc danh
       sách mục tiêu tiết kiệm **hiện có** để tránh đề xuất trùng lặp/mâu
       thuẫn. Lưu ý: mục tiêu tiết kiệm **không có** trong
@@ -831,20 +831,70 @@ cân nhắc quay lại dùng tool.
   **MVP2 — Quý 3/2026 (Tự động hoá & Báo cáo):**
   - [x] Báo cáo dòng tiền thu-chi (biểu đồ, theo danh mục) → **đã làm xong,
     chính là tính năng `chart` ở mục ngay trên.**
-  - [ ] **Hũ chi tiêu** (tạo hũ, phân bổ quỹ tuỳ chỉnh, gợi ý phân bổ theo
-    rule)
-    - **Cân nhắc tool mới:** `list_existing_jars()` — đọc danh sách hũ chi
-      tiêu **hiện có** từ hệ thống PFM ngoài (`customer_data.json` không có
-      khái niệm "hũ") để: (a) tránh đề xuất tạo hũ trùng tên, (b) tính đúng
-      % còn lại có thể phân bổ nếu tổng % các hũ phải ≤100%. Cùng loại rủi
-      ro chi phí tích hợp như `check_existing_savings_goals()` ở trên —
-      cần API thật từ hệ thống PFM ngoài, chưa có trong repo này.
-    - **Check khác:** đọc lịch sử chi tiêu theo danh mục (đã có qua
-      `read_file`) để gợi ý phân bổ theo rule (ví dụ 50/30/20) — không cần
-      tool mới cho phần này.
-    - **Propose:** `create_jar` (jar_name, allocation_amount hoặc
-      allocation_percent, rule_used) — có thể kèm `chart` (pie) minh hoạ
-      trực quan phần phân bổ đề xuất.
+  - [x] **Hũ chi tiêu (tạo hũ, chỉnh sửa hũ) — Đã implement xong
+    (2026-09-07), CHƯA có tool.**
+    - **Quyết định (theo yêu cầu trực tiếp):** implement `create_jar` +
+      `edit_jar` **không dùng tool nào** — agent tự đọc `/customer_data.json`
+      (`monthly_spending_summary`) bằng `read_file` để tính mức đề xuất,
+      giống pattern đã áp dụng cho `transfer_form` sau khi bỏ
+      `check_available_balance_or_credit` (xem mục 1.8).
+    - **Đã làm:**
+      1. `text_utils.py` — `_is_valid_create_jar()`/`_is_valid_edit_jar()`,
+         đăng ký vào `_UI_VALIDATORS` (tái dùng `extract_ui_block()` chung,
+         không cần code mới ở tầng parse).
+      2. `skills/project/spending-jar/SKILL.md` (mới) — dạy agent khi nào
+         dùng `create_jar` vs `edit_jar`, kèm giới hạn ban đầu: **"hũ đã
+         có" chỉ có thể hiểu là hũ đã được nhắc tới TRONG CHÍNH CUỘC HỘI
+         THOẠI này** (chưa có dữ liệu hũ thật lúc này — đã gỡ bớt giới hạn
+         này ngay sau đó, xem cập nhật 2026-09-07 bên dưới).
+      3. `docs/spending-jar.md` (mới) + cập nhật `docs/api.md` (liệt kê 2
+         `ui.type` mới). Đã đồng bộ sang `PersonalCardAgentUI/agent_backend_docs/`.
+      4. Test: 6 test mới trong `tests/test_text_utils.py` (parse/validate
+         cả 2 type), 1 test end-to-end trong `tests/test_server.py`. 61/61
+         test pass (`uv run --group dev pytest tests/`).
+      5. Verify thật với model VNG: hỏi "Tạo giúp tôi 1 hũ ăn uống hợp lý
+         mỗi tháng" → agent tự đọc `monthly_spending_summary` 3 tháng, tự
+         tính trung bình thật, sinh đúng `create_jar` hợp lệ.
+    - **[Cập nhật 2026-09-07] Đã thêm `account`/`jars` vào mockup data —
+      gỡ được 1 phần giới hạn ở trên, KHÔNG cần tool.** Theo yêu cầu trực
+      tiếp, thêm vào cả 3 file `data/customers/CIF_000{1,2,3}.json`:
+      - `account: {account_number, account_type, balance_vnd}` — số dư tài
+        khoản thanh toán (giải quyết luôn câu hỏi "balance" ở mục Tiết kiệm
+        mục tiêu phía trên).
+      - `jars: [{jar_id, jar_name, allocation_amount_vnd, created_on}, ...]`
+        — danh sách hũ hiện có tính đến đầu phiên (CIF_0001: 2 hũ, CIF_0002:
+        1 hũ, CIF_0003: chưa có hũ nào — cố tình đa dạng để test cả case
+        rỗng).
+      - Test mới trong `tests/data/test_customer_data.py`:
+        `test_account_balance_is_a_non_negative_number`,
+        `test_jars_have_required_fields_and_positive_allocation`
+        (+ thêm `account`/`jars` vào danh sách top-level key bắt buộc). 67/67
+        test pass.
+      - Cập nhật `skills/project/spending-jar/SKILL.md` để agent thật sự
+        dùng data này: đọc `jars` trước khi quyết định `create_jar` hay
+        `edit_jar` (không chỉ dựa vào ngữ cảnh hội thoại nữa). **Đã verify
+        thật với model VNG:** hỏi "Tăng hũ giải trí của tôi lên 800 nghìn"
+        (chưa hề nhắc tới hũ này trong hội thoại) → agent tự đọc `jars`,
+        nhận diện đúng hũ Giải trí đã tồn tại (600.000đ), trả về đúng
+        `edit_jar` (không tạo trùng bằng `create_jar`).
+      - **Lưu ý còn treo (chưa giải quyết bằng data mockup):** `jars` là
+        **snapshot đầu phiên**, không tự cập nhật realtime nếu khách hàng
+        tạo/sửa hũ thật qua hệ thống PFM khác trong lúc đang trò chuyện.
+    - **⚠️ Tool cần làm sau (đã note lại theo yêu cầu ban đầu, KHÔNG làm
+      bây giờ) — vẫn còn giá trị dù đã có mockup data ở trên:**
+      `list_existing_jars()` — đọc danh sách hũ chi tiêu **thật, realtime**
+      từ hệ thống PFM ngoài (khác với `jars` mockup ở trên — đó chỉ là
+      snapshot tĩnh trong file test, không phản ánh thay đổi thật sau khi
+      agent bắt đầu phiên). Tool này sẽ giải quyết nốt giới hạn còn lại:
+      1. Dữ liệu hũ luôn mới nhất, không lệch so với thực tế dù khách hàng
+         vừa tạo/sửa hũ qua kênh khác.
+      2. Tính được % hũ còn có thể phân bổ nếu tổng % các hũ đã tạo phải
+         ≤100% (`list_existing_jars()` cần trả về cả % đã phân bổ của các
+         hũ hiện có, thứ mockup `jars` hiện tại không có khái niệm này).
+      Khi có tool này: cập nhật lại `SKILL.md` để bắt buộc gọi trước khi
+      đề xuất (giống pattern check trước đây của `transfer_form`), và có
+      thể tách hẳn `edit_jar` cần `jar_id` thật thay vì chỉ dựa vào
+      `jar_name`.
     - **Execute:** không — hệ thống PFM ngoài xử lý khi user xác nhận
       (đúng ví dụ bạn nêu: agent gửi thông tin hũ, user bấm OK, **backend**
       mới tạo hũ mới).

@@ -122,6 +122,39 @@ def _is_valid_transfer_form(raw: dict) -> bool:
     return True
 
 
+def _is_valid_create_jar(raw: dict) -> bool:
+    """Validate a parsed create_jar payload (raw["type"] == "create_jar").
+    Pure validation only -- same "no auto-fixing" rule as _is_valid_chart
+    (see skills/project/spending-jar/SKILL.md for the model-facing rules
+    this mirrors). Display-only proposal -- creating the jar for real
+    happens in an external PFM system when the customer confirms, this
+    repo never executes anything (see todo.md's "Roadmap PFM" section).
+    """
+    jar_name = raw.get("jar_name")
+    if not isinstance(jar_name, str) or not jar_name:
+        return False
+
+    allocation_amount = raw.get("allocation_amount")
+    if not _is_finite_number(allocation_amount) or allocation_amount <= 0:
+        return False
+
+    reason = raw.get("reason")
+    if not isinstance(reason, str) or not reason:
+        return False
+
+    return True
+
+
+def _is_valid_edit_jar(raw: dict) -> bool:
+    """Validate a parsed edit_jar payload (raw["type"] == "edit_jar"). Same
+    shape as create_jar plus a `jar_name` identifying which existing jar to
+    change -- see skills/project/spending-jar/SKILL.md for why "existing"
+    can currently only mean "mentioned earlier in this conversation" (no
+    tool/data source lists real jars yet, tracked in todo.md).
+    """
+    return _is_valid_create_jar(raw)
+
+
 # Dispatch table: ui block "type" -> validator. Add an entry here (and a new
 # _is_valid_<type> function above) for each new widget type -- every type
 # shares the same ```ui-json fence and the same envelope shape
@@ -129,6 +162,8 @@ def _is_valid_transfer_form(raw: dict) -> bool:
 _UI_VALIDATORS = {
     "chart": _is_valid_chart,
     "transfer_form": _is_valid_transfer_form,
+    "create_jar": _is_valid_create_jar,
+    "edit_jar": _is_valid_edit_jar,
 }
 
 
