@@ -103,7 +103,7 @@ def test_chat_endpoint_returns_answer_with_correct_api_key(monkeypatch):
     assert body["thread_id"] == "t1"
 
 
-def test_chat_endpoint_generates_thread_id_when_omitted(monkeypatch):
+def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
     fake_model = _ToolCapableFakeChatModel(responses=["ok"])
     fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
     monkeypatch.setattr(server, "agent", fake_agent)
@@ -115,7 +115,7 @@ def test_chat_endpoint_generates_thread_id_when_omitted(monkeypatch):
         headers={"X-API-Key": "test-key-for-pytest"},
     )
     assert response.status_code == 200
-    assert response.json()["thread_id"]  # non-empty, some generated id
+    assert response.json()["thread_id"] == "u1"
 
 
 def test_chat_history_rejects_missing_api_key():
@@ -163,6 +163,85 @@ def test_chat_history_returns_prior_turns_for_same_thread(monkeypatch):
         {"role": "user", "content": "how are you"},
         {"role": "assistant", "content": "reply 2"},
     ]
+
+
+def test_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
+    fake_model = _ToolCapableFakeChatModel(responses=["ok"])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    # No thread_id on either call -- both must resolve to the same default
+    # thread (== user_id) for the GET to find what the POST wrote.
+    client.post("/chat", json={"message": "hello", "user_id": "u1"}, headers=headers)
+
+    response = client.get("/chat/history", params={"user_id": "u1"}, headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["thread_id"] == "u1"
+    assert body["messages"] == [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "ok"}]
+
+
+def test_delete_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
+    fake_model = _ToolCapableFakeChatModel(responses=["ok"])
+    tracking_saver = _DeleteTrackingSaver()
+    fake_agent = server.build_agent(model=fake_model, checkpointer=tracking_saver)
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    client.post("/chat", json={"message": "hello", "user_id": "u1"}, headers=headers)
+
+    response = client.delete("/chat/history", params={"user_id": "u1"}, headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"thread_id": "u1", "status": "deleted"}
+    assert ("u1", "u1") in tracking_saver.deleted_calls
+
+
+def test_delete_chat_history_rejects_missing_api_key():
+    client = TestClient(server.app)
+    response = client.delete("/chat/history", params={"user_id": "u1", "thread_id": "t1"})
+    assert response.status_code == 401
+
+
+class _DeleteTrackingSaver(InMemorySaver):
+    """InMemorySaver that accepts the actor_id positional arg on delete_thread
+    (InMemorySaver.delete_thread only takes thread_id -- AgentBaseMemoryEvents.
+    delete_thread(thread_id, actor_id="") takes both, which is the real
+    interface server.py's DELETE /chat/history calls against) and records
+    what it was called with, then actually deletes so the follow-up GET can
+    verify the history is really gone."""
+
+    def __init__(self):
+        super().__init__()
+        self.deleted_calls: list[tuple[str, str]] = []
+
+    def delete_thread(self, thread_id, actor_id=""):
+        self.deleted_calls.append((thread_id, actor_id))
+        super().delete_thread(thread_id)
+
+
+def test_delete_chat_history_removes_thread(monkeypatch):
+    fake_model = _ToolCapableFakeChatModel(responses=["reply 1"])
+    tracking_saver = _DeleteTrackingSaver()
+    fake_agent = server.build_agent(model=fake_model, checkpointer=tracking_saver)
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    client.post("/chat", json={"message": "hello", "user_id": "u1", "thread_id": "t1"}, headers=headers)
+
+    before = client.get("/chat/history", params={"user_id": "u1", "thread_id": "t1"}, headers=headers)
+    assert before.json()["messages"]  # has history before delete
+
+    response = client.delete("/chat/history", params={"user_id": "u1", "thread_id": "t1"}, headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"thread_id": "t1", "status": "deleted"}
+    assert ("t1", "u1") in tracking_saver.deleted_calls
+
+    after = client.get("/chat/history", params={"user_id": "u1", "thread_id": "t1"}, headers=headers)
+    assert after.json()["messages"] == []  # gone after delete
 
 
 class _ActorIdRecordingGetTupleSaver(InMemorySaver):

@@ -1,7 +1,6 @@
 import hmac
 import logging
 import os
-import uuid
 from pathlib import Path
 
 from deepagents import create_deep_agent
@@ -84,6 +83,14 @@ class ChatHistoryResponse(BaseModel):
     messages: list[HistoryMessage]
 
 
+def _default_thread_id(user_id: str) -> str:
+    """Frontend doesn't manage/pass thread_id yet -- every user_id gets one
+    default (and, for now, only) conversation thread when thread_id is
+    omitted, so /chat, GET /chat/history, and DELETE /chat/history all agree
+    on the same thread for a given user without the caller tracking it."""
+    return user_id
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -97,7 +104,7 @@ def chat(
     if not x_api_key or not hmac.compare_digest(x_api_key, SERVER_API_KEY):
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
-    thread_id = request.thread_id or str(uuid.uuid4())
+    thread_id = request.thread_id or _default_thread_id(request.user_id)
     try:
         result = agent.invoke(
             {"messages": [{"role": "user", "content": request.message}]},
@@ -114,12 +121,13 @@ def chat(
 @app.get("/chat/history", response_model=ChatHistoryResponse)
 def chat_history(
     user_id: str,
-    thread_id: str,
+    thread_id: str | None = None,
     x_api_key: str | None = Header(default=None),
 ) -> ChatHistoryResponse:
     if not x_api_key or not hmac.compare_digest(x_api_key, SERVER_API_KEY):
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
+    thread_id = thread_id or _default_thread_id(user_id)
     try:
         state = agent.get_state(config={"configurable": {"thread_id": thread_id, "actor_id": user_id}})
     except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
@@ -142,3 +150,27 @@ def chat_history(
         history.append(HistoryMessage(role=role, content=text))
 
     return ChatHistoryResponse(thread_id=thread_id, messages=history)
+
+
+class DeleteHistoryResponse(BaseModel):
+    thread_id: str
+    status: str
+
+
+@app.delete("/chat/history", response_model=DeleteHistoryResponse)
+def delete_chat_history(
+    user_id: str,
+    thread_id: str | None = None,
+    x_api_key: str | None = Header(default=None),
+) -> DeleteHistoryResponse:
+    if not x_api_key or not hmac.compare_digest(x_api_key, SERVER_API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+    thread_id = thread_id or _default_thread_id(user_id)
+    try:
+        agent.checkpointer.delete_thread(thread_id, user_id)
+    except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
+        logger.exception("checkpointer.delete_thread failed for thread_id=%s", thread_id)
+        raise HTTPException(status_code=500, detail="Failed to delete conversation history") from exc
+
+    return DeleteHistoryResponse(thread_id=thread_id, status="deleted")

@@ -95,6 +95,9 @@ main agent, but is otherwise fully isolated: it has its own
 `requirements.txt` (plain `pip`, no `uv`/`pyproject.toml` involvement) and
 its own `Dockerfile`.
 
+**Full endpoint reference for frontend integration:** see
+[`docs/api.md`](docs/api.md).
+
 **Required environment variables** (the container refuses to start without
 `SERVER_API_KEY`, `MEMORY_ID`, or `USER_PREFERENCE_STRATEGY_ID`; it
 crash-loops on the first request without a working `OPENAI_API_KEY`):
@@ -152,13 +155,31 @@ docker run -p 8080:8080 \
 - `GET /health` -- no auth, returns `{"status": "ok"}`
 - `POST /chat` -- requires `X-API-Key` header, body
   `{"message": str, "user_id": str, "thread_id": str | null}`, returns
-  `{"answer": str, "thread_id": str}`
+  `{"answer": str, "thread_id": str}`. `thread_id` is optional -- see
+  "Default thread per user" below.
 - `GET /chat/history?user_id=...&thread_id=...` -- requires `X-API-Key`
-  header, returns `{"thread_id": str, "messages": [{"role": "user" | "assistant", "content": str}]}`.
+  header, `thread_id` optional, returns `{"thread_id": str, "messages": [{"role": "user" | "assistant", "content": str}]}`.
   Reads straight from the same GreenNode Memory checkpointer `/chat` writes
   to (via `agent.get_state()`) -- no separate storage needed to show a past
   conversation on the UI. An unknown `(thread_id, user_id)` pair returns an
   empty `messages` list, not an error.
+- `DELETE /chat/history?user_id=...&thread_id=...` -- requires `X-API-Key`
+  header, `thread_id` optional, returns `{"thread_id": str, "status": "deleted"}`.
+  Deletes the thread's checkpoint history via `checkpointer.delete_thread()`.
+  **Caveat:** `AgentBaseMemoryEvents` keeps an internal 30-second read cache
+  that `delete_thread()` does not invalidate, so a `GET /chat/history` call
+  made within ~30s of a delete can still return the just-deleted messages
+  even though the delete already succeeded on GreenNode's side (verified:
+  waiting past 30s returns the correct empty result). This is a limitation
+  of the third-party SDK, not a bug in this server.
+
+**Default thread per user:** the frontend currently only sends `user_id`,
+not `thread_id`. When `thread_id` is omitted on any of the three endpoints
+above, it defaults to `user_id` itself (see `_default_thread_id()` in
+`server.py`) -- so every user effectively has exactly one ongoing
+conversation right now. Passing an explicit `thread_id` (for a future
+multi-conversation-per-user UI) still works and is stored separately from
+the default thread.
 
 **Multi-user conversation history:** each `(thread_id, user_id)` pair gets
 its own conversation history, persisted in GreenNode AgentBase Memory (via

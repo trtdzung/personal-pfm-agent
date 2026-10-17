@@ -231,6 +231,31 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   `docker-compose.yml`/CI workflow/README với biến env mới, và bổ sung
   `instructions.md` hướng dẫn khi nào dùng `remember_fact`/`recall_fact` thay
   vì `remember_preference`/`recall_preference`.
+- [ ] **Chuyển sang dùng model của VNG (MaaS)** thay vì (hoặc song song với)
+  OpenAI `gpt-5.5` đang hard-code ở `server.py:build_agent()`. Đã xác nhận
+  qua docs GreenNode: VNG có endpoint LLM tương thích OpenAI API tại
+  `https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1`, dùng thẳng được với
+  `ChatOpenAI(base_url=..., api_key=<key riêng>, model=<model path VNG>)`
+  vì cùng chuẩn OpenAI-compatible.
+  - **Việc cần làm:**
+    1. Vào mục **"Model as a Service (MaaS)"** / **"Models"** trên console
+       GreenNode (thấy trong sidebar khi kiểm tra Access Control) để xem
+       danh sách model VNG cung cấp + tên/path model chính xác cần truyền
+       vào `model=`.
+    2. Lấy API key gọi được endpoint MaaS này — cách docs hướng dẫn là qua
+       decorator `@requires_api_key(provider_name="<tên provider>")` (từ
+       `greennode_agentbase.identity`, đã verify là decorator thường, **không
+       bắt buộc phải dùng `GreenNodeAgentBaseApp`** — gắn được lên hàm bất kỳ,
+       kể cả route handler FastAPI của `server.py`). Cần cấu hình 1
+       "Outbound Auth" provider trước (tab **Outbound Auth** cạnh Access
+       Control trên console, hoặc CLI `gab identity outbound-auth`) — loại
+       "Static (API Key)" là đơn giản nhất cho M2M.
+    3. Cân nhắc: giữ `model` cấu hình được qua env var (ví dụ `LLM_MODEL`,
+       `LLM_PROVIDER`) để dễ so sánh OpenAI vs model VNG mà không phải sửa
+       code, hoặc A/B giữa 2 lựa chọn khi eval chất lượng.
+    4. Kiểm tra lại toàn bộ 11 câu hỏi checklist (mục 2) với model mới —
+       chất lượng suy luận/tool-calling có thể khác OpenAI, cần verify lại
+       chứ không giả định tương đương.
 
 ## 4. Việc người dùng tự quyết định
 
