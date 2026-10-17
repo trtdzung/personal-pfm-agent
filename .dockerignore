@@ -1,5 +1,7 @@
 # server.py only needs: requirements.txt, server.py, text_utils.py,
-# instructions.md, middleware/, data/, tools/memory_tools.py. Everything else below is excluded --
+# instructions.md, middleware/, data/, tools/memory_tools.py,
+# skills/project/ (data-visualization SKILL.md, read via FilesystemBackend --
+# see server.py's build_agent()). Everything else below is excluded --
 # whenever a new file/directory is added at the repo root that server.py
 # does NOT need, add it here too, or it silently ends up in the image
 # (this is the tradeoff of COPY . . + .dockerignore vs. an explicit
@@ -32,16 +34,17 @@ memory.py
 pyproject.toml
 uv.lock
 
-# managed-deploy-only scaffold pieces (channels/connectors/schedules/
-# sandbox/skills are opt-in-by-presence for `mda`, not used by this server)
-# and other local-dev-only content.
+# managed-deploy-only scaffold pieces (channels/connectors/schedules/sandbox
+# are opt-in-by-presence for `mda`, not used by this server) and other
+# local-dev-only content.
 # NOTE: tools/ is NOT excluded -- tools/memory_tools.py (remember_preference/
 # recall_preference) is a real runtime dependency of server.py.
+# NOTE: skills/ is NOT excluded -- server.py's build_agent() reads
+# skills/project/data-visualization/SKILL.md at runtime via FilesystemBackend.
 channels/
 connectors/
 schedules/
 sandbox/
-skills/
 scripts/
 notebooks/
 evals/

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from deepagents import create_deep_agent
+from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
 from fastapi import FastAPI, Header, HTTPException
 from greennode_agent_bridge import AgentBaseMemoryEvents
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -15,12 +16,13 @@ from pydantic import BaseModel
 
 from middleware.audit import log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
-from text_utils import extract_final_text
+from text_utils import extract_chart_block, extract_final_text
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
 
 REPO_ROOT = Path(__file__).resolve().parent
+SKILLS_DIR = REPO_ROOT / "skills"
 
 SERVER_API_KEY = os.environ.get("SERVER_API_KEY")
 if not SERVER_API_KEY:
@@ -65,6 +67,15 @@ def build_agent(
         middleware=[log_tool_calls, SeedCustomerContext()],
         system_prompt=instructions,
         checkpointer=checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID),
+        # StateBackend stays the default for everything (per-thread, isolates
+        # customers' data -- see SeedCustomerContext) so only /skills/ is
+        # routed to a real-disk FilesystemBackend, scoped to the skills/ dir
+        # with virtual_mode=True (blocks path traversal outside SKILLS_DIR).
+        backend=CompositeBackend(
+            default=StateBackend(),
+            routes={"/skills/": FilesystemBackend(root_dir=SKILLS_DIR, virtual_mode=True)},
+        ),
+        skills=["/skills/project/"],
     )
 
 
@@ -87,6 +98,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     thread_id: str
+    chart: dict | None = None
 
 
 class HistoryMessage(BaseModel):
@@ -131,7 +143,8 @@ def chat(
         raise HTTPException(status_code=500, detail="Agent failed to process the request") from exc
 
     answer = extract_final_text(result["messages"][-1].content)
-    return ChatResponse(answer=answer, thread_id=thread_id)
+    answer, chart = extract_chart_block(answer)
+    return ChatResponse(answer=answer, thread_id=thread_id, chart=chart)
 
 
 @app.get("/chat/history", response_model=ChatHistoryResponse)
@@ -160,6 +173,7 @@ def chat_history(
             continue  # skip tool/system messages -- not meant for a chat UI transcript
 
         text = extract_final_text(message.content)
+        text, _ = extract_chart_block(text)
         if not text:
             continue  # e.g. an AIMessage whose only content was a tool call
 

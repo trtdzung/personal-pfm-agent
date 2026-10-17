@@ -151,12 +151,18 @@ Content-Type: application/json
 ```json
 {
   "answer": "Tháng này bạn đã chi tiêu 4.250.000 VND...",
-  "thread_id": "CUS-000482"
+  "thread_id": "CUS-000482",
+  "chart": null
 }
 ```
 `thread_id` trả về là giá trị **thực sự đã dùng** (bằng `user_id` nếu bạn
 không truyền) — không bắt buộc phải lưu lại trừ khi bạn chủ động muốn quản
 lý nhiều thread.
+
+`chart` là `null` ở hầu hết câu trả lời. Với một số câu hỏi mang tính phân
+tích/so sánh, agent tự quyết định kèm theo 1 object mô tả biểu đồ để
+frontend vẽ — xem chi tiết schema + cách render trong
+[`docs/chart-visualization.md`](./chart-visualization.md).
 
 **Lỗi:**
 | Status | Khi nào |

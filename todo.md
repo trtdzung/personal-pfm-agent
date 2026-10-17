@@ -249,6 +249,38 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
 
 ## 3. Việc nhỏ còn treo (đã ghi nhận, không chặn, làm khi rảnh)
 
+- [ ] **Câu trả lời của agent đang bị dài quá mức cần thiết** —
+  `instructions.md` hiện **không có bất kỳ hướng dẫn nào** về độ dài/phong
+  cách trả lời (đã grep xác nhận: không có từ khoá "ngắn gọn"/"súc tích"/
+  "concise" nào trong file). Hệ quả quan sát được thật (verify với model VNG
+  qua `server.py`): hỏi 1 câu đơn giản kiểu "Danh mục chi tiêu lớn nhất của
+  tôi là gì?" nhưng agent tự động:
+  - Tự diễn giải câu hỏi theo **2 cách** (tháng hiện tại vs tổng 3 tháng)
+    dù không được hỏi, rồi trả lời **cả hai**.
+  - Hiện **bảng breakdown đầy đủ 6 danh mục** cho cả 2 cách hiểu, thay vì
+    chỉ nói tên danh mục lớn nhất.
+  - Hiện luôn phép **kiểm tra tổng** (`16.280.000 + ... = 50.332.000 ✓`) —
+    lộ luôn "chain of thought" tính toán ra ngoài câu trả lời.
+  - Tự thêm 1 câu **gợi ý chủ động** không được hỏi ("Bạn có muốn mình gợi ý
+    cách tối ưu...") ở cuối.
+  - Toàn bộ chỉ để trả lời đúng 1 từ: "Mua sắm".
+  - **Việc cần làm:** thêm 1 mục mới vào `instructions.md` (ví dụ đặt gần
+    đầu file, cạnh mục "Trước khi trả lời...") hướng dẫn rõ:
+    1. Trả lời **thẳng vào câu hỏi trước**, ngắn gọn — chỉ mở rộng
+       chi tiết/bảng số liệu khi được hỏi thêm hoặc khi câu hỏi thật sự cần
+       (ví dụ "phân tích chi tiết", "so sánh theo tháng").
+    2. Chỉ tự diễn giải nhiều cách hiểu khi câu hỏi **thực sự mơ hồ** — mặc
+       định chọn cách hiểu hợp lý nhất (ví dụ "tháng này" cho câu hỏi không
+       ghi rõ mốc thời gian) thay vì trả lời cả 2 phương án.
+    3. Không hiện phép tính trung gian/bước kiểm tra tổng ra câu trả lời
+       cuối cùng cho khách hàng — đó là việc nội bộ của agent (dùng
+       `read_file`/tính toán trong quá trình suy luận), không phải nội
+       dung cần hiện cho người dùng.
+    4. Không tự động thêm câu gợi ý/hỏi thêm ở cuối trừ khi thực sự liên
+       quan trực tiếp và ngắn gọn — không biến mỗi câu trả lời thành 1
+       đoạn văn dài có kết luận + gợi ý bán chéo.
+  - Cân nhắc thêm ví dụ minh hoạ "trước/sau" ngay trong `instructions.md`
+    để agent dễ bắt chước đúng độ dài mong muốn.
 - [ ] `data/customer_data.json`'s `_meta.as_of_date` sẽ tiếp tục lệch ngày
   thật mỗi lần demo — cân nhắc cập nhật định kỳ hoặc bỏ trường này.
 - [x] ~~`README.md` còn 2 dòng cũ chưa dọn (mục Deploy nhắc `skills/`, mục
@@ -320,6 +352,109 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   - **Chưa làm:** kiểm tra lại toàn bộ 11 câu hỏi checklist (mục 2) với
     model mới — chất lượng suy luận/tool-calling có thể khác OpenAI, chưa
     verify hệ thống, chỉ mới test 1 câu hỏi đơn giản (giới thiệu bản thân).
+- [ ] **Kết nối MCP tin tức/thông tin bên ngoài** — hiện agent **chỉ** có
+  dữ liệu tĩnh của chính khách hàng (`data/customers/*.json`) + bộ nhớ nội
+  bộ, hoàn toàn không có nguồn thông tin bên ngoài nào. Use case cụ thể:
+  khách hỏi kiểu "so sánh quyền lợi thẻ của tôi với thẻ ngân hàng khác" —
+  hiện agent không thể trả lời đúng nghĩa (không biết gì về sản phẩm ngân
+  hàng khác), dễ bịa hoặc từ chối.
+  - **Đã kiểm tra hiện trạng:** `connectors/mcp.py` đã có sẵn 1 ví dụ khai
+    báo MCP (`managed_deepagents.connectors.mcp(...)`, hiện trỏ tới
+    `docs.langchain.com/mcp` chỉ để minh hoạ) — nhưng đây là API của
+    `managed_deepagents`, **chỉ dùng được cho `agent.py`/đường `mda`**,
+    chưa wire vào `tools=[...]` của `agent.py`. `server.py` (OSS
+    `deepagents`) **không có** API MCP tương đương built-in (đã verify:
+    `deepagents` không có gì liên quan "mcp" trong package) — muốn dùng ở
+    `server.py` cần thêm thư viện mới, ví dụ `langchain-mcp-adapters`
+    (chưa có trong `requirements.txt`), để convert MCP tool thành
+    `BaseTool` rồi thêm vào danh sách `tools=[...]` của `build_agent()`.
+  - **Việc cần làm:**
+    1. Chọn cụ thể 1 nguồn MCP tin tức/dữ liệu tài chính phù hợp (chưa
+       chốt — "tin tức" chung chung chưa đủ cụ thể để implement; cần biết
+       nguồn nào có dữ liệu quyền lợi/lãi suất/phí thẻ của các ngân hàng
+       khác, không chỉ tin tức thời sự thông thường).
+    2. Quyết định implement cho `server.py`, `agent.py`, hay cả hai (2 cơ
+       chế kỹ thuật khác nhau như ghi ở trên — không dùng chung code được).
+    3. Cân nhắc bảo mật/độ tin cậy: thông tin từ MCP là dữ liệu bên ngoài,
+       có thể sai/lỗi thời — cần hướng dẫn rõ trong `instructions.md` để
+       agent trích dẫn nguồn, không trộn lẫn với dữ liệu tài chính thật của
+       khách hàng, và không suy diễn thêm ngoài những gì MCP trả về.
+    4. Cập nhật `instructions.md` thêm hướng dẫn khi nào dùng tool MCP mới
+       này (ví dụ: chỉ khi câu hỏi thực sự cần so sánh với bên ngoài, không
+       dùng cho câu hỏi chỉ liên quan tới dữ liệu nội bộ khách hàng).
+    5. Nếu MCP cần API key riêng, thêm env var + fail-fast tương tự các
+       tích hợp khác, cập nhật `docker-compose.yml`/CI/README.
+    6. Viết test cho tool mới (tương tự pattern `_FakeMemoryClient` đã
+       dùng cho `remember_preference`/`recall_preference` — không gọi MCP
+       thật trong unit test).
+- [ ] **(Chưa ưu tiên)** Cân nhắc tách `instructions.md` thành các skill
+  riêng (deepagents có `skills` param + thư mục `skills/` đã có sẵn, hiện
+  rỗng) thay vì 1 file monolithic. Hiện tại (~5300 ký tự) **chưa cần** — phần
+  lớn nội dung (vai trò, quy tắc đọc data, danh sách nhóm câu hỏi) luôn cần
+  cho mọi câu hỏi nên tách ra không có lợi (vẫn phải load mọi lúc). Ứng viên
+  hợp lý để tách khi cần: mục ngân sách (khá dài, chỉ cần khi hỏi ngân sách),
+  và các mục tool-cụ-thể sắp thêm (Semantic Memory, MCP so sánh ngân hàng
+  khác — xem 2 mục ngay trên) — các mục này có hình dạng "cụ thể, ít khi
+  cần" hợp làm skill hơn nhồi vào system prompt luôn tải. Đánh đổi: skill
+  giúp system prompt gọn/đỡ tốn token, nhưng thêm 1 bước agent phải tự quyết
+  định có cần đọc skill đó không — mô tả skill không đủ rõ thì dễ bị bỏ sót,
+  bug khó phát hiện hơn so với thiếu hướng dẫn ngay trong system prompt.
+  **Mốc để quay lại xem xét:** sau khi làm xong sửa độ dài câu trả lời (mục
+  đầu ở trên) + có thể cả Semantic Memory/MCP, nếu `instructions.md` phình
+  to gấp đôi hiện tại trở lên thì tách.
+- [x] **Visualize dữ liệu (chart) qua skill — chỉ cho 1 vài trường hợp cụ
+  thể** (ví dụ user hỏi "phân tích"/so sánh xu hướng/breakdown theo danh
+  mục), không phải mọi câu trả lời. **Đã triển khai xong**, đã đọc kỹ docs
+  chính thức của deepagents (`docs.langchain.com/oss/python/deepagents/customization`)
+  trước khi implement để xác nhận đúng pattern khuyến nghị.
+  - **Cơ chế cuối cùng (đã verify thật, không phải middleware-seeding như
+    dự tính ban đầu):** vướng kỹ thuật ban đầu là `create_deep_agent(skills=[...])`
+    dùng chung `backend` với agent (mặc định `StateBackend`, ephemeral theo
+    phiên) — thử seed `SKILL.md` vào `StateBackend` bằng 1 middleware
+    (`before_agent`, theo pattern `SeedCustomerContext`) nhưng **không hoạt
+    động** (`SkillsMiddleware` báo "No skills available yet", root cause
+    không cần điều tra tiếp vì đã đổi hướng). Giải pháp đúng —
+    **`CompositeBackend`** (`deepagents.backends`): route `/skills/` sang 1
+    `FilesystemBackend(root_dir=<thư mục skills/>, virtual_mode=True)` thật
+    (đọc file thật trên đĩa), còn mọi path khác vẫn dùng `StateBackend` mặc
+    định như cũ (không đổi hành vi cô lập dữ liệu khách hàng theo
+    `SeedCustomerContext`). Đây đúng là pattern chính thức docs khuyến nghị
+    cho việc này. `virtual_mode=True` chặn path traversal (`..`, `~`) ra
+    ngoài thư mục `skills/` nên an toàn dù dùng `FilesystemBackend` (vốn có
+    cảnh báo không nên dùng trực tiếp trong web server) — verify bằng đọc
+    source `_resolve_path` của thư viện, root bị scope chặt vào đúng
+    `skills/`, không phải toàn bộ repo/đĩa.
+  - **Đã chốt (không dùng `response_format`):** model chèn 1 khối code đặc
+    biệt (```chart-json```) chứa JSON theo schema cố định **ngay trong text
+    trả lời bình thường**, `server.py` tự parse tách ra — không ép toàn bộ
+    agent trả structured output.
+  - **Đã làm:**
+    1. `skills/project/data-visualization/SKILL.md` — mô tả: dùng khi câu
+       hỏi cần phân tích xu hướng/so sánh/breakdown theo danh mục-thời gian.
+       Schema: `{"chart_type": "bar"|"line"|"pie", "title": str, "labels": [...], "series": [{"name": str, "data": [...]}]}`.
+    2. `server.py:build_agent()` — thêm
+       `backend=CompositeBackend(default=StateBackend(), routes={"/skills/": FilesystemBackend(root_dir=SKILLS_DIR, virtual_mode=True)})`
+       + `skills=["/skills/project/"]`.
+    3. `text_utils.py` — hàm `extract_chart_block()` (tương tự
+       `_strip_think_tags`) tách khối ```chart-json``` khỏi `answer`, parse
+       thành field `chart: dict | None` mới trong `ChatResponse`. Không có
+       chart hoặc JSON hỏng → `null`, không bao giờ làm vỡ `/chat`.
+    4. `docs/api.md` — document field `chart` mới trong response `/chat`.
+    5. `docs/chart-visualization.md` (file mới) — tài liệu riêng cho
+       frontend: schema đầy đủ, ví dụ payload, code mẫu render bằng
+       Chart.js, lưu ý độ tin cậy (không có structured-output enforcement)
+       và giới hạn hiện tại (`GET /chat/history` không trả lại `chart` cho
+       tin nhắn cũ).
+    6. Test: `tests/test_text_utils.py` (3 test mới cho `extract_chart_block` —
+       không có block, có block hợp lệ, JSON hỏng) + `tests/test_server.py`
+       (1 test mới: fake model trả khối chart-json giả, verify `/chat` tách
+       đúng `chart` + `answer` không còn JSON thô). 41/41 test pass
+       (`uv run --group dev pytest tests/`).
+  - **Chưa làm / cân nhắc sau:** `GET /chat/history` hiện chỉ lọc bỏ khối
+    chart-json thô khỏi text lịch sử (để không lộ JSON kỹ thuật ra UI), chưa
+    lưu lại field `chart` để trả lại khi xem lại lịch sử cũ — nếu sau này
+    cần, phải đổi cách lưu (hiện history được tái tạo từ text message của
+    checkpointer, không có chỗ lưu `chart` riêng).
 
 ## 4. Việc người dùng tự quyết định
 

@@ -102,6 +102,35 @@ def test_chat_endpoint_returns_answer_with_correct_api_key(monkeypatch):
     body = response.json()
     assert body["answer"] == "Đây là câu trả lời giả."
     assert body["thread_id"] == "t1"
+    assert body["chart"] is None
+
+
+def test_chat_endpoint_splits_chart_json_block_into_chart_field(monkeypatch):
+    chart_answer = (
+        "Tháng này bạn chi nhiều nhất cho Mua sắm.\n\n"
+        '```chart-json\n{"chart_type": "pie", "title": "Chi tiêu theo danh mục", '
+        '"labels": ["Mua sắm", "Ăn uống"], "series": [{"name": "VND", "data": [16280000, 10500000]}]}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[chart_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "Phân tích chi tiêu theo danh mục giúp tôi.", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Tháng này bạn chi nhiều nhất cho Mua sắm."
+    assert "```chart-json" not in body["answer"]
+    assert body["chart"] == {
+        "chart_type": "pie",
+        "title": "Chi tiêu theo danh mục",
+        "labels": ["Mua sắm", "Ăn uống"],
+        "series": [{"name": "VND", "data": [16280000, 10500000]}],
+    }
 
 
 def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
