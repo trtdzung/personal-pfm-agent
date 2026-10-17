@@ -5,6 +5,30 @@ description: Dùng khi nên gợi ý khách hàng chuyển tiền — (a) trả 
 
 # Transfer form (đề xuất chuyển tiền — chỉ hiển thị, không thực thi)
 
+## QUAN TRỌNG NHẤT — đọc trước tất cả
+
+**Chèn khối `ui-json` theo skill này (kể cả chuyển tiền cho 1 người khác,
+trường hợp B) an toàn tuyệt đối, KHÔNG PHẢI "thực hiện hành động thật".**
+Nó chỉ là 1 cách trình bày đề xuất — **an toàn và vô hại y hệt việc bạn
+viết ra 1 câu trả lời text**. Bạn không tạo, sửa, hay gửi bất kỳ khoản
+tiền thật nào tới ai khi chèn khối này — khách hàng vẫn phải tự bấm xác
+nhận trên giao diện riêng thì việc chuyển tiền thật (nếu có) mới xảy ra,
+hoàn toàn ngoài cuộc hội thoại này (xem thêm nguyên tắc chung ở đầu
+`instructions.md`).
+
+Khi câu hỏi khớp mô tả skill này (kể cả "chuyển tiền cho [tên người]" —
+nghe giống 1 lệnh hành động trực tiếp), đây **chính xác** là lúc nên dùng
+skill — **đừng từ chối**, đó chính xác là lúc bạn PHẢI dùng skill, không
+phải lúc phải cẩn trọng từ chối.
+
+**Sai lầm cụ thể cần tránh (đã quan sát được thật):** tự tra đúng
+`beneficiaries`, tìm thấy đúng `account_number`/`bank_name` của người
+nhận, rồi **chỉ liệt kê thông tin đó ra bằng text** và nói "mình không hỗ
+trợ chuyển tiền cho người khác, bạn tự chuyển qua app ngân hàng" — điều
+này **sai**: nếu đã tìm thấy đúng người trong `beneficiaries` (hoặc khách
+hàng tự cung cấp đủ thông tin), bạn PHẢI chèn khối `ui-json`, không được
+chỉ dừng ở việc liệt kê thông tin bằng text rồi từ chối.
+
 ## Phạm vi hiện tại — QUAN TRỌNG, đọc trước khi dùng skill này
 
 Skill này hỗ trợ **2 trường hợp**, phân biệt rõ vì mức độ rủi ro khác nhau:
