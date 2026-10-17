@@ -267,6 +267,46 @@ thường trên cùng thread.
   request"), hoặc tự động catch riêng lỗi này và tự xoá/reset thread thay
   vì chỉ trả 500.
 
+### 1.6. [Đã fix] JSON của `ui` lọt thẳng vào `answer` khi model không dùng đúng fence
+
+**Sự cố (2026-09-07, phát hiện bởi team frontend qua test thật trên PCA
+chat):** 1 câu trả lời so sánh chi tiêu (có kèm chart) hiện nguyên văn
+JSON thô ở cuối `answer`:
+```
+...con số cuối tháng có thể cao hơn.
+
+{"chart_type": "bar", "title": "So sánh...
+```
+Đúng điều `docs/chart-visualization.md` cam kết "frontend không bao giờ
+thấy JSON thô lẫn trong `answer`" bị vi phạm.
+
+**Nguyên nhân:** `extract_ui_block()` (`text_utils.py`) trước đó chỉ tìm
+đúng 1 pattern cố định — khối được bọc đúng fence ` ```ui-json\n...\n``` `.
+Khi model (vì lý do bất kỳ — không phải lỗi cố ý, model đôi khi bỏ sót
+fence) chèn JSON mà **không bọc fence** (hoặc bọc sai/không đóng đúng),
+regex không match được gì, hàm trả nguyên văn text không đổi → JSON lọt
+thẳng ra `answer`.
+
+**Đã fix:** viết lại `extract_ui_block()` theo 2 lớp, không phụ thuộc
+tuyệt đối vào fence:
+1. Vẫn tìm và cắt bỏ mọi khối fence bất kỳ (` ```<label>...``` `) trước —
+   **kể cả khi nội dung bên trong không phải JSON hợp lệ** (app này không
+   có use case hợp lệ nào khác cho code fence ngoài `ui-json`, nên cắt bỏ
+   toàn bộ khối fence là an toàn dù không parse được, đúng yêu cầu "thà
+   cắt bỏ phần nghi ngờ còn hơn để lọt nguyên văn").
+2. Trên phần còn lại, quét tiếp tìm JSON object **trần** (không fence) —
+   dùng `json.JSONDecoder.raw_decode` thật (không phải đếm ngoặc thủ
+   công) để tìm đúng object hoàn chỉnh dù model quên bọc fence.
+3. Object nào tìm được (dù fenced hay không, dù hợp lệ hay không) đều bị
+   cắt khỏi `answer`; chỉ object **đầu tiên pass `_is_valid_ui`** mới trở
+   thành `ui`, còn lại `ui: null`.
+- Test mới trong `tests/test_text_utils.py`: JSON hợp lệ không fence, và
+  đúng fragment JSON schema cũ (thiếu field `type`) y hệt báo cáo lỗi —
+  cả 2 đều bị cắt khỏi `answer` đúng, `ui` fallback `null` khi thiếu
+  `type`/sai schema.
+- Verify thật với model VNG (2 skill `chart` + `transfer_form`): `answer`
+  không còn ký tự `` ` ``/`{`/`}` nào, `ui` đúng type. 58/58 test pass.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong
