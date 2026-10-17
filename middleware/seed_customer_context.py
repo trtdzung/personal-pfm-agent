@@ -67,6 +67,12 @@ class SeedCustomerContext(AgentMiddleware):
     the model has the data from its very first turn, at the cost of a fixed
     ~4-6k token increase on every call (the file is small enough that this
     is worth it -- see todo.md for the measured before/after).
+
+    Note: `jars`/`beneficiaries` are intentionally NOT part of
+    data/customers/<id>.json anymore -- they're hardcoded mock data inside
+    tools/customer_data_tools.py, only reachable via that module's
+    list_existing_jars()/query_beneficiaries(), so this middleware has
+    nothing to filter out here.
     """
 
     def before_agent(self, state: AgentState, runtime: Runtime) -> dict:

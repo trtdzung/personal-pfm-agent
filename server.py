@@ -20,6 +20,7 @@ from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from text_utils import extract_final_text, extract_ui_block
+from tools.customer_data_tools import list_existing_jars, query_beneficiaries
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
@@ -105,7 +106,9 @@ def build_agent(
     patch_preserve_delta_snapshots()
     return create_deep_agent(
         model=model or _default_model(),
-        tools=tools if tools is not None else [remember_preference, recall_preference],
+        tools=tools
+        if tools is not None
+        else [remember_preference, recall_preference, list_existing_jars, query_beneficiaries],
         middleware=[log_tool_calls, log_model_calls, SeedCustomerContext()],
         system_prompt=instructions,
         checkpointer=checkpointer,

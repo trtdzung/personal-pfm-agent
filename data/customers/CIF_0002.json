@@ -27,15 +27,6 @@
     "account_type": "Tài khoản thanh toán",
     "balance_vnd": 8000000
   },
-  "jars": [
-    {
-      "jar_id": "jar_001",
-      "jar_name": "Hoá đơn",
-      "allocation_amount_vnd": 6200000,
-      "created_on": "2026-06-10"
-    }
-  ],
-  "beneficiaries": [],
   "cards": [
     {
       "card_id": "card_001",

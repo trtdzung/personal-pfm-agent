@@ -27,21 +27,19 @@ chèn khối này, không được dừng ở text).
 
 ## Phạm vi hiện tại — QUAN TRỌNG, đọc trước khi dùng skill này
 
-`/customer_data.json` giờ **có** trường `jars` (danh sách hũ hiện có tính
-đến thời điểm dữ liệu được nạp — `jar_id`, `jar_name`,
-`allocation_amount_vnd`, `created_on`) và trường `account.balance_vnd` (số
-dư tài khoản thanh toán). Đây là dữ liệu **snapshot** tại đầu phiên — nếu
-khách hàng tạo/sửa hũ thật qua hệ thống PFM khác trong lúc đang trò
-chuyện, `jars` trong file **không tự cập nhật theo thời gian thực**. Vì
-vậy, "đã có hũ" nên hiểu theo 2 nguồn, ưu tiên nguồn mới hơn khi có xung
-đột:
+Dùng tool **`list_existing_jars()`** (không cần tham số — tool tự biết
+đang nói chuyện với khách hàng nào) để lấy danh sách hũ hiện có, **thay vì
+đọc trường `jars` tĩnh trong `/customer_data.json`** — tool này đọc lại
+mới mỗi lần gọi nên phản ánh đúng hũ đã tạo/sửa gần nhất trong chính cuộc
+hội thoại này, không bị giới hạn bởi snapshot đầu phiên.
 
-1. Hũ đã xuất hiện trong `jars` của `/customer_data.json` (tồn tại từ đầu
-   phiên).
+"Đã có hũ" nên hiểu theo 2 nguồn, ưu tiên nguồn mới hơn khi có xung đột:
+
+1. Hũ trả về từ `list_existing_jars()`.
 2. Hũ được nhắc tới/agent vừa đề xuất **trong chính cuộc hội thoại này**
-   (mới hơn, ưu tiên hơn dữ liệu snapshot nếu có khác biệt — ví dụ agent
-   vừa đề xuất `create_jar` ở lượt trước, giờ khách hàng muốn đổi số tiền
-   ngay, dù `jars` trong file chưa có hũ đó).
+   (mới hơn, ưu tiên hơn nếu có khác biệt — ví dụ agent vừa đề xuất
+   `create_jar` ở lượt trước, giờ khách hàng muốn đổi số tiền ngay, dù
+   `list_existing_jars()` chưa kịp phản ánh hũ đó).
 
 Nếu khách hàng nhắc tới 1 hũ không có ở cả 2 nguồn trên: hỏi lại thay vì tự
 đoán, hoặc dùng `create_jar` nếu ý khách hàng rõ ràng là muốn **tạo mới**.
@@ -50,26 +48,24 @@ Số tiền đề xuất (`allocation_amount`) PHẢI tính từ dữ liệu chi
 trong `/customer_data.json` (`monthly_spending_summary`/`transactions`
 theo danh mục liên quan, hoặc `customer.monthly_income_vnd`/
 `account.balance_vnd` nếu áp dụng rule tổng quát như 50/30/20) — không bịa
-số.
+số. `/customer_data.json` (chi tiêu, thu nhập, số dư) vẫn đọc trực tiếp từ
+system prompt như trước — chỉ riêng **danh sách hũ hiện có** thì dùng tool
+`list_existing_jars()`.
 
 ## Khi nào dùng `create_jar` vs `edit_jar`
 
-- **`create_jar`** — hũ đó **không có** trong `jars` của
-  `/customer_data.json` và cũng chưa từng được nhắc tới trong hội thoại
-  này.
-- **`edit_jar`** — hũ đó **có** trong `jars` của `/customer_data.json`,
-  HOẶC đã được nhắc tới/agent vừa đề xuất trong chính cuộc hội thoại này.
+- **`create_jar`** — hũ đó **không có** trong kết quả `list_existing_jars()`
+  và cũng chưa từng được nhắc tới trong hội thoại này.
+- **`edit_jar`** — hũ đó **có** trong kết quả `list_existing_jars()`, HOẶC
+  đã được nhắc tới/agent vừa đề xuất trong chính cuộc hội thoại này.
 
 ## Quy trình bắt buộc — Check trước, Propose sau
 
-1. **Check (bắt buộc):** dữ liệu khách hàng (`/customer_data.json`) **đã có
-   sẵn ngay trong system prompt của bạn** — KHÔNG cần gọi `read_file`/`grep`
-   để lấy lại. Chỉ cần đọc trực tiếp từ đó — (a) xem `jars` đã có hũ tên đó
-   chưa (để chọn đúng `create_jar` hay `edit_jar`), (b) lấy số liệu chi tiêu
-   thật làm căn cứ đề xuất mức phân bổ (theo danh mục liên quan trong
-   `monthly_spending_summary`, hoặc theo `monthly_income_vnd`/
-   `account.balance_vnd` nếu áp dụng 1 rule phân bổ tổng quát) — không bịa
-   số.
+1. **Check (bắt buộc):** gọi tool `list_existing_jars()` để xem đã có hũ
+   tên đó chưa (chọn đúng `create_jar` hay `edit_jar`). Số liệu chi tiêu
+   làm căn cứ đề xuất mức phân bổ (`monthly_spending_summary`,
+   `monthly_income_vnd`/`account.balance_vnd`) đã có sẵn ngay trong system
+   prompt — không cần `read_file`/`grep` cho phần này, không bịa số.
 2. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời, dùng
    đúng 1 trong 2 type dưới đây.
 
@@ -99,8 +95,8 @@ số.
 3. `allocation_amount` là number JSON thật, dương — không phải string.
 4. `reason` PHẢI có nội dung cụ thể, dựa trên số liệu thật đọc được từ
    `/customer_data.json`.
-5. Với `edit_jar`, `jar_name` PHẢI khớp đúng tên hũ có trong `jars` của
-   `/customer_data.json` HOẶC đã xuất hiện trước đó trong hội thoại —
+5. Với `edit_jar`, `jar_name` PHẢI khớp đúng tên hũ trả về từ
+   `list_existing_jars()` HOẶC đã xuất hiện trước đó trong hội thoại —
    không tự bịa tên hũ mới rồi gắn nhãn `edit_jar`.
 6. Đúng 1 khối `ui-json` mỗi câu trả lời.
 
@@ -108,9 +104,9 @@ số.
 
 - KHÔNG tự thêm field ngoài 4 field đã định nghĩa (`type`, `jar_name`,
   `allocation_amount`, `reason`).
-- KHÔNG dùng `edit_jar` cho 1 hũ không có trong `jars` của
-  `/customer_data.json` và cũng chưa từng được nhắc tới trong hội thoại
-  này — dùng `create_jar` thay vào đó.
+- KHÔNG dùng `edit_jar` cho 1 hũ không có trong kết quả `list_existing_jars()`
+  và cũng chưa từng được nhắc tới trong hội thoại này — dùng `create_jar`
+  thay vào đó.
 - KHÔNG khẳng định hũ đã được tạo/chỉnh sửa thật — đây chỉ là đề xuất hiển
   thị để khách hàng tự xem và tự bấm xác nhận trên UI, việc tạo/sửa hũ
   thật (nếu có) diễn ra hoàn toàn bên ngoài cuộc hội thoại này, ở hệ thống
@@ -138,10 +134,9 @@ Lượt sau, khách hỏi: "Đổi hũ đó lên 4 triệu được không?"
 {"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": 4000000, "reason": "Khách hàng yêu cầu tăng hũ Ăn uống đã tạo ở lượt trước lên 4.000.000đ/tháng"}
 ```
 
-Ví dụ khác — hũ đã có sẵn trong `jars` của `/customer_data.json` từ đầu
-phiên (không cần nhắc tới trong hội thoại trước): khách hỏi "Tăng hũ giải
-trí của tôi lên 800k được không?" → đọc `jars`, thấy đã có
-`{"jar_name": "Giải trí", "allocation_amount_vnd": 600000, ...}` → dùng
+Ví dụ khác — hũ đã tồn tại sẵn (không cần nhắc tới trong hội thoại trước):
+khách hỏi "Tăng hũ giải trí của tôi lên 800k được không?" → gọi
+`list_existing_jars()`, thấy đã có "Giải trí: 600.000đ/tháng" → dùng
 `edit_jar` (không phải `create_jar`, vì hũ này đã tồn tại):
 
 ```ui-json
@@ -157,7 +152,7 @@ trí của tôi lên 800k được không?" → đọc `jars`, thấy đã có
 # SAI — thiếu field bắt buộc (reason)
 {"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000}
 
-# SAI — edit_jar cho hũ không có trong jars của /customer_data.json và
+# SAI — edit_jar cho hũ không có trong kết quả list_existing_jars() và
 # cũng chưa từng nhắc tới trong hội thoại này
 {"type": "edit_jar", "jar_name": "Du lịch", "allocation_amount": 2000000, "reason": "..."}
 ```

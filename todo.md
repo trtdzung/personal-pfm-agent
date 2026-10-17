@@ -780,6 +780,94 @@ banking ngoài (tương tự `list_existing_jars()` đã note ở mục Roadmap 
 cho `spending-jar`) khi có API thật. Khi có tool này: sửa lại `SKILL.md` để
 gọi tool thay vì đọc `beneficiaries` tĩnh trong `/customer_data.json`.
 
+**[Cập nhật 2026-09-14] Verify trường hợp (B) — phát hiện + fix thêm 1 bug
+từ chối, cùng mẫu với mục 1.9:**
+
+- **Sự cố:** verify trên endpoint production (đã deploy bản mở rộng scope)
+  — hỏi "Chuyển tiền cho Toàn 500 nghìn với nội dung Thanh toán tiền ăn" →
+  agent **tự tra đúng `beneficiaries`, tìm đúng số tài khoản/ngân hàng**,
+  nhưng chỉ liệt kê thông tin đó bằng text rồi từ chối: *"Mình không hỗ
+  trợ chuyển tiền cho người khác, bạn vui lòng thực hiện qua app ngân
+  hàng..."* — không chèn khối `ui-json`, `ui: null`. Đúng mẫu bug đã gặp ở
+  mục 1.9 cho `create_jar`/`edit_jar` (tính đúng số nhưng bỏ qua bước chèn
+  `ui-json` vì tưởng nhầm là "vượt quyền hạn") — lần này xảy ra với
+  `transfer-form` trường hợp (B), có lẽ vì "chuyển tiền cho người khác"
+  nghe giống hành động rủi ro hơn hẳn so với trả nợ thẻ của chính mình,
+  nên dễ kích hoạt bản năng từ chối của model hơn.
+- **Nguyên nhân:** `transfer-form/SKILL.md` (bản viết lúc mở rộng scope)
+  **chưa có** đoạn "QUAN TRỌNG NHẤT — đọc trước tất cả" chống từ chối như
+  đã thêm cho `spending-jar` ở mục 1.9 vòng 2 — chỉ dựa vào đoạn chung ở
+  `instructions.md`, chưa đủ mạnh cho trường hợp cụ thể này.
+- **Đã fix:** thêm đúng đoạn "QUAN TRỌNG NHẤT" (theo pattern đã dùng cho
+  `spending-jar`) vào đầu `transfer-form/SKILL.md`, nêu thẳng sai lầm cụ
+  thể đã quan sát được (tính đúng số tài khoản nhưng chỉ liệt kê bằng text
+  rồi từ chối, không chèn `ui-json`).
+- **Verify lại (local, 3 lần):** "Chuyển tiền cho Toàn 500 nghìn với nội
+  dung Thanh toán tiền ăn" → **3/3 lần đều đúng**, tạo `transfer_form` hợp
+  lệ (Toàn, 00012000321, Techcombank, 500.000đ), không còn từ chối. 77/77
+  test pass.
+- **Lưu ý còn treo:** cũng gặp 1 lần `HTTP 500` trên production ngay sau
+  khi `DELETE /chat/history` rồi hỏi lại quá sớm (trong vòng ~30s, đúng
+  race condition đã ghi ở mục 1.5) — không tái hiện lại được lỗi 500 này
+  riêng biệt ở local, nên chưa chắc chắn đây là do race condition đơn
+  thuần hay có thêm nguyên nhân khác; cần tiếp tục quan sát nếu tái diễn.
+  Vẫn chưa deploy lại bản có đoạn "QUAN TRỌNG NHẤT" mới này lên production
+  — cần build/deploy rồi test lại lần cuối trên endpoint thật.
+
+### 1.13. [Đã làm] Thêm tool thật cho `list_existing_jars()`/`query_beneficiaries()` — không còn đọc snapshot tĩnh
+
+**Yêu cầu (2026-09-16, trực tiếp):** thay vì để `jars`/`beneficiaries` chỉ
+là field tĩnh trong `data/customers/CIF_000X.json` (bị nhúng thụ động vào
+system prompt), làm đúng 2 tool đã note từ trước ở mục Roadmap PFM
+(`list_existing_jars()` cho `spending-jar`, `query_beneficiaries()` cho
+`transfer-form`) — trả kết quả mock nhưng qua 1 lời gọi tool thật, và
+**CIF phải tự lấy từ context của request, không để model tự truyền vào
+tham số**.
+
+**Đã làm:**
+- `tools/customer_data_tools.py` (mới) — 2 tool `list_existing_jars()`/
+  `query_beneficiaries()`, **không nhận tham số nào từ model** — tự lấy
+  `customer_id` qua `_resolve_customer_id()` (tái dùng đúng helper
+  `SeedCustomerContext` đang dùng), đúng pattern đã áp dụng cho
+  `tools/memory_tools.py`'s `actor_id`. Dữ liệu mock **hardcode thẳng
+  trong file này** (dict `_MOCK_JARS`/`_MOCK_BENEFICIARIES` khoá theo
+  `customer_id`) — **không đọc file JSON riêng nào khác** (thử phương án
+  tách sang `data/jars.json`/`data/beneficiaries.json` trước, bị yêu cầu
+  sửa lại vì không cần thiết — bỏ ngay, hardcode trực tiếp trong
+  `tools/`).
+- Đăng ký cả 2 tool vào `server.py`'s `build_agent()` (mặc định cùng
+  `remember_preference`/`recall_preference`).
+- **Xoá hẳn `jars`/`beneficiaries` khỏi `data/customers/CIF_000X.json`**
+  (cả 3 file) — không còn bị nhúng vào system prompt qua
+  `SeedCustomerContext` nữa, model chỉ có thể lấy 2 loại dữ liệu này qua
+  đúng 2 tool trên.
+- `skills/project/spending-jar/SKILL.md` và
+  `skills/project/transfer-form/SKILL.md` — sửa lại Check step: gọi tool
+  thay vì đọc `jars`/`beneficiaries` từ `/customer_data.json`.
+- Test: `tests/test_customer_data_tools.py` (mới, 10 test — đúng khách
+  hàng, không leak chéo dữ liệu, fallback khi thiếu context, cấu trúc
+  `_MOCK_JARS`/`_MOCK_BENEFICIARIES` hợp lệ) +
+  `tests/data/test_customer_data.py` cập nhật (xác nhận `jars`/
+  `beneficiaries` **không còn** trong customer file). **92/92 test pass.**
+- **Verify thật với model VNG (local):**
+  - "Tăng hũ giải trí của tôi lên 800 nghìn được không?" → gọi đúng
+    `list_existing_jars()`, kết quả đúng (Giải trí 600.000đ→800.000đ).
+  - "Chuyển tiền cho Toàn 500 nghìn với nội dung Thanh toán tiền ăn" → gọi
+    đúng `query_beneficiaries()`, kết quả đúng (Toàn/00012000321/
+    Techcombank).
+  - Xác nhận trực tiếp: `SeedCustomerContext.before_agent()` seed vào
+    system prompt **không còn** chứa `jars`/`beneficiaries`.
+  - Gặp 1 lần lỗi `403 ModelArts.81011` ("Output text May contain
+    sensitive information") khi test câu hũ — **không liên quan** tới thay
+    đổi này, đúng lỗi content-filter không tất định của VNG ModelArts đã
+    biết từ trước (đã quyết định không sửa) — thử lại thành công ngay.
+
+**Lưu ý còn treo:** vẫn là mock (dữ liệu hardcode trong code, không nối
+PFM/core-banking thật) — khi có API thật, chỉ cần sửa nội dung bên trong
+2 hàm tool này (thay `_MOCK_JARS.get(...)`/`_MOCK_BENEFICIARIES.get(...)`
+bằng lời gọi API thật), không cần đổi gì ở `SKILL.md`/`server.py` vì
+interface tool đã đúng hình dạng. Chưa deploy lên GreenNode Runtime.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

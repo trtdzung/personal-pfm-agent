@@ -39,12 +39,12 @@ trong `cards` của khách hàng. Luôn an toàn vì thẻ là dữ liệu có t
 chính khách hàng.
 
 **(B) Chuyển tiền cho 1 người trong danh bạ đã lưu (`beneficiaries`)** —
-`/customer_data.json` có trường `beneficiaries` (danh sách người nhận đã
-lưu sẵn, mỗi người có `name`/`account_number`/`bank_name`). **Đây hiện là
-danh sách hardcode tạm thời** (chưa có tool đọc danh bạ thật/realtime — đã
-ghi chú trong `todo.md`, cân nhắc thêm tool `query_beneficiaries` sau) —
-nhưng trong phạm vi demo này, coi đây là nguồn dữ liệu đáng tin cậy duy
-nhất cho 1 người nhận không phải chính khách hàng.
+dùng tool **`query_beneficiaries()`** (không cần tham số) để lấy danh sách
+người nhận đã lưu (mỗi người có `name`/`account_number`/`bank_name`).
+**Dữ liệu tool này trả về hiện vẫn là mock** (chưa nối vào hệ thống PFM
+thật/realtime — xem `todo.md`) nhưng trong phạm vi demo này, coi đây là
+nguồn dữ liệu đáng tin cậy duy nhất cho 1 người nhận không phải chính
+khách hàng.
 
 - **CHỈ đề xuất chuyển cho 1 người nếu tên đó khớp đúng 1 entry trong
   `beneficiaries`** của khách hàng đang trò chuyện — lấy nguyên
@@ -90,9 +90,8 @@ nhất cho 1 người nhận không phải chính khách hàng.
        và đề xuất luôn, kèm 1 câu ngắn nhắc còn thẻ khác cũng có dư nợ.
 
 3. **Trường hợp (B) — chuyển cho 1 người:**
-   - **Check (bắt buộc):** đọc `beneficiaries` trong `/customer_data.json`
-     (đã có sẵn trong system prompt), tìm entry có `name` khớp đúng người
-     khách hàng vừa nêu.
+   - **Check (bắt buộc):** gọi tool `query_beneficiaries()`, tìm entry có
+     `name` khớp đúng người khách hàng vừa nêu.
      - **Tìm thấy:** lấy nguyên `account_number`/`bank_name` từ entry đó.
      - **Không tìm thấy, và khách hàng cũng không tự cho số tài khoản:**
        không chèn `ui-json` — hỏi lại số tài khoản + ngân hàng thật.
@@ -192,9 +191,9 @@ Kèm khối:
 Khách hỏi: "Chuyển tiền cho Toàn 500 nghìn với nội dung Thanh toán tiền
 ăn."
 
-Bước 1 (bắt buộc): đọc `beneficiaries` trong `/customer_data.json`, thấy
-đúng 1 entry `{"name": "Toàn", "account_number": "00012000321",
-"bank_name": "Techcombank"}` — dùng nguyên số tài khoản/ngân hàng này.
+Bước 1 (bắt buộc): gọi tool `query_beneficiaries()`, thấy đúng 1 entry
+`{"name": "Toàn", "account_number": "00012000321", "bank_name":
+"Techcombank"}` — dùng nguyên số tài khoản/ngân hàng này.
 
 Phần text trả lời: "Mình đã điền sẵn form chuyển 500.000đ cho Toàn
 (Techcombank), bạn xem lại rồi bấm xác nhận nhé."

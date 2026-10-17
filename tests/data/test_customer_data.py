@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-CUSTOMERS_DIR = Path(__file__).resolve().parents[2] / "data" / "customers"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+CUSTOMERS_DIR = DATA_DIR / "customers"
 CUSTOMER_IDS = ["CIF_0001", "CIF_0002", "CIF_0003"]
 
 
@@ -27,14 +28,23 @@ def test_customer_data_has_required_top_level_keys(customer_id):
         "customer",
         "chat_memory_example",
         "account",
-        "jars",
-        "beneficiaries",
         "cards",
         "statements",
         "monthly_spending_summary",
         "transactions",
     ):
         assert key in data, f"missing top-level key: {key}"
+
+
+@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
+def test_customer_data_no_longer_has_tool_backed_fields(customer_id):
+    # jars/beneficiaries are hardcoded mock data inside
+    # tools/customer_data_tools.py now (see its own tests), reachable only
+    # via list_existing_jars()/query_beneficiaries() -- never passively
+    # baked into /customer_data.json (see middleware/seed_customer_context.py).
+    data = _load(customer_id)
+    assert "jars" not in data
+    assert "beneficiaries" not in data
 
 
 @pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
@@ -88,29 +98,7 @@ def test_account_balance_is_a_non_negative_number(customer_id):
     assert isinstance(account["balance_vnd"], (int, float)) and account["balance_vnd"] >= 0
 
 
-@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
-def test_jars_have_required_fields_and_positive_allocation(customer_id):
-    data = _load(customer_id)
-    jars = data["jars"]
-    assert isinstance(jars, list)
-    seen_names = set()
-    for jar in jars:
-        for key in ("jar_id", "jar_name", "allocation_amount_vnd", "created_on"):
-            assert key in jar, f"jar missing field: {key}"
-        assert isinstance(jar["allocation_amount_vnd"], (int, float)) and jar["allocation_amount_vnd"] > 0
-        assert jar["jar_name"] not in seen_names, f"duplicate jar_name: {jar['jar_name']}"
-        seen_names.add(jar["jar_name"])
-
-
-@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
-def test_beneficiaries_have_required_fields(customer_id):
-    data = _load(customer_id)
-    beneficiaries = data["beneficiaries"]
-    assert isinstance(beneficiaries, list)
-    seen_names = set()
-    for beneficiary in beneficiaries:
-        for key in ("name", "account_number", "bank_name"):
-            assert key in beneficiary, f"beneficiary missing field: {key}"
-            assert isinstance(beneficiary[key], str) and beneficiary[key]
-        assert beneficiary["name"] not in seen_names, f"duplicate beneficiary name: {beneficiary['name']}"
-        seen_names.add(beneficiary["name"])
+# jars/beneficiaries mock-data structure is now tested in
+# tests/test_customer_data_tools.py, next to the tool code that owns it
+# (tools/customer_data_tools.py's _MOCK_JARS/_MOCK_BENEFICIARIES) -- no
+# longer files under data/, so nothing to validate here.
