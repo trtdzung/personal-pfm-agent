@@ -125,9 +125,13 @@ agent, but this server has no persistent memory backend wired in yet --
 each request is effectively stateless regardless of `thread_id`. This is a
 deliberate, documented placeholder for a future memory backend, not a bug.
 
-CI (`.github/workflows/docker-build.yml`) runs the server's tests, builds
-the image, and pushes it to `ghcr.io/<owner>/personal-card-agent` on every
-push to `master` (pull requests build and smoke-test only, never push).
+CI (`.github/workflows/docker-build.yml`) runs the server's tests, builds,
+and smoke-tests the image on every push and pull request. On push to
+`master` it also pushes the image to a private registry:
+`vcr.vngcloud.vn/wefi/pca-agent:sha-<7-char commit sha>` and `:latest`
+(pull requests build and smoke-test only, never push). Requires two repo
+secrets set in GitHub (`VCR_USERNAME`, `VCR_PASSWORD`) for `docker login
+vcr.vngcloud.vn`.
 
 ## Deploy
 
@@ -180,7 +184,7 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── Dockerfile                 # packages server.py for self-hosting
 ├── .dockerignore
 └── .github/workflows/
-    └── docker-build.yml       # test -> build -> smoke-test -> push server.py's image to GHCR
+    └── docker-build.yml       # test+build+smoke-test on every push/PR; push to vcr.vngcloud.vn on push to master
 ```
 
 Notes:

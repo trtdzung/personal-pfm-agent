@@ -1,7 +1,92 @@
 # TODO — personal-card-agent
 
-Trạng thái: 7 task của plan + final review đã xong (commit `b6c805d`), sau đó
-sửa thêm 3 bug phát hiện khi chạy thật (`2d530f7`, `8a1db02`, `e714bee`).
+Trạng thái: 7 task của plan gốc + final review đã xong (nội dung tương ứng
+commit `b6c805d`), sau đó sửa thêm 3 bug phát hiện khi chạy thật
+(`2d530f7`, `8a1db02`, `e714bee`). Tiếp theo là plan Docker/server tự host
+(5 task + 1 final-review fix wave) + một loạt chỉnh sửa theo yêu cầu trực
+tiếp (chuyển `conftest.py` vào `tests/`, thêm mục Testing vào README, khôi
+phục `tools/`/`skills/`/`sandbox/`, đổi Dockerfile sang `COPY . .` +
+`.dockerignore`, bổ sung `.gitignore`).
+
+**Toàn bộ các thay đổi này (kể cả từ đầu phiên) vẫn chưa có commit nào** —
+chỉ đang ở trạng thái `git add` (staged), vì chỉ bạn được quyền commit
+trong repo này. Chạy `git status` để xem danh sách đầy đủ trước khi commit.
+
+## Đã làm xong
+
+**Plan 1 — personal-card-agent cốt lõi** (7 task, review sạch từng task +
+final review, 1 fix wave):
+- `data/customer_data.json` — dữ liệu khách hàng mẫu (70 giao dịch, 3
+  tháng), có regression test tự kiểm tra tổng khớp với từng giao dịch
+  (`tests/data/test_customer_data.py`)
+- `middleware/seed_customer_context.py` — nạp lại data mỗi phiên (session-
+  scoped, không cache), có test cho cả sync/async
+- `agent.py` — đổi từ scaffold "research-assistant" sang "personal-card-agent",
+  bỏ tool tìm kiếm cũ, gắn `SeedCustomerContext` + `LogToolCalls`
+- `instructions.md` — viết lại toàn bộ: agent chỉ cung cấp thông tin/tư vấn
+  (không hành động), quy tắc đọc `/customer_data.json` + bộ nhớ ngân sách
+  `/memories/agent/customer_budgets.json`, không hard-code phép tính
+- Dọn scaffold cũ (`tools/search.py`, `skills/research/`, `sandbox/` — sau
+  đó khôi phục lại theo yêu cầu, xem dưới), cập nhật `pyproject.toml`
+- 2 Harbor eval task (`evals/tasks/spending-total-question`,
+  `large-transactions-question`)
+- Công cụ verify cục bộ: `scripts/verify_agent.py` + notebook cells,
+  `docs/superpowers/plans/2026-08-30-personal-card-agent-verification.md`
+
+**3 bug phát hiện khi chạy thật** (không phát hiện được bằng review/test
+tĩnh, chỉ lộ ra khi thực sự gọi `.invoke()`):
+- Thiếu `langchain-openai` trong `pyproject.toml`'s `notebook` extra —
+  notebook/script sẽ crash ngay khi resolve model
+- `SeedCustomerContext`/`LogToolCalls` chỉ có bản async, thiếu bản sync —
+  crash khi gọi `.invoke()` (sync) thay vì `.ainvoke()`
+- In thẳng `message.content` thô (list block reasoning/text của model
+  reasoning) thay vì chỉ lấy phần text — sinh ra `extract_final_text()`
+
+**Plan 2 — Docker/server tự host** (5 task + 1 final-review fix wave):
+- `text_utils.py` — gộp `extract_final_text()` dùng chung (trước đó lặp ở
+  notebook + script)
+- `requirements.txt` — dependency riêng cho `server.py`, dùng `pip` thuần,
+  tách biệt hoàn toàn khỏi `pyproject.toml`/`uv`
+- `server.py` — FastAPI app tự host, độc lập với `mda dev`/LangSmith:
+  `POST /chat` (xác thực `X-API-Key` bằng `hmac.compare_digest`),
+  `GET /health`, tắt `/docs`/`/redoc`/`/openapi.json`, không leak lỗi nội
+  bộ ra response, refuse-to-start nếu thiếu `SERVER_API_KEY`
+- `Dockerfile` + `.dockerignore` — non-root user, healthcheck
+- `.github/workflows/docker-build.yml` — test → build → smoke-test
+  (retry loop) → push GHCR (chỉ khi push `master`)
+- Fix wave từ final review: `tests/conftest.py` (sửa lỗi CI chưa từng chạy
+  được + lỗi lệnh `uv run --group dev pytest tests/` established của dự án
+  bị hỏng về 0 test), thêm test cho `SERVER_API_KEY` fail-fast + 500-masking,
+  mục "Self-hosted server" trong README
+
+**Chỉnh sửa theo yêu cầu trực tiếp sau đó:**
+- Chuyển `conftest.py` từ root vào `tests/conftest.py`
+- Thêm mục "Testing" vào README (2 cách chạy test)
+- Khôi phục `tools/`, `skills/` (thư mục rỗng) và `sandbox/__init__.py`
+  (bật thật tính năng sandbox) — theo đúng cấu trúc chuẩn MDA
+- Đổi `Dockerfile` từ allowlist (`COPY server.py ...`) sang `COPY . .` +
+  `.dockerignore` liệt kê đầy đủ (theo yêu cầu, đánh đổi bảo mật đã giải
+  thích)
+- Bổ sung `.claude/`, `.pytest_cache/` vào `.gitignore` (phát hiện đang
+  untracked nhưng không hề gitignore)
+
+23/23 test pass xuyên suốt tất cả các bước trên (`uv run --group dev pytest
+tests/ -v`).
+
+## Còn lại (chi tiết ở các mục dưới)
+
+Tóm tắt nhanh — xem chi tiết từng mục bên dưới:
+1. **Kiến trúc chưa giải quyết:** đa khách hàng thật, checkpointer cho
+   `agent.py`, cô lập bộ nhớ ngân sách, checkpointer bền vững production
+2. **Chưa verify bằng chạy thật:** đủ 11 câu checklist, row 10 (ngân sách
+   qua thread mới), `agent.py` thật qua `mda dev`, Harbor eval thật,
+   `docker build` thật, GitHub Actions thật
+3. **Việc nhỏ:** `as_of_date` lệch ngày, namespace `data/` trong wheel,
+   error handling khi thiếu data, test riêng cho `LogToolCalls`, rủi ro
+   `.dockerignore` lệch theo thời gian, chốt giữ/xoá `sandbox/`
+4. **Bạn tự quyết:** `git commit` + `git push`, bật Docker Desktop để build
+   thật, chốt `sandbox/__init__.py`
+
 Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức độ quan trọng.
 
 ## 1. Kiến trúc còn thiếu — chưa giải quyết, cần quyết định hướng đi
@@ -9,14 +94,18 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
 ### 1.1. Đa người dùng (multi-customer)
 - `identity.py` hiện chỉ xác thực bằng **1 LangSmith API key dùng chung cho cả
   workspace** (`auth.langsmith_api_key()`) — không có khái niệm "khách hàng A"
-  khác "khách hàng B" ở tầng xác thực.
-- `data/customer_data.json` là **1 file tĩnh duy nhất** — muốn nhiều khách
-  hàng thật cần: (a) nguồn dữ liệu theo từng `customer_id` (DB/API thay vì 1
-  file JSON), (b) `SeedCustomerContext` đọc đúng dữ liệu của khách hàng đang
-  chat (cần biết "đang chat với ai" — phụ thuộc việc xác thực ở mục trên).
+  khác "khách hàng B" ở tầng xác thực. `server.py` (đường tự host) cũng
+  **chưa có khái niệm khách hàng** — chỉ 1 `SERVER_API_KEY` dùng chung, không
+  phải xác thực theo từng người dùng.
+- `data/customer_data.json` là **1 file tĩnh duy nhất**, dùng chung cho cả
+  `agent.py` lẫn `server.py` — muốn nhiều khách hàng thật cần: (a) nguồn dữ
+  liệu theo từng `customer_id` (DB/API thay vì 1 file JSON), (b)
+  `SeedCustomerContext` đọc đúng dữ liệu của khách hàng đang chat (cần biết
+  "đang chat với ai" — phụ thuộc việc xác thực ở mục trên).
 - **Việc cần làm:** đổi `identity.py` sang `auth.supabase(...)` (README đã gợi
   ý) hoặc cơ chế xác thực theo người dùng thật; thiết kế lại nguồn dữ liệu
-  khách hàng theo `customer_id`.
+  khách hàng theo `customer_id`; nếu giữ `server.py`, cũng cần nghĩ xác thực
+  theo người dùng thay vì 1 `SERVER_API_KEY` dùng chung.
 
 ### 1.2. Lịch sử hội thoại ngắn hạn (trong 1 phiên chat)
 - `agent.py` (agent **thật**, deploy qua `managed_deepagents.define_deep_agent`)
@@ -24,9 +113,14 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   số này. Đang **phó mặc hoàn toàn cho checkpoint mặc định của nền tảng
   LangSmith Agent Server**, chưa từng verify nền tảng đó có thực sự giữ được
   lịch sử hội thoại qua nhiều lượt trong 1 thread hay không.
-- `scripts/verify_agent.py` và notebook chỉ dùng `MemorySaver()` **cục bộ**
-  (khác hoàn toàn với agent thật) để tự test — không phản ánh hành vi thật khi
-  deploy.
+- `server.py` (đường tự host) **cố tình không có checkpointer/bộ nhớ** — đây
+  là quyết định đã chốt (không dùng `MemorySaver` trong RAM của container),
+  `thread_id` chỉ nằm sẵn trong API để sau này cắm memory backend riêng vào,
+  hiện tại mỗi request coi như độc lập hoàn toàn. Không phải bug, đã ghi rõ
+  trong README mục "Self-hosted server".
+- `scripts/verify_agent.py` và notebook dùng `MemorySaver()` **cục bộ**
+  (khác hoàn toàn với `agent.py` lẫn `server.py` thật) chỉ để tự test —
+  không phản ánh hành vi thật của bên nào khi deploy.
 - **Việc cần làm:** chạy `mda dev .`, mở 1 thread trong Studio, hỏi nhiều lượt
   liên tiếp (đặc biệt câu hỏi ngân sách 2 lượt: nói ngân sách → hỏi lại), xác
   nhận agent thật có nhớ được trong cùng thread không. Nếu không, cần tìm cách
@@ -34,6 +128,8 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   LangChain, hoặc chờ version mới của `managed-deepagents`).
 
 ### 1.3. Bộ nhớ ngân sách dùng chung 1 file (`/memories/agent/customer_budgets.json`)
+- Chỉ áp dụng cho `agent.py` (đường `mda`) — `server.py` không đọc/ghi file
+  này (không có bộ nhớ, xem 1.2).
 - `define_memory` chỉ hỗ trợ `scope="agent"` (1 file bền vững **dùng chung
   cho mọi người gọi deployment**) — không có cô lập theo người dùng ở tầng
   framework.
@@ -46,83 +142,90 @@ Danh sách dưới đây là những việc **còn lại**, ưu tiên theo mức
   ngân sách của khách khác nếu prompt injection hoặc model không tuân thủ).
 
 ### 1.4. Checkpointer bền vững cho production
-- `MemorySaver()` (nếu dùng được — xem 1.2) chỉ lưu trong RAM, mất khi
-  restart process. Chưa chọn checkpointer bền vững (Postgres-backed hay
-  tương đương) cho môi trường production thật.
+- `MemorySaver()` (nếu dùng được cho `agent.py` — xem 1.2) chỉ lưu trong RAM,
+  mất khi restart process. Chưa chọn checkpointer bền vững (Postgres-backed
+  hay tương đương) cho môi trường production thật — áp dụng cho cả `agent.py`
+  (nếu sau này tự quản checkpointer được) lẫn bất kỳ memory backend nào cắm
+  vào `server.py` sau này (xem 1.2).
 
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong
-  `docs/superpowers/plans/2026-08-30-personal-card-agent-verification.md`,
-  điền kết quả PASS/FAIL vào bảng (mới test tay 2 câu ngoài checklist: tổng
-  chi tiêu tháng 8, giao dịch lớn nhất tuần — cả 2 đều đúng).
+  `docs/superpowers/plans/2026-08-30-personal-card-agent-verification.md`
+  (qua `mda dev .` + Studio HOẶC qua `scripts/verify_agent.py`/notebook cục
+  bộ), điền kết quả PASS/FAIL vào bảng. Đã test tay rải rác vài câu ngoài
+  checklist qua `server.py`'s đường local-invoke (tổng chi tiêu tháng 8,
+  giao dịch lớn nhất tuần, chi tiêu ăn uống — đều đúng), nhưng chưa chạy đủ
+  bộ 11 câu có hệ thống lần nào.
 - [ ] **Row 10 (ngân sách nhớ được qua thread MỚI)** — chỉ test được qua
-  `mda dev .` + Studio thật, chưa làm lần nào. Đây là phép thử duy nhất xác
-  nhận `/memories/agent/customer_budgets.json` hoạt động đúng như thiết kế.
+  `mda dev .` + Studio thật (agent.py), chưa làm lần nào. Đây là phép thử
+  duy nhất xác nhận `/memories/agent/customer_budgets.json` hoạt động đúng
+  như thiết kế. `server.py` không áp dụng (không có bộ nhớ, xem 1.2).
 - [ ] **Chưa từng chạy `agent.py` thật qua `mda dev .`** — toàn bộ việc test
-  đến giờ đều qua `deepagents.create_deep_agent` cục bộ (Option A trong
-  notebook), KHÔNG phải qua `managed_deepagents.define_deep_agent` (Option B,
-  agent thật sẽ deploy). Rủi ro: bug sync/async vừa sửa (`8a1db02`) được phát
-  hiện và fix trên đường Option A — chưa xác nhận Option B (nền tảng thật) có
-  gặp vấn đề tương tự hay không.
+  đến giờ (cả plan gốc lẫn plan Docker/server) đều qua `deepagents.create_deep_agent`
+  cục bộ (notebook Option A / `server.py` / `scripts/verify_agent.py`),
+  KHÔNG phải qua `managed_deepagents.define_deep_agent` (Option B, agent
+  thật sẽ deploy). Rủi ro: các bug sync/async đã phát hiện và fix
+  (`8a1db02`) đều nằm trên đường Option A — chưa xác nhận Option B (nền
+  tảng thật) có gặp vấn đề tương tự hay không.
 - [ ] 2 Harbor eval task (`evals/tasks/spending-total-question`,
   `evals/tasks/large-transactions-question`) mới verify cấu trúc bằng tay
   (viết `answer.md` giả), **chưa từng chạy qua Harbor/`mda evals` thật**. Cả 2
-  Task.md đã ghi chú nghi ngờ: xoá `sandbox/` có thể khiến agent không có
-  filesystem thật để ghi `answer.md` cho Harbor chấm — chưa xác nhận đúng/sai.
+  Task.md đã ghi chú nghi ngờ: `sandbox/` (giờ đã khôi phục lại — xem mục 3)
+  có ảnh hưởng gì đến việc agent có filesystem thật để ghi `answer.md` cho
+  Harbor chấm hay không — chưa xác nhận đúng/sai, nhưng việc khôi phục
+  `sandbox/` có thể đã giải quyết một phần nghi ngờ này (chưa kiểm chứng).
+- [ ] **`Dockerfile` chưa từng `docker build` thật lần nào** — Docker Desktop
+  không chạy trên máy suốt cả phiên làm việc này. Review chỉ verify được
+  bằng cách đọc file + kiểm tra file tồn tại, KHÔNG phải build thật. Đặc
+  biệt cần build lại sau khi đổi sang `COPY . .` (xem mục 3) — cấu trúc
+  COPY khác hẳn bản allowlist đã từng review.
+- [ ] **`.github/workflows/docker-build.yml` chưa từng chạy thật trên
+  GitHub** — cần `git push` (mục 4) rồi mới biết workflow có thật sự chạy
+  đúng trên GitHub Actions hay không (dù đã verify YAML hợp lệ + verify test
+  job bằng scratch venv cục bộ).
 
 ## 3. Việc nhỏ còn treo (đã ghi nhận, không chặn, làm khi rảnh)
 
 - [ ] `data/customer_data.json`'s `_meta.as_of_date` sẽ tiếp tục lệch ngày
   thật mỗi lần demo — cân nhắc cập nhật định kỳ hoặc bỏ trường này.
-- [ ] `README.md` còn 2 dòng cũ chưa dọn (mục Deploy nhắc `skills/`, mục Next
-  steps có link "tools guide") — tham chiếu khái niệm đã xoá.
+- [x] ~~`README.md` còn 2 dòng cũ chưa dọn (mục Deploy nhắc `skills/`, mục
+  Next steps có link "tools guide")~~ — đã hết stale: `tools/` và `skills/`
+  đã được khôi phục (thư mục rỗng, opt-in), nên 2 dòng này giờ lại đúng.
 - [ ] `pyproject.toml` gói `data/customer_data.json` vào `site-packages/data/`
   — tên thư mục không có namespace riêng, có thể đụng độ nếu sau này thêm
-  package khác cũng dùng tên `data`.
+  package khác cũng dùng tên `data`. (Chỉ ảnh hưởng đường `mda deploy` —
+  `server.py`/Docker dùng `requirements.txt` riêng, không liên quan.)
 - [ ] `SeedCustomerContext.before_agent`/`abefore_agent` không bắt lỗi khi
   `data/customer_data.json` thiếu/hỏng — hiện fail loud (traceback thô), có
-  thể bọc lại thành thông báo rõ ràng hơn.
-- [ ] `middleware/audit.py` (`LogToolCalls`, vừa sửa thành class có cả sync +
-  async) **chưa có unit test nào** — khác với `SeedCustomerContext` đã có
-  test cho cả 2 đường sync/async. Nên thêm `tests/middleware/test_audit.py`
-  để tránh tái diễn kiểu bug vừa gặp (chỉ phát hiện khi chạy thật).
+  thể bọc lại thành thông báo rõ ràng hơn. Ảnh hưởng cả `agent.py` lẫn
+  `server.py` (dùng chung middleware này).
+- [ ] `middleware/audit.py` (`LogToolCalls`) **vẫn chưa có unit test riêng**
+  (`tests/middleware/` chỉ có `test_seed_customer_context.py`) — có coverage
+  *gián tiếp* qua `tests/test_server.py` (các test gọi `.invoke()` thật với
+  fake model đều đi qua `LogToolCalls` sync path), nhưng chưa có test cô lập
+  đúng nghĩa như `SeedCustomerContext` đã có. Nên thêm
+  `tests/middleware/test_audit.py`.
+- [ ] **Mới phát sinh — rủi ro `.dockerignore` bị lệch theo thời gian:**
+  `Dockerfile` vừa đổi từ allowlist (`COPY server.py ... `) sang `COPY . .`
+  + `.dockerignore` liệt kê tường minh mọi thứ cần loại trừ (đây là lựa
+  chọn có chủ đích, đã cân nhắc đánh đổi bảo mật). Rủi ro đã biết: **thêm
+  file/thư mục mới ở root mà quên cập nhật `.dockerignore` sẽ lọt thẳng vào
+  image** — không có gì tự động cảnh báo việc này. Nên định kỳ đối chiếu
+  `.dockerignore` với `ls` ở root, đặc biệt trước mỗi lần build/deploy image
+  thật.
+- [ ] `sandbox/__init__.py` vừa được khôi phục — sự hiện diện của nó **bật
+  thật tính năng managed sandbox** khi `mda deploy` (ảnh hưởng chi phí/hành
+  vi). Nếu không thật sự cần chạy code trên nền tảng, cân nhắc xoá lại
+  trước khi deploy thật lần đầu với thư mục này.
 
 ## 4. Việc người dùng tự quyết định
 
 - [ ] `git push` lên `origin/master` (https://github.com/Daonguyen2401/personal-card-agent.git)
-  — hiện toàn bộ commit vẫn chỉ ở local theo lựa chọn của bạn.
-
-## 5. Đóng gói Docker & CI/CD
-
-- [ ] **Quyết định trước khi viết Dockerfile:** dự án này dùng `mda dev`/
-  `mda deploy` (LangSmith Agent Server hosted — không tự chạy server). Muốn
-  container hoá cần chọn: (a) container chỉ để chạy `mda dev .` bên trong
-  (phục vụ demo/dev cục bộ), hay (b) tự viết một entrypoint HTTP riêng (vd
-  FastAPI/uvicorn gọi `deepagents.create_deep_agent` như notebook Option A)
-  để không phụ thuộc hạ tầng LangSmith khi tự host. Ảnh hưởng trực tiếp đến
-  nội dung Dockerfile và mục đích của image.
-- [ ] Viết `Dockerfile`: base image Python (khớp `requires-python = ">=3.11"`
-  trong `pyproject.toml`), cài `uv`, `uv sync` (không cài `notebook`/`dev`
-  extra trong image production), copy `agent.py`, `instructions.md`,
-  `middleware/`, `data/customer_data.json`, `memory.py`, `identity.py`.
-  **Không bake `OPENAI_API_KEY`/`LANGSMITH_API_KEY` vào image** — inject qua
-  biến môi trường lúc chạy container.
-- [ ] Thêm `.dockerignore` (loại `.venv/`, `__pycache__/`, `.git/`, `.env`,
-  `notebooks/`, `evals/`, `.superpowers/`).
-- [ ] Viết GitHub Actions workflow (`.github/workflows/docker-build.yml`):
-  - Trigger: push lên `master` + trên pull request (build-only, không push
-    image khi là PR).
-  - Build image bằng `docker/build-push-action`, cache layer `uv` để build
-    nhanh hơn giữa các lần chạy.
-  - Chạy `uv run --group dev pytest tests/ -v` trong bước CI **trước khi**
-    build image — chặn build nếu test đỏ.
-  - Đẩy image lên registry (GHCR `ghcr.io/<owner>/personal-card-agent` là lựa
-    chọn mặc định đơn giản nhất vì dùng chung quyền với repo, không cần
-    secret riêng — Docker Hub cần thêm `DOCKERHUB_TOKEN` secret nếu chọn).
-  - Gắn tag theo commit SHA + `latest` (hoặc theo git tag nếu về sau dùng
-    release theo version).
-  - Cân nhắc thêm bước smoke test: `docker run` image vừa build, xác nhận
-    import `agent` module không lỗi (giống `tests/test_agent.py`'s
-    `test_agent_module_imports_without_error`, nhưng chạy bên trong
-    container để bắt lỗi thiếu dependency khi đóng gói).
+  — hiện toàn bộ (bao gồm cả plan Docker/server + mọi chỉnh sửa sau đó) vẫn
+  chỉ đang **staged, chưa có commit nào**, theo lựa chọn của bạn (chỉ bạn
+  được quyền commit). Cần tự `git commit` trước khi có gì để push.
+- [ ] Build Docker image thật + `docker run` thử (Docker Desktop cần được
+  bật trước) — xem mục 2.
+- [ ] Chốt việc có giữ `sandbox/__init__.py` (bật tính năng thật) hay xoá
+  lại trước khi deploy — xem mục 3.
