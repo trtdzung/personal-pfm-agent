@@ -454,6 +454,120 @@ có thể chung rủi ro), (c) nếu tần suất từ chối trên production v
 đã fix, khả năng phải cân nhắc quay lại dùng tool cho các bước chuẩn bị dữ
 liệu (không chỉ dựa hoàn toàn vào prompt).
 
+### 1.10. [Đã fix — cải thiện lớn] Agent phản hồi quá chậm (10s-590s/câu) trên GreenNode Runtime
+
+**Sự cố (2026-09-13, báo trực tiếp):** agent mất quá nhiều thời gian để trả
+lời, đặc biệt câu hỏi cần nhiều bước — có lúc lên tới gần 10 phút cho 1 câu
+hỏi (`budget_plan`, tính năng đã bị mất trong 1 lần revert khác, không còn
+để tham chiếu lại được). Bạn hỏi liệu tắt xác thực Auth0 có giúp được
+không.
+
+**Đã điều tra loại trừ Auth0/Runtime trước khi sửa gì:**
+- Đo riêng bước lấy JWT Auth0: ~420-460ms — không đáng kể so với tổng thời
+  gian request (10s-590s).
+- So sánh cùng câu hỏi qua endpoint thật (có Auth0+Runtime) vs. gọi local
+  trực tiếp (bỏ qua hẳn Auth0+Runtime): 2 cách cho thời gian gần như nhau
+  (chênh vài giây, trong khoảng nhiễu bình thường) → **xác nhận Auth0/
+  Runtime không phải nguyên nhân**, tắt đi sẽ không giải quyết được gì,
+  chỉ mất 1 lớp bảo mật miễn phí.
+
+**3 nguyên nhân thật đã tìm ra, đã fix cả 3:**
+
+1. **Mỗi skill tự chia việc đọc `/customer_data.json` thành nhiều lượt
+   `read_file`/`grep` riêng biệt** — dù dữ liệu đã được `SeedCustomerContext`
+   nạp sẵn vào virtual filesystem từ đầu turn (`before_agent`), agent vẫn
+   phải tốn 1 round-trip LLM riêng cho MỖI lần gọi `read_file` (tool-calling
+   loop kiểu ReAct: mỗi tool call = 1 lượt LLM riêng, không có cách nào né
+   được, kể cả khi bản thân việc đọc file cực nhanh vì chỉ đọc từ RAM).
+   - **Fix:** `middleware/seed_customer_context.py` — thêm
+     `wrap_model_call`/`awrap_model_call`, nhúng thẳng nội dung
+     `customer_data.json` (~16-18KB/khách hàng, ~4-5k token) vào system
+     message của MỌI lượt gọi LLM, lấy lại từ `request.state["files"]`
+     (không đọc lại đĩa). Vẫn giữ `before_agent` seed vào virtual
+     filesystem (để dùng `grep` khi cần). Đồng thời sửa `instructions.md`
+     + `SKILL.md` của `spending-jar`/`transfer-form` để bỏ chỉ dẫn
+     `read_file`/`grep` cho `/customer_data.json` (nếu không sửa, model vẫn
+     có thể tự gọi lại theo thói quen dù dữ liệu đã có sẵn).
+2. **Model GLM (`z-ai/glm-5.2-hackathon` qua VNG MaaS) mặc định bật
+   "thinking"/reasoning**, sinh ra lượng token suy luận nội bộ rất lớn bị
+   strip bỏ hoàn toàn ở `text_utils._strip_think_tags()` — không ai nhìn
+   thấy, không dùng để làm gì, nhưng vẫn tốn thời gian sinh ra. Verify
+   bằng raw API call: câu "Xin chào" đơn giản sinh **170 completion_tokens,
+   trong đó 111 token (~65%) là `reasoning_tokens`**.
+   - **Fix:** `server.py`'s `_default_model()` — thêm
+     `extra_body={"thinking": {"type": "disabled"}}` vào `ChatOpenAI`. Đã
+     verify đúng tên tham số bằng cách gọi raw API trực tiếp (2 tên tham số
+     phổ biến khác — `enable_thinking`, `chat_template_kwargs.enable_thinking`
+     — bị model lặng lẽ bỏ qua, không có tác dụng). Kết quả: câu "Xin chào"
+     giảm từ 8.33s → 4.91s (reasoning_tokens: 111 → 0).
+3. **Chưa có cách xem agent chậm ở bước nào** — thêm
+   `middleware/audit.py`'s `LogModelCalls` (mới, đo thời gian mỗi lượt gọi
+   LLM) bên cạnh `LogToolCalls` đã có (giờ đo luôn thời gian mỗi tool call,
+   trước đây chỉ in tên). Không cần dependency ngoài, in thẳng ra server
+   log. Xác nhận qua log thật: **tool call (`read_file`) tốn 0.00-0.01s,
+   100% thời gian nằm ở chính lượt gọi LLM** — không phải do overhead
+   tool-execution.
+
+**Kết quả benchmark (local, 3 lần sửa cộng dồn):**
+
+| Câu hỏi | Gốc | + Sửa (1) | + Sửa (1)+(2) |
+|---|---|---|---|
+| "Xin chào" (không tool) | 10.03s | 8.31s | **6.81s** |
+| Tạo 1 hũ (`create_jar`, 1 skill) | 28.68s (2 lần `read_file`) | 25.05s (1 lần `read_file`) | **17.20s** |
+| Hỏi chi tiêu tháng này (Q&A thường) | ~10s (luôn cần `read_file`) | — | **5.71s** (0 tool call) |
+
+`create_jar` giảm tổng **~40%** (28.68s → 17.20s). Đã verify chất lượng
+đầu ra không bị ảnh hưởng: `create_jar` vẫn ra đúng `ui-json` hợp lệ, số
+liệu tính đúng; câu hỏi Q&A vẫn trả lời chính xác, ngắn gọn đúng
+`instructions.md`. 67/67 test pass.
+
+**Chưa làm/còn treo:**
+- [ ] Chưa deploy lại lên GreenNode Runtime — mọi số liệu trên là **local
+  only**, cần build lại Docker image + deploy để production thực sự nhanh
+  hơn.
+- [ ] `budget-plan` (skill nặng nhất, ~8 tool call, từng mất ~590s) đã bị
+  mất trong 1 lần revert khác trong session này — chưa đo lại được mức cải
+  thiện thật cho trường hợp nặng nhất (dự kiến cải thiện còn lớn hơn nhiều
+  so với `create_jar` vì tỉ lệ nghịch với số `read_file` đã tiết kiệm được).
+- [ ] Chưa test A/B thật với LangSmith bật/tắt để đo overhead thật của
+  tracing (bạn thêm `LANGSMITH_TRACING=true` nhưng `LANGSMITH_API_KEY` hiện
+  đang trả `401 Unauthorized` khi gửi trace — cần kiểm tra lại giá trị key).
+  Điểm tích cực đã quan sát được: dù gửi trace fail liên tục, response vẫn
+  nhanh bình thường — xác nhận tracing chạy nền, không chặn response chính.
+- [x] **[Đã test] Đánh giá việc tắt "thinking" có ảnh hưởng chất lượng
+  không — so sánh trực tiếp thinking BẬT vs TẮT trên 3 câu khó hơn**
+  (`transfer_form` — trả nợ 20 triệu; `chart` — phân tích chi tiêu; so sánh
+  % chi tiêu tháng 7 vs tháng 8, cần cộng/trừ/chia nhiều bước), mỗi câu 1
+  agent riêng (`ChatOpenAI` với/không `extra_body={"thinking": {"type":
+  "disabled"}}"`), tự đối chiếu số liệu trả về với dữ liệu gốc
+  (`monthly_spending_summary`, `statements`, `account.balance_vnd`).
+  - **`transfer_form`:** cả 2 config đều từ chối đề xuất (đúng — tài khoản
+    thanh toán chỉ có 12.500.000đ, không đủ cho khoản 20 triệu định trả),
+    cùng trích dẫn đúng số liệu (dư nợ 34.500.000đ, kỳ sao kê 21.400.000đ
+    hạn 10/08, số dư 12.500.000đ). Thinking tắt: 13.76s; thinking bật:
+    70.89s.
+  - **`chart`:** số liệu **giống hệt tuyệt đối** giữa 2 config (Mua sắm
+    5.130.000 / Siêu thị 2.870.000 / Ăn uống 2.585.000 / Di chuyển
+    2.100.000 / Hoá đơn 900.000 / Giải trí 599.000 — khớp đúng
+    `by_category_vnd` tháng 8), chỉ khác `chart_type` (pie vs bar, không
+    sai). Thinking tắt: 17.86s; thinking bật: 42.93s.
+  - **So sánh % 2 tháng:** cả 2 tính đúng (tự verify lại: giảm 6.630.000đ,
+    ≈ −31,86% chính xác — thinking tắt làm tròn "−32%", thinking bật
+    "−31,8%", cả 2 chấp nhận được). Thinking tắt còn tính đúng cả breakdown
+    theo danh mục (Di chuyển −5.000.000đ, Ăn uống −880.000đ — khớp chính
+    xác dữ liệu gốc) dù trả lời ngắn gọn hơn hẳn thinking bật (bảng đầy đủ
+    mọi danh mục). Thinking tắt: 8.43s; thinking bật: 23.26s.
+  - **Kết luận:** không phát hiện lỗi tính toán/logic nào khi tắt thinking
+    trên cả 3 câu — mọi số liệu khớp chính xác dữ liệu gốc ở cả 2 config,
+    kết luận tài chính giống nhau. Khác biệt duy nhất là mức độ chi tiết
+    trình bày (thinking bật viết dài/đầy đủ bảng hơn — thinking tắt ngắn
+    gọn hơn, thực ra khớp tốt hơn với yêu cầu "trả lời ngắn gọn" đã thêm ở
+    mục trước). Tốc độ nhanh hơn 2.4x-5.1x tuỳ câu.
+  - **Thận trọng:** mẫu nhỏ (3 câu, mỗi câu 1 lần chạy, không phải benchmark
+    thống kê) — không loại trừ hoàn toàn khả năng có trường hợp phức tạp
+    hơn mà reasoning giúp tránh sai sót. Nên tiếp tục quan sát trên
+    production sau khi deploy, đặc biệt câu hỏi nhiều bước tính toán hơn.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

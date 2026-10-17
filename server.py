@@ -14,7 +14,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel
 
-from middleware.audit import log_tool_calls
+from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from text_utils import extract_final_text, extract_ui_block
 from tools.memory_tools import recall_preference, remember_preference
@@ -52,7 +52,24 @@ LLM_MODEL = os.environ.get("LLM_MODEL") or "z-ai/glm-5.2-hackathon"
 
 
 def _default_model() -> BaseChatModel:
-    return ChatOpenAI(base_url=LLM_BASE_URL, api_key=AI_PLATFORM_API_KEY, model=LLM_MODEL)
+    # `thinking: {"type": "disabled"}` turns off this GLM model's reasoning
+    # tokens -- verified directly against the raw API (bypassing langchain)
+    # that this is the one param name it actually honors (other common
+    # names like `enable_thinking`/`chat_template_kwargs.enable_thinking`
+    # are silently ignored). Reasoning tokens were the dominant cost in
+    # every LLM call's latency (e.g. 111 of 170 completion tokens on a
+    # trivial "Xin chào" -- see todo.md's performance investigation) and
+    # are never shown to the customer or used for anything once
+    # `text_utils._strip_think_tags` discards them, so disabling them is a
+    # straight latency win with no user-visible behavior lost *if* the
+    # model's tool-calling/JSON-formatting quality holds up without them
+    # (verified against the existing skill test suite -- see todo.md).
+    return ChatOpenAI(
+        base_url=LLM_BASE_URL,
+        api_key=AI_PLATFORM_API_KEY,
+        model=LLM_MODEL,
+        extra_body={"thinking": {"type": "disabled"}},
+    )
 
 
 def build_agent(
@@ -64,7 +81,7 @@ def build_agent(
     return create_deep_agent(
         model=model or _default_model(),
         tools=tools if tools is not None else [remember_preference, recall_preference],
-        middleware=[log_tool_calls, SeedCustomerContext()],
+        middleware=[log_tool_calls, log_model_calls, SeedCustomerContext()],
         system_prompt=instructions,
         checkpointer=checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID),
         # StateBackend stays the default for everything (per-thread, isolates
