@@ -115,8 +115,10 @@ function renderUi(canvasEl, ui) {
 2. Nếu `ui !== null && ui.type === "chart"`, hiện thêm 1 chart ngay dưới
    bong bóng chat đó (không thay thế `answer` — 2 phần bổ sung cho nhau,
    `answer` đã được agent viết ngắn gọn với giả định là có chart đi kèm).
-3. `GET /chat/history` **không** trả field `ui`, kể cả với các tin nhắn cũ
-   từng có chart lúc mới trả về (`server.py` chỉ lọc bỏ khối `ui-json` thô
-   khỏi text lịch sử, không lưu lại `ui` để trả lại). Khi hiện lại lịch sử
-   cũ, chỉ hiện text, không có chart đi kèm — đây là giới hạn hiện tại,
-   không phải lỗi.
+3. **⚠️ Đổi từ 2026-09-07:** `GET /chat/history` **giờ CÓ trả field `ui`**
+   cho từng message (trước đây không trả — đã đảo ngược quyết định cũ).
+   Mỗi message trong `messages[]` có thêm `ui: dict | null`, tính lại từ
+   nội dung gốc lưu trong GreenNode Memory (bản gốc vẫn còn nguyên khối
+   `ui-json`, chỉ bị lọc khỏi phần `content` hiển thị) — nên tin nhắn cũ
+   từng có chart lúc mới trả lời **sẽ hiện lại đúng chart đó** khi mở lại
+   lịch sử, không chỉ còn text như trước.

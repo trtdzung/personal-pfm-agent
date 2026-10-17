@@ -211,8 +211,8 @@ GET /chat/history?user_id=CUS-000482
 {
   "thread_id": "CUS-000482",
   "messages": [
-    { "role": "user", "content": "Tháng này tôi đã chi tiêu bao nhiêu?" },
-    { "role": "assistant", "content": "Tháng này bạn đã chi tiêu 4.250.000 VND..." }
+    { "role": "user", "content": "Tháng này tôi đã chi tiêu bao nhiêu?", "ui": null },
+    { "role": "assistant", "content": "Tháng này bạn đã chi tiêu 4.250.000 VND...", "ui": null }
   ]
 }
 ```
@@ -220,6 +220,13 @@ GET /chat/history?user_id=CUS-000482
 - `role` chỉ có 2 giá trị: `"user"` hoặc `"assistant"` — tin nhắn nội bộ
   (tool call, system prompt...) đã bị lọc bỏ, chỉ trả về nội dung phù hợp để
   hiện lên UI chat.
+- **⚠️ Breaking change (2026-09-07):** mỗi message giờ có thêm field `ui`
+  (cùng schema `ui` của `POST /chat`, xem `docs/chart-visualization.md`/
+  `docs/transfer-form.md`) — **đảo ngược lại quyết định trước đó** (từng
+  thống nhất `GET`/`DELETE /chat/history` không bao giờ trả `ui`). Nếu tin
+  nhắn `assistant` cũ từng kèm chart/form khi mới trả lời, mở lại lịch sử
+  giờ sẽ thấy lại đúng `ui` đó; tin nhắn không có `ui` sẽ là `null` (luôn có
+  mặt field này, không omit). `role: "user"` luôn có `ui: null`.
 - Thread chưa từng chat lần nào → trả về `"messages": []`, **không phải lỗi
   404**.
 

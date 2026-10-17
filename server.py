@@ -107,6 +107,7 @@ class ChatResponse(BaseModel):
 class HistoryMessage(BaseModel):
     role: str
     content: str
+    ui: dict | None = None
 
 
 class ChatHistoryResponse(BaseModel):
@@ -176,11 +177,11 @@ def chat_history(
             continue  # skip tool/system messages -- not meant for a chat UI transcript
 
         text = extract_final_text(message.content)
-        text, _ = extract_ui_block(text)
+        text, ui = extract_ui_block(text)
         if not text:
             continue  # e.g. an AIMessage whose only content was a tool call
 
-        history.append(HistoryMessage(role=role, content=text))
+        history.append(HistoryMessage(role=role, content=text, ui=ui))
 
     return ChatHistoryResponse(thread_id=thread_id, messages=history)
 

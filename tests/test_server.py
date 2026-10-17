@@ -234,11 +234,44 @@ def test_chat_history_returns_prior_turns_for_same_thread(monkeypatch):
     body = response.json()
     assert body["thread_id"] == "t1"
     assert body["messages"] == [
-        {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "reply 1"},
-        {"role": "user", "content": "how are you"},
-        {"role": "assistant", "content": "reply 2"},
+        {"role": "user", "content": "hello", "ui": None},
+        {"role": "assistant", "content": "reply 1", "ui": None},
+        {"role": "user", "content": "how are you", "ui": None},
+        {"role": "assistant", "content": "reply 2", "ui": None},
     ]
+
+
+def test_chat_history_includes_ui_for_a_past_turn_that_had_a_chart(monkeypatch):
+    chart_answer = (
+        "Tháng này bạn chi nhiều nhất cho Mua sắm.\n\n"
+        '```ui-json\n{"type": "chart", "chart_type": "pie", "title": "Chi tiêu theo danh mục", '
+        '"labels": ["Mua sắm", "Ăn uống"], "series": [{"name": "VND", "data": [16280000, 10500000]}]}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[chart_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    client.post(
+        "/chat",
+        json={"message": "Phân tích chi tiêu theo danh mục giúp tôi.", "user_id": "CIF_0001", "thread_id": "t1"},
+        headers=headers,
+    )
+
+    response = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+    assert response.status_code == 200
+    messages = response.json()["messages"]
+    assistant_message = next(m for m in messages if m["role"] == "assistant")
+    assert assistant_message["content"] == "Tháng này bạn chi nhiều nhất cho Mua sắm."
+    assert "```ui-json" not in assistant_message["content"]
+    assert assistant_message["ui"] == {
+        "type": "chart",
+        "chart_type": "pie",
+        "title": "Chi tiêu theo danh mục",
+        "labels": ["Mua sắm", "Ăn uống"],
+        "series": [{"name": "VND", "data": [16280000, 10500000]}],
+    }
 
 
 def test_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
@@ -256,7 +289,10 @@ def test_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["thread_id"] == "CIF_0001"
-    assert body["messages"] == [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "ok"}]
+    assert body["messages"] == [
+        {"role": "user", "content": "hello", "ui": None},
+        {"role": "assistant", "content": "ok", "ui": None},
+    ]
 
 
 def test_delete_chat_history_defaults_thread_id_to_user_id_when_omitted(monkeypatch):

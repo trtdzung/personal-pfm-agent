@@ -307,6 +307,43 @@ tuyệt đối vào fence:
 - Verify thật với model VNG (2 skill `chart` + `transfer_form`): `answer`
   không còn ký tự `` ` ``/`{`/`}` nào, `ui` đúng type. 58/58 test pass.
 
+### 1.7. [Đã làm] `GET /chat/history` giờ trả lại `ui` cho từng message — đảo ngược quyết định cũ
+
+**Bối cảnh (2026-09-07):** thảo luận với người dùng phát hiện ra: dữ liệu
+`ui` **không hề mất** khi lưu qua GreenNode Memory — checkpoint lưu
+nguyên văn AIMessage gốc (còn nguyên khối `ui-json`) TRƯỚC khi
+`extract_ui_block()` chạy ở tầng `/chat`. `GET /chat/history` trước đó
+CÓ chạy lại `extract_ui_block()` trên từng message cũ (để lọc JSON thô
+khỏi `content` hiển thị), nhưng **chủ động vứt bỏ** phần `ui` tách được
+(`text, _ = extract_ui_block(text)`) — và `HistoryMessage` không có field
+nào để mang giá trị đó ra ngoài. Đây là thiếu sót ở code/schema, không
+phải giới hạn về dữ liệu.
+
+**Đã sửa:** `server.py` — thêm field `ui: dict | None = None` vào
+`HistoryMessage`, dùng luôn giá trị `ui` tách được thay vì vứt.
+
+**⚠️ Đảo ngược 1 quyết định đã thống nhất với FE trước đó:**
+`docs/chart-output-rules.md` (tài liệu FE viết, đã xoá khỏi repo) từng có
+rule **B.MUST-6: "`GET`/`DELETE /chat/history` PHẢI KHÔNG BAO GIỜ trả
+field `ui`"**. Quyết định này giờ đảo ngược — `GET /chat/history` **có**
+trả `ui`. `DELETE /chat/history` không đổi (không trả `messages` nên
+không liên quan). **Cần báo lại FE** đây là thay đổi hợp đồng API thật,
+không chỉ thêm field cho tính năng mới — nếu FE code chỉ đọc `content`
+khi load lịch sử cũ (theo đúng rule cũ), giờ có thể cần đọc thêm `ui` để
+hiện lại chart/form cho tin nhắn cũ.
+
+**Đã cập nhật:** `docs/api.md` (thêm breaking-change note ở mục
+`GET /chat/history`), `docs/chart-visualization.md` (mục "Luồng UI gợi ý"
+điểm 3), test mới trong `tests/test_server.py`
+(`test_chat_history_includes_ui_for_a_past_turn_that_had_a_chart`) +
+cập nhật 2 test cũ đang assert cứng shape `messages[]` (thiếu field `ui`).
+52/52 test pass (venv có fastapi).
+
+**Đã đồng bộ:** copy lại `api.md`/`chart-visualization.md` mới vào
+`PersonalCardAgentUI/agent_backend_docs/` (`transfer-form.md` không đổi,
+không cần copy lại). **Còn treo:** báo lại FE về thay đổi hợp đồng này
+(chưa phải việc code, chỉ là communication — người dùng tự làm).
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong
