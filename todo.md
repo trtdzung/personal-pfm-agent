@@ -374,6 +374,48 @@ vào agent tuân theo `SKILL.md` (giống rủi ro đã ghi ở mục 1.3 cho ng
 sách). Nếu sau này phát hiện agent hay tính sai hạn mức trong thực tế,
 cân nhắc quay lại dùng tool.
 
+### 1.9. [Đã fix — giảm tần suất, không tất định] Agent đôi khi từ chối đề xuất `create_jar`/`edit_jar`, tưởng nhầm là hành động thật
+
+**Sự cố (2026-09-07, phát hiện khi bạn test trên endpoint đã deploy):** hỏi
+"Tạo giúp tôi 1 hũ mua sắm hợp lý mỗi tháng." / "Tăng hũ giải trí của tôi
+lên 800 nghìn được không?" → agent **từ chối cả 2**, trả lời kiểu "Việc tạo
+hũ tiết kiệm là hành động thiết lập trên hệ thống ngân hàng, nằm ngoài
+phạm vi hỗ trợ của tôi..." — `ui: null` cho cả 2, chưa test được format vì
+bị chặn ngay từ đầu.
+
+**Nguyên nhân:** câu mở đầu `instructions.md` ("bạn không thực hiện bất kỳ
+hành động nào làm thay đổi trạng thái thẻ... Nếu khách hàng yêu cầu một
+hành động như vậy, giải thích rằng việc đó ngoài phạm vi hỗ trợ") được viết
+**trước khi có** các skill `transfer_form`/`create_jar`/`edit_jar` — không
+có ngoại lệ nào nói rõ "đề xuất hiển thị qua skill" khác với "thực hiện
+hành động thật". Model đôi khi áp nhầm rule từ chối này vào câu hỏi dạng ra
+lệnh trực tiếp ("tạo giúp tôi...", "tăng... giúp tôi") dù có skill tương
+ứng hướng dẫn nên đề xuất.
+
+**Đã xác nhận đây là non-determinism (không tất định), không phải bug 100%
+lặp lại:** thử lại **đúng câu hỏi y hệt** ngay sau khi nhận báo cáo (trước
+khi sửa gì) → agent trả lời đúng, không từ chối. Cùng loại hiện tượng đã
+biết với chart-skill (model không phải lúc nào cũng tuân theo skill).
+
+**Đã fix:** thêm đoạn "Ngoại lệ quan trọng" ngay sau câu mở đầu
+`instructions.md`, nói rõ: đề xuất form/biểu đồ qua skill chuyên biệt
+KHÔNG tính là "hành động thật" bị cấm — chỉ áp dụng rule từ chối cho những
+hành động thật sự không có skill đề xuất tương ứng (mở thẻ, khoá thẻ...).
+
+**Verify thật với model VNG:** chạy lại đúng 3 lần câu "Tạo giúp tôi 1 hũ
+mua sắm hợp lý mỗi tháng." (3 thread mới, cô lập) sau khi sửa → **3/3 lần
+đều trả về đúng `create_jar`**, không còn từ chối. 67/67 test pass
+(`uv run --group dev pytest tests/`).
+
+**Lưu ý còn treo:** đây là fix làm **giảm tần suất**, không đảm bảo 100%
+(bản chất skill-based không có gì enforce cứng, giống mọi non-determinism
+khác đã biết ở chart/transfer_form). Nếu sau này vẫn thấy từ chối tái diễn
+thường xuyên dù đã có ngoại lệ này, cân nhắc: (a) làm rõ hơn nữa ngay trong
+từng `SKILL.md` (nhắc lại "đây không phải hành động thật" ngay đầu file,
+không chỉ dựa vào `instructions.md`), hoặc (b) test với nhiều cách diễn đạt
+câu hỏi khác nhau (ra lệnh trực tiếp vs hỏi tư vấn) để xem cách nào dễ bị
+từ chối hơn.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong
