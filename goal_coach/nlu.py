@@ -12,6 +12,8 @@ logger = logging.getLogger("goal_coach.nlu")
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "extract_v1.md"
 _MAX_ATTEMPTS = 2  # first try + one retry with the error described
+# Own model for this feature (the rest of the agent keeps LLM_MODEL). Override with GOAL_COACH_MODEL.
+DEFAULT_MODEL = "google/gemma-4-31b-it"
 
 
 class ModelUnavailableError(RuntimeError):
@@ -30,6 +32,8 @@ def extract(text: str) -> GoalExtraction:
     system = _PROMPT_PATH.read_text(encoding="utf-8")
     try:
         model = default_model(os.environ.get("AI_PLATFORM_API_KEY"), timeout=20, max_retries=0)
+        # Same client config as the platform default, only the model name differs.
+        model = model.model_copy(update={"model_name": os.environ.get("GOAL_COACH_MODEL") or DEFAULT_MODEL})
         try:
             structured = model.with_structured_output(GoalExtraction, method="function_calling")
         except TypeError:
