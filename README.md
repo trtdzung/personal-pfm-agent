@@ -213,12 +213,15 @@ docker run -p 8080:8080 \
 - `DELETE /chat/history?user_id=...&thread_id=...` -- requires `X-API-Key`
   header, `thread_id` optional, returns `{"thread_id": str, "status": "deleted"}`.
   Deletes the thread's checkpoint history via `checkpointer.delete_thread()`.
-  **Caveat:** `AgentBaseMemoryEvents` keeps an internal 30-second read cache
-  that `delete_thread()` does not invalidate, so a `GET /chat/history` call
-  made within ~30s of a delete can still return the just-deleted messages
-  even though the delete already succeeded on GreenNode's side (verified:
-  waiting past 30s returns the correct empty result). This is a limitation
-  of the third-party SDK, not a bug in this server.
+  Deletes every event even past 100 (one page) and evicts the SDK's own
+  read-your-writes cache, so a `GET /chat/history` call right after a delete
+  reliably returns empty -- see `checkpointer_local_cache_race.py` and
+  `checkpointer_delete_pagination.py` (both patch bugs found in
+  `greennode-agent-bridge`, not this server's own code; docs/incidents/
+  2026-09-27-greennode-memory-*.md have the full writeups). Deletes run
+  through a bounded thread pool (10-way by default), not strictly one event
+  at a time -- still a single synchronous `DELETE` call, no background job;
+  measured 85s -> ~12-16s on a thread of ~415 events.
 
 **Default thread per user:** the frontend currently only sends `user_id`,
 not `thread_id`. When `thread_id` is omitted on any of the three endpoints
@@ -308,6 +311,10 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 │   └── test_server.py         # server.py's tests — see "Testing" above for how to run these
 │
 ├── server.py                 # self-hosted FastAPI app — see "Self-hosted server" below
+├── checkpointer_cache.py             # request-scoped cache around AgentBaseMemoryEvents' get_events (docs/incidents/2026-09-13-...-perf.md)
+├── checkpointer_delta_snapshot.py    # stops a DeltaChannel snapshot blob from crashing every request past ~50 updates (todo.md 1.5)
+├── checkpointer_local_cache_race.py  # merges AgentBaseMemoryEvents' own read-your-writes cache into every fetch instead of discarding it (docs/incidents/2026-09-27-greennode-memory-local-cache-race.md)
+├── checkpointer_delete_pagination.py # fixes + parallelizes AgentBaseMemoryEvents.delete_thread() (docs/incidents/2026-09-27-greennode-memory-delete-pagination.md)
 ├── requirements.txt          # server.py's own pip-only dependency list (no uv/pyproject.toml)
 ├── Dockerfile                 # packages server.py for self-hosting
 ├── .dockerignore

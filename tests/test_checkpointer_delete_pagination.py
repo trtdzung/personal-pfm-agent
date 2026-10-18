@@ -10,6 +10,8 @@ offset-based pagination closely enough to reproduce it: deleting an item
 shifts everything after it back by one.
 """
 
+import threading
+import time
 from types import SimpleNamespace
 from typing import Any
 
@@ -29,15 +31,18 @@ class _FakeMemoryClient:
     def __init__(self):
         self.events: dict[tuple[str, str], list[Any]] = {}
         self._counter = 0
+        self._lock = threading.Lock()  # deletes may run concurrently once patched
 
     def create_event(self, *, id, actorId, sessionId, request):
-        self._counter += 1
-        self.events.setdefault((sessionId, actorId), []).append(
-            SimpleNamespace(id=f"event-{self._counter}", payload=request.payload)
-        )
+        with self._lock:
+            self._counter += 1
+            self.events.setdefault((sessionId, actorId), []).append(
+                SimpleNamespace(id=f"event-{self._counter}", payload=request.payload)
+            )
 
     def list_events(self, *, id, actorId, sessionId, page, size):
-        items = self.events.get((sessionId, actorId), [])
+        with self._lock:
+            items = list(self.events.get((sessionId, actorId), []))
         start = (page - 1) * size
         return SimpleNamespace(
             list_data=items[start : start + size],
@@ -45,8 +50,9 @@ class _FakeMemoryClient:
         )
 
     def delete_event(self, *, id, actorId, sessionId, eventId):
-        for key, items in self.events.items():
-            self.events[key] = [e for e in items if e.id != eventId]
+        with self._lock:
+            for key, items in self.events.items():
+                self.events[key] = [e for e in items if e.id != eventId]
 
 
 def _client_with_events(n: int) -> tuple[_FakeMemoryClient, AgentBaseEventClient]:
@@ -132,3 +138,65 @@ def test_the_patch_is_idempotent():
     once = AgentBaseEventClient.delete_events
     patch_delete_events_reads_page_one_every_time()
     assert AgentBaseEventClient.delete_events is once
+
+
+class _ConcurrencyTrackingFakeMemoryClient(_FakeMemoryClient):
+    """Like `_FakeMemoryClient`, but `delete_event` holds the (thread-safe)
+    lock briefly and records how many calls were in flight AT ONCE, so a
+    test can prove deletes actually overlap instead of only checking the
+    end result (which a sequential loop would also produce correctly)."""
+
+    def __init__(self, hold_seconds: float = 0.02):
+        super().__init__()
+        self._hold_seconds = hold_seconds
+        self._lock = threading.Lock()
+        self._in_flight = 0
+        self.max_in_flight = 0
+
+    def delete_event(self, *, id, actorId, sessionId, eventId):
+        with self._lock:
+            self._in_flight += 1
+            self.max_in_flight = max(self.max_in_flight, self._in_flight)
+        time.sleep(self._hold_seconds)
+        super().delete_event(id=id, actorId=actorId, sessionId=sessionId, eventId=eventId)
+        with self._lock:
+            self._in_flight -= 1
+
+
+def test_the_patch_deletes_events_within_a_page_concurrently_not_one_at_a_time():
+    patch_delete_events_reads_page_one_every_time()
+    memory_client = _ConcurrencyTrackingFakeMemoryClient(hold_seconds=0.02)
+    for i in range(20):
+        memory_client.create_event(
+            id="mem-1", actorId="CIF_0001", sessionId="t1",
+            request=SimpleNamespace(payload=SimpleNamespace(type="other", binary_data=None)),
+        )
+    event_client = AgentBaseEventClient(
+        "mem-1", EventSerializer(JsonPlusSerializer()), memory_client=memory_client
+    )
+
+    t0 = time.time()
+    event_client.delete_events("t1", "CIF_0001")
+    elapsed = time.time() - t0
+
+    assert memory_client.events[("t1", "CIF_0001")] == []
+    assert memory_client.max_in_flight > 1, "deletes ran one at a time -- no speed-up"
+    assert elapsed < 20 * 0.02, "took as long as fully sequential deletes would"
+
+
+def test_the_patch_respects_a_configured_concurrency_limit():
+    patch_delete_events_reads_page_one_every_time(max_workers=3)
+    memory_client = _ConcurrencyTrackingFakeMemoryClient(hold_seconds=0.02)
+    for i in range(20):
+        memory_client.create_event(
+            id="mem-1", actorId="CIF_0001", sessionId="t1",
+            request=SimpleNamespace(payload=SimpleNamespace(type="other", binary_data=None)),
+        )
+    event_client = AgentBaseEventClient(
+        "mem-1", EventSerializer(JsonPlusSerializer()), memory_client=memory_client
+    )
+
+    event_client.delete_events("t1", "CIF_0001")
+
+    assert memory_client.events[("t1", "CIF_0001")] == []
+    assert memory_client.max_in_flight <= 3
