@@ -1058,3 +1058,24 @@ def test_delete_memory_preference_endpoint_rejects_missing_api_key():
     client = TestClient(server.app)
     response = client.delete("/memory/preferences/rec-1", params={"user_id": "CIF_0001"})
     assert response.status_code == 401
+
+
+def test_memory_preferences_endpoints_handle_dict_records_like_the_real_client(monkeypatch):
+    # The real MemoryClient.list_memory_records returns plain dicts, not objects.
+    fake_memory_client = _FakeMemoryClient(
+        list_response=[
+            {"id": "rec-1", "memory": "Khách hàng thích đá banh", "score": None, "created_at": "2026-10-14T06:25:36Z", "updated_at": None},
+        ]
+    )
+    monkeypatch.setattr(memory_tools, "memory_client", fake_memory_client)
+
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    listed = client.get("/memory/preferences", params={"user_id": "CIF_0001"}, headers=headers)
+    assert listed.json()["records"] == [
+        {"id": "rec-1", "fact": "Khách hàng thích đá banh", "created_at": "2026-10-14T06:25:36Z"}
+    ]
+
+    deleted = client.delete("/memory/preferences/rec-1", params={"user_id": "CIF_0001"}, headers=headers)
+    assert deleted.status_code == 200
+    assert fake_memory_client.delete_calls == [{"id": "test-memory-id-for-pytest", "memoryRecordId": "rec-1"}]

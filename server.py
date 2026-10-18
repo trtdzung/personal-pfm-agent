@@ -353,6 +353,11 @@ def _list_user_preference_records(user_id: str) -> list[object]:
     return response if isinstance(response, list) else getattr(response, "list_data", None) or []
 
 
+def _record_field(record: object, name: str) -> object:
+    # MemoryClient.list_memory_records returns plain dicts; tolerate attribute-style objects too.
+    return record.get(name) if isinstance(record, dict) else getattr(record, name, None)
+
+
 class MemoryPreferenceRecord(BaseModel):
     id: str
     fact: str
@@ -382,9 +387,13 @@ def memory_preferences(
         raise HTTPException(status_code=500, detail="Failed to load remembered preferences") from exc
 
     records = [
-        MemoryPreferenceRecord(id=record.id, fact=record.memory, created_at=record.created_at)
+        MemoryPreferenceRecord(
+            id=_record_field(record, "id"),
+            fact=_record_field(record, "memory"),
+            created_at=_record_field(record, "created_at"),
+        )
         for record in raw_records
-        if getattr(record, "id", None) and getattr(record, "memory", None)
+        if _record_field(record, "id") and _record_field(record, "memory")
     ]
     return MemoryPreferencesResponse(user_id=user_id, records=records)
 
@@ -413,7 +422,7 @@ def delete_memory_preference(
         logger.exception("memory_client.list_memory_records failed for user_id=%s", user_id)
         raise HTTPException(status_code=500, detail="Failed to load remembered preferences") from exc
 
-    if record_id not in {getattr(record, "id", None) for record in raw_records}:
+    if record_id not in {_record_field(record, "id") for record in raw_records}:
         raise HTTPException(status_code=404, detail="Memory record not found for this user")
 
     try:
