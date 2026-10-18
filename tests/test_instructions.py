@@ -150,6 +150,13 @@ def test_investment_guidance_is_short_bold_and_cites_full_urls():
     assert "Tối đa 3 nguồn" in skill
     assert "Chỉ gắn mã nguồn cho điều nguồn đó thật sự nói" in skill
     assert "**Biểu đồ:** mặc định KHÔNG" in skill
+    assert "mỗi câu là **một dòng riêng, cách nhau một dòng trống**" in skill
+    raw = (SKILLS_DIR / "investment-guidance" / "SKILL.md").read_text(encoding="utf-8")  # _skill() flattens newlines
+    example = raw[raw.index("## Ví dụ ĐÚNG"):raw.index("## Ví dụ SAI")]
+    start = example.index("```\n") + 4
+    body = example[start:example.index("\n```", start)].strip()
+    paragraphs = [p for p in body.split("\n\n") if p.strip()]
+    assert len(paragraphs) == 5 and all("\n" not in p.strip() for p in paragraphs)  # one sentence per line
 
 
 def test_investment_guidance_forbids_foreign_script_glitches():
@@ -232,3 +239,9 @@ def test_every_skill_front_matter_is_valid_yaml_for_the_skill_loader():
         if not value.startswith(('"', "'")):
             assert ": " not in value and " #" not in value, f"{skill_md.parent.name}: quote the description or drop ': '"
         assert lines[0][len("name: "):] == skill_md.parent.name
+
+
+def test_instructions_ask_for_one_sentence_per_line_in_multi_sentence_answers():
+    text = _text()
+    assert "**mỗi câu một dòng riêng, cách nhau một dòng trống**" in text
+    assert "không dồn cả câu trả lời thành một khối chữ" in text

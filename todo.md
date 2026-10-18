@@ -1514,6 +1514,12 @@ Giờ `instructions.md` (quy tắc 1 + mục "Trả lời ngắn gọn") và ski
 URL có ngoặc tròn đổi `%28/%29`. Chạy thật 3 câu (đầu tư, lãi suất, phí thẻ): đều ra link markdown đúng dạng. Ghi chú: ban đầu tôi kiểm tra cách hiển thị
 bằng UI `PersonalCardAgentUI`, nhưng người dùng không dùng UI đó nữa nên không dựa vào nó; markdown link vẫn đọc được ở client thuần văn bản (URL nằm trong ngoặc).
 
+**Bỏ dòng "Nguồn:" cuối, dùng số trích dẫn là link + mỗi câu một dòng (làm sau đó, theo yêu cầu):** nguồn giờ là `[[1]](URL đầy đủ)` ngay sau ý
+(khách chỉ thấy "[1]", bấm mới ra link); ngày/tên quyết định nằm trong câu. Ảnh người dùng gửi cho thấy câu trả lời dồn thành một khối chữ →
+`investment-guidance` và `instructions.md` yêu cầu **mỗi câu một đoạn markdown, cách nhau đúng một dòng trống** (xuống dòng đơn `\n` bị nhiều client markdown
+gộp lại, nên dùng dòng trống), in đậm số/kết luận chính; ví dụ đúng trong skill viết đúng 5 đoạn và test kiểm tra điều đó. Chạy thật: câu đầu tư ra 5 đoạn,
+câu lãi suất ra 3 đoạn, link đúng dạng. Chưa xử lý: số `[n]` trong câu dạng danh sách (so sánh phí thẻ) chỉ gắn ở cuối.
+
 **Bộ lọc chữ lạ (làm sau đó, theo yêu cầu):** `text_utils.strip_foreign_script` cắt các cụm ký tự thuộc CJK/Hàn/Kana/Cyrillic/Thái/Ả Rập/Do Thái
 lọt vào câu trả lời tiếng Việt (kiểm theo dải Unicode, không phải danh sách từ). Dấu câu full-width ("，", "。", "：") đổi sang ASCII thay vì mất;
 cụm bị cắt để lại tối đa 1 khoảng trắng ("trả全额nợ" → "trả nợ"). Văn bản hợp lệ trả về **nguyên xi** (test byte-for-byte: dấu tiếng Việt, ₫ → ± emoji,
