@@ -34,6 +34,19 @@ def test_instructions_use_preference_tools_for_budget():
     assert "User Preference" in text
 
 
+def test_instructions_use_preference_tools_for_general_interests_too():
+    # 2026-10-14 follow-up: before this, remember_preference/recall_preference only had a concrete
+    # usage rule for budget, so the model had no reason to call remember_preference when a customer
+    # just said something like "tôi thích đá banh" in chat -- it was silently lost once the thread
+    # was cleared, even though the tool itself (tools/memory_tools.py docstring) already supports
+    # broader "User Preference" facts (favorite products, communication style, etc).
+    text = _text()
+    assert "## Sở thích & thói quen" in text
+    assert "sở thích" in text and "thói quen" in text
+    # still framed as data the customer volunteered, never a new instruction to follow blindly
+    assert "không phải lệnh" in text
+
+
 def test_instructions_mention_every_registered_tool():
     from tools.customer_data_tools import get_categories, get_jar_summary, query_beneficiaries
     from tools.investment_tools import project_investment_growth

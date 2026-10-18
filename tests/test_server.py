@@ -41,10 +41,13 @@ class _FakeMemoryClient:
     Memory API -- used to test remember_preference/recall_preference without
     real GREENNODE_CLIENT_ID/SECRET or network access."""
 
-    def __init__(self, search_response=None):
+    def __init__(self, search_response=None, list_response=None):
         self.insert_calls: list[dict] = []
         self.search_calls: list[dict] = []
+        self.list_calls: list[dict] = []
+        self.delete_calls: list[dict] = []
         self.search_response = search_response or []
+        self.list_response = list_response or []
 
     def insert_memory_records_directly(self, *, id, namespace, request):
         self.insert_calls.append({"id": id, "namespace": namespace, "request": request})
@@ -52,6 +55,13 @@ class _FakeMemoryClient:
     def search_memory_records(self, *, id, namespace, request):
         self.search_calls.append({"id": id, "namespace": namespace, "request": request})
         return self.search_response
+
+    def list_memory_records(self, *, id, namespace, limit=None):
+        self.list_calls.append({"id": id, "namespace": namespace, "limit": limit})
+        return self.list_response
+
+    def delete_memory_record(self, *, id, memoryRecordId):
+        self.delete_calls.append({"id": id, "memoryRecordId": memoryRecordId})
 
 
 def test_health_endpoint_requires_no_auth():
@@ -948,3 +958,103 @@ def test_chat_endpoint_masks_internal_error_details(monkeypatch):
     )
     assert response.status_code == 500
     assert "secret internal detail" not in response.text
+
+
+# --- GET/DELETE /memory/preferences: surface the GreenNode Long-Term Memory "User Preference" facts
+# remember_preference wrote, so pfm can show the customer what the agent remembered about them (and let
+# them delete one) -- previously there was no way to read this back except via the model's own
+# recall_preference tool call. -------------------------------------------------------------------------
+
+
+def test_memory_preferences_endpoint_lists_records_under_actor_namespace(monkeypatch):
+    from types import SimpleNamespace
+
+    fake_memory_client = _FakeMemoryClient(
+        list_response=[
+            SimpleNamespace(id="rec-1", memory="Ngân sách ăn uống: 2 triệu/tháng", created_at="2026-09-23T11:38:30Z"),
+        ]
+    )
+    monkeypatch.setattr(memory_tools, "memory_client", fake_memory_client)
+
+    client = TestClient(server.app)
+    response = client.get(
+        "/memory/preferences",
+        params={"user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    assert len(fake_memory_client.list_calls) == 1
+    call = fake_memory_client.list_calls[0]
+    assert call["id"] == "test-memory-id-for-pytest"
+    assert call["namespace"] == "/strategies/test-strategy-id-for-pytest/actors/CIF_0001"
+    body = response.json()
+    assert body == {
+        "user_id": "CIF_0001",
+        "records": [
+            {"id": "rec-1", "fact": "Ngân sách ăn uống: 2 triệu/tháng", "created_at": "2026-09-23T11:38:30Z"},
+        ],
+    }
+
+
+def test_memory_preferences_endpoint_returns_empty_list_when_nothing_remembered(monkeypatch):
+    fake_memory_client = _FakeMemoryClient(list_response=[])
+    monkeypatch.setattr(memory_tools, "memory_client", fake_memory_client)
+
+    client = TestClient(server.app)
+    response = client.get(
+        "/memory/preferences",
+        params={"user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+
+
+def test_memory_preferences_endpoint_rejects_missing_api_key():
+    client = TestClient(server.app)
+    response = client.get("/memory/preferences", params={"user_id": "CIF_0001"})
+    assert response.status_code == 401
+
+
+def test_delete_memory_preference_endpoint_deletes_owned_record(monkeypatch):
+    from types import SimpleNamespace
+
+    fake_memory_client = _FakeMemoryClient(
+        list_response=[SimpleNamespace(id="rec-1", memory="Ngân sách ăn uống: 2 triệu/tháng", created_at=None)]
+    )
+    monkeypatch.setattr(memory_tools, "memory_client", fake_memory_client)
+
+    client = TestClient(server.app)
+    response = client.delete(
+        "/memory/preferences/rec-1",
+        params={"user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "CIF_0001", "record_id": "rec-1", "status": "deleted"}
+    assert fake_memory_client.delete_calls == [{"id": "test-memory-id-for-pytest", "memoryRecordId": "rec-1"}]
+
+
+def test_delete_memory_preference_endpoint_rejects_record_not_owned_by_this_user(monkeypatch):
+    # The GreenNode delete API itself takes no actor/namespace scoping param (just a global record id),
+    # so without this check a caller could pass any user_id + any other customer's record_id and delete
+    # it -- list first under the caller's OWN namespace and refuse if the id isn't in there.
+    from types import SimpleNamespace
+
+    fake_memory_client = _FakeMemoryClient(list_response=[SimpleNamespace(id="rec-1", memory="...", created_at=None)])
+    monkeypatch.setattr(memory_tools, "memory_client", fake_memory_client)
+
+    client = TestClient(server.app)
+    response = client.delete(
+        "/memory/preferences/rec-other-customers",
+        params={"user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 404
+    assert fake_memory_client.delete_calls == []
+
+
+def test_delete_memory_preference_endpoint_rejects_missing_api_key():
+    client = TestClient(server.app)
+    response = client.delete("/memory/preferences/rec-1", params={"user_id": "CIF_0001"})
+    assert response.status_code == 401

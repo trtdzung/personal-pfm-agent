@@ -35,6 +35,7 @@ from tools.customer_data_tools import get_categories, get_jar_summary, query_ben
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
+import tools.memory_tools as memory_tools
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
@@ -337,5 +338,88 @@ def delete_chat_history(
         logger.exception("checkpointer.delete_thread failed for thread_id=%s", thread_id)
         raise HTTPException(status_code=500, detail="Failed to delete conversation history") from exc
     invalidate_checkpointer_cache(agent.checkpointer, thread_id, user_id)
-
     return DeleteHistoryResponse(thread_id=thread_id, status="deleted")
+
+
+def _user_preference_namespace(user_id: str) -> str:
+    return f"/strategies/{USER_PREFERENCE_STRATEGY_ID}/actors/{user_id}"
+
+
+def _list_user_preference_records(user_id: str) -> list[object]:
+    response = memory_tools.memory_client.list_memory_records(
+        id=MEMORY_ID,
+        namespace=_user_preference_namespace(user_id),
+    )
+    return response if isinstance(response, list) else getattr(response, "list_data", None) or []
+
+
+class MemoryPreferenceRecord(BaseModel):
+    id: str
+    fact: str
+    created_at: str | None = None
+
+
+class MemoryPreferencesResponse(BaseModel):
+    user_id: str
+    records: list[MemoryPreferenceRecord]
+
+
+@app.get("/memory/preferences", response_model=MemoryPreferencesResponse)
+def memory_preferences(
+    user_id: str,
+    x_api_key: str | None = Header(default=None),
+) -> MemoryPreferencesResponse:
+    """What `remember_preference` has saved for this customer (GreenNode Long-Term Memory, "User
+    Preference" strategy) -- so pfm can show the customer what the agent remembered about them. There
+    was previously no way to read this back except via the model's own `recall_preference` tool call."""
+    if not x_api_key or not hmac.compare_digest(x_api_key, SERVER_API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+    try:
+        raw_records = _list_user_preference_records(user_id)
+    except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
+        logger.exception("memory_client.list_memory_records failed for user_id=%s", user_id)
+        raise HTTPException(status_code=500, detail="Failed to load remembered preferences") from exc
+
+    records = [
+        MemoryPreferenceRecord(id=record.id, fact=record.memory, created_at=record.created_at)
+        for record in raw_records
+        if getattr(record, "id", None) and getattr(record, "memory", None)
+    ]
+    return MemoryPreferencesResponse(user_id=user_id, records=records)
+
+
+class DeleteMemoryPreferenceResponse(BaseModel):
+    user_id: str
+    record_id: str
+    status: str
+
+
+@app.delete("/memory/preferences/{record_id}", response_model=DeleteMemoryPreferenceResponse)
+def delete_memory_preference(
+    record_id: str,
+    user_id: str,
+    x_api_key: str | None = Header(default=None),
+) -> DeleteMemoryPreferenceResponse:
+    """Let the customer delete one remembered preference fact. GreenNode's own delete API takes no
+    actor/namespace scoping param (just a global record id) -- list this user's OWN records first and
+    refuse with 404 if record_id isn't among them, so one customer can never delete another's fact."""
+    if not x_api_key or not hmac.compare_digest(x_api_key, SERVER_API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+    try:
+        raw_records = _list_user_preference_records(user_id)
+    except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
+        logger.exception("memory_client.list_memory_records failed for user_id=%s", user_id)
+        raise HTTPException(status_code=500, detail="Failed to load remembered preferences") from exc
+
+    if record_id not in {getattr(record, "id", None) for record in raw_records}:
+        raise HTTPException(status_code=404, detail="Memory record not found for this user")
+
+    try:
+        memory_tools.memory_client.delete_memory_record(id=MEMORY_ID, memoryRecordId=record_id)
+    except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
+        logger.exception("memory_client.delete_memory_record failed for record_id=%s", record_id)
+        raise HTTPException(status_code=500, detail="Failed to delete remembered preference") from exc
+
+    return DeleteMemoryPreferenceResponse(user_id=user_id, record_id=record_id, status="deleted")
