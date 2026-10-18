@@ -166,7 +166,7 @@ thể trả ra, phân biệt bằng field `type` bên trong. **Frontend cần đ
 đọc `body.chart` sang `body.ui`, và luôn kiểm tra `ui.type` trước khi đọc
 các field còn lại.**
 
-`ui` là `null` ở hầu hết câu trả lời. Hiện có 5 loại `ui.type`:
+`ui` là `null` ở hầu hết câu trả lời. Hiện có 6 loại `ui.type`:
 
 - `"chart"` — biểu đồ cho câu hỏi phân tích/so sánh, xem
   [`docs/chart-visualization.md`](./chart-visualization.md).
@@ -177,6 +177,9 @@ các field còn lại.**
   xem [`docs/spending-jar.md`](./spending-jar.md).
 - `"rebalance_jars"` — đề xuất lấy tiền từ hũ/tiền chưa phân bổ khác để bù hũ
   đang thiếu hoặc đã chi vượt, xem [`docs/jar-rebalance.md`](./jar-rebalance.md).
+- `"distribute_amount"` — đề xuất chia một số tiền khách nêu vào số dư nhiều hũ. **Không** đến từ
+  `POST /chat` mà từ `POST /jar-rebalance` (bên dưới), xem
+  [`docs/jar-rebalance-endpoint.md`](./jar-rebalance-endpoint.md).
 
 Sau này có thêm loại khác, frontend chỉ cần thêm nhánh xử lý theo `ui.type`
 mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.
@@ -187,6 +190,17 @@ mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.
 | `401` | Thiếu/sai `X-API-Key` |
 | `422` | Thiếu `message` hoặc `user_id` |
 | `500` | Agent xử lý lỗi (model timeout, lỗi nội bộ...) — chi tiết lỗi **không** trả về client, chỉ nằm trong log server |
+
+---
+
+## `POST /jar-rebalance`
+
+Endpoint **không cần chat** cho các màn hình đã biết sẵn việc cần làm: bù cho hũ thiếu tiền bằng số dư các hũ khác
+(`mode: "cover"`) hoặc chia một số tiền khách nêu vào số dư các hũ (`mode: "distribute"`). Không có hội thoại, không có `thread_id`, không dùng chung agent
+hay bộ nhớ với `/chat`. Cùng server, cùng `X-API-Key` (và Bearer khi qua AgentBase như `/chat`).
+
+Đầy đủ request/response, các trường hợp trả lời không cần gọi model, mã lỗi và contract `distribute_amount`:
+[`docs/jar-rebalance-endpoint.md`](./jar-rebalance-endpoint.md).
 
 ---
 

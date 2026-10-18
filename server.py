@@ -10,18 +10,20 @@ from greennode_agent_bridge import AgentBaseMemoryEvents
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import BaseTool
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel
 
+from llm import LLM_BASE_URL, LLM_MODEL, default_model  # noqa: F401 -- re-exported: tests/notebooks read them off `server`
 from checkpointer_cache import invalidate as invalidate_checkpointer_cache
 from checkpointer_cache import patch_get_events_with_cache
 from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
+from jar_endpoint import router as jar_router
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
-from tools.customer_data_tools import get_jar_summary, query_beneficiaries
+from ui_guard import read_turn_facts, ui_matches_facts
+from tools.customer_data_tools import get_categories, get_jar_summary, query_beneficiaries
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
@@ -55,29 +57,8 @@ if not AI_PLATFORM_API_KEY:
         "for GreenNode's VNG Cloud AI Platform (Model-as-a-Service) endpoint."
     )
 
-LLM_BASE_URL = "https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1"
-LLM_MODEL = os.environ.get("LLM_MODEL") or "z-ai/glm-5.2-hackathon"
-
-
 def _default_model() -> BaseChatModel:
-    # `thinking: {"type": "disabled"}` turns off this GLM model's reasoning
-    # tokens -- verified directly against the raw API (bypassing langchain)
-    # that this is the one param name it actually honors (other common
-    # names like `enable_thinking`/`chat_template_kwargs.enable_thinking`
-    # are silently ignored). Reasoning tokens were the dominant cost in
-    # every LLM call's latency (e.g. 111 of 170 completion tokens on a
-    # trivial "Xin chào" -- see todo.md's performance investigation) and
-    # are never shown to the customer or used for anything once
-    # `text_utils._strip_think_tags` discards them, so disabling them is a
-    # straight latency win with no user-visible behavior lost *if* the
-    # model's tool-calling/JSON-formatting quality holds up without them
-    # (verified against the existing skill test suite -- see todo.md).
-    return ChatOpenAI(
-        base_url=LLM_BASE_URL,
-        api_key=AI_PLATFORM_API_KEY,
-        model=LLM_MODEL,
-        extra_body={"thinking": {"type": "disabled"}},
-    )
+    return default_model(AI_PLATFORM_API_KEY)
 
 
 def build_agent(
@@ -116,6 +97,7 @@ def build_agent(
             remember_preference,
             recall_preference,
             get_jar_summary,
+            get_categories,
             query_beneficiaries,
             project_investment_growth,
             calculate_deposit_interest,
@@ -146,6 +128,9 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+# Jar proposals for screens that need no chat: its own route and agent, same process (jar_endpoint.py).
+app.include_router(jar_router)
 
 
 class ChatRequest(BaseModel):
@@ -205,6 +190,11 @@ def chat(
 
     answer = extract_final_text(result["messages"][-1].content)
     answer, ui = extract_ui_block(answer)
+    if ui is not None and not ui_matches_facts(ui, read_turn_facts(result["messages"])):
+        # e.g. an edit_jar for a jar the model never read this turn (backend_docs/pfm-read-api.md C2.2): the
+        # customer gets the answer text only, exactly like a shape-invalid ui.
+        logger.warning("Dropping ui block: ids not among what get_jar_summary/get_categories returned this turn: %r", ui)
+        ui = None
     answer = strip_foreign_script(answer)  # after the ui block is split off: its strings are left alone
     return ChatResponse(answer=answer, thread_id=thread_id, ui=ui)
 

@@ -8,6 +8,7 @@ try:
     import fastapi  # noqa: F401
 except ImportError:
     collect_ignore.append("test_server.py")
+    collect_ignore.append("test_jar_endpoint.py")  # imports the server too
 
 try:
     import greennode_agent_bridge  # noqa: F401

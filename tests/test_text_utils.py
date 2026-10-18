@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
+from text_utils import extract_final_text, extract_ui_block, is_valid_ui, strip_foreign_script
 
 
 def test_extract_final_text_returns_plain_string_unchanged():
@@ -377,6 +377,24 @@ def test_create_jar_rejects_invalid_payloads(overrides):
     assert _ui_of(_create_jar(**overrides)) is None
 
 
+def test_create_and_edit_jar_accept_a_category_the_customer_created_themselves():
+    # pfm: every customer has the 10 defaults PLUS their own `c_<slug>` categories (backend_docs C2.3)
+    assert _ui_of(_create_jar(category_ids=["entertainment", "c_cafe"])) == _create_jar(category_ids=["entertainment", "c_cafe"])
+    assert _ui_of(_edit_jar(category_ids=["c_cafe_sang"])) == _edit_jar(category_ids=["c_cafe_sang"])
+
+
+@pytest.mark.parametrize("category", ["c_", "C_Cafe", "cafe", "c_ca phe", "c_cà_phê", "gaming", "transfer", ""])
+def test_jar_categories_that_are_neither_a_default_nor_a_c_slug_are_rejected(category):
+    assert _ui_of(_create_jar(category_ids=[category])) is None
+    assert _ui_of(_edit_jar(category_ids=[category])) is None
+
+
+def test_transfer_form_accepts_a_category_the_customer_created_themselves():
+    payload = {"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount": 50000, "note": "ca phe", "category": "c_cafe"}
+    assert _ui_of(payload) == payload
+    assert _ui_of({**payload, "category": "gaming"}) is None
+
+
 def test_create_jar_requires_category_ids():
     payload = _create_jar()
     del payload["category_ids"]
@@ -517,3 +535,60 @@ def test_strip_foreign_script_is_fast_enough_to_run_on_every_answer():
     for _ in range(200):
         strip_foreign_script(text)
     assert (time.perf_counter() - start) / 200 < 0.005  # < 5 ms each (measured ~0.03 ms)
+
+
+# --- distribute_amount: share the "Chưa phân bổ" money into several jars ---------------------------------------
+
+
+def _distribute_amount(**overrides) -> dict:
+    payload = {
+        "type": "distribute_amount",
+        "allocations": [{"to_jar_id": "food", "amount": 300000}, {"to_jar_id": "lifestyle", "amount": 200000}],
+        "reason": "Chia 500.000đ cho hai hũ đang cần nhiều nhất",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_extract_ui_block_splits_out_valid_distribute_amount_block():
+    text = "Mình đề xuất chia 500.000đ.\n\n" + _ui_text(_distribute_amount())
+    cleaned, ui = extract_ui_block(text)
+    assert cleaned == "Mình đề xuất chia 500.000đ."
+    assert ui == _distribute_amount()
+
+
+def test_distribute_amount_accepts_a_single_allocation():
+    payload = _distribute_amount(allocations=[{"to_jar_id": "food", "amount": 500000}])
+    assert _ui_of(payload) == payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"allocations": []},
+        {"allocations": "food"},
+        {"allocations": ["food"]},
+        {"allocations": [{"to_jar_id": "food", "amount": 0}]},
+        {"allocations": [{"to_jar_id": "food", "amount": -5}]},
+        {"allocations": [{"to_jar_id": "food", "amount": "300000"}]},
+        {"allocations": [{"to_jar_id": "", "amount": 300000}]},
+        {"allocations": [{"amount": 300000}]},
+        {"allocations": [{"to_jar_id": "pool", "amount": 300000}]},  # the pool is the source here, never a receiver
+        {"allocations": [{"to_jar_id": "food", "amount": 1}, {"to_jar_id": "food", "amount": 2}]},  # a jar once
+        {"reason": ""},
+    ],
+)
+def test_distribute_amount_rejects_invalid_payloads(overrides):
+    assert _ui_of(_distribute_amount(**overrides)) is None
+
+
+@pytest.mark.parametrize("field", ["allocations", "reason"])
+def test_distribute_amount_requires_every_field(field):
+    payload = _distribute_amount()
+    del payload[field]
+    assert _ui_of(payload) is None
+
+
+def test_is_valid_ui_is_the_public_check_used_outside_this_module():
+    assert is_valid_ui(_distribute_amount()) and is_valid_ui(_rebalance_jars())
+    assert not is_valid_ui(_distribute_amount(allocations=[])) and not is_valid_ui("not a dict") and not is_valid_ui({"type": "x"})

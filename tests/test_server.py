@@ -235,24 +235,83 @@ def test_chat_endpoint_splits_ui_json_rebalance_jars_block_into_ui_field(monkeyp
         '"moves": [{"from_jar_id": "pool", "amount": 1000000}, {"from_jar_id": "lifestyle", "amount": 500000}], '
         '"reason": "Lấy 1.000.000đ từ tiền chưa phân bổ và 500.000đ từ hũ Hưởng thụ"}\n```'
     )
-    fake_model = _ToolCapableFakeChatModel(responses=[rebalance_answer])
-    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
-    monkeypatch.setattr(server, "agent", fake_agent)
-
-    client = TestClient(server.app)
-    response = client.post(
-        "/chat",
-        json={"message": "Hũ ăn uống của tôi hết tiền rồi.", "user_id": "CIF_0001"},
-        headers={"X-API-Key": "test-key-for-pytest"},
-    )
-    assert response.status_code == 200
-    body = response.json()
+    body = _chat_with_summary_read_then(monkeypatch, rebalance_answer)  # the model read the jars this turn
     assert "```ui-json" not in body["answer"]
     assert body["ui"]["type"] == "rebalance_jars"
     assert body["ui"]["moves"] == [
         {"from_jar_id": "pool", "amount": 1000000},
         {"from_jar_id": "lifestyle", "amount": 500000},
     ]
+
+
+def test_chat_drops_a_rebalance_from_a_jar_that_was_never_in_the_summary(monkeypatch):
+    invented = (
+        "Mình đề xuất lấy từ hũ Dự phòng.\n\n"
+        '```ui-json\n{"type": "rebalance_jars", "target_jar_id": "food", "shortfall": 500000, '
+        '"moves": [{"from_jar_id": "du-phong", "amount": 500000}], "reason": "x"}\n```'
+    )
+    body = _chat_with_summary_read_then(monkeypatch, invented)
+    assert body["ui"] is None and "Dự phòng" in body["answer"]
+
+
+_JAR_SUMMARY_FOR_GUARD = {
+    "month": "2026-09",
+    "casaBalance": 18000000,
+    "unallocated": 13044000,
+    "allocationHeadroom": 1000000,
+    "jars": [
+        {"id": "food", "label": "Ăn uống", "categoryIds": ["dining"], "budgetLimit": 4000000, "spent": 2187000, "remaining": 1813000, "spendable": 1813000, "overLimit": False},
+        {"id": "lifestyle", "label": "Hưởng thụ", "categoryIds": ["entertainment"], "budgetLimit": 2500000, "spent": 1204000, "remaining": 1296000, "spendable": 1296000, "overLimit": False},
+    ],
+}
+
+
+def _chat_with_summary_read_then(monkeypatch, final_answer: str, read_summary: bool = True):
+    """Run /chat with a fake model that (optionally) calls get_jar_summary and then answers `final_answer`."""
+    import httpx
+    import tools.customer_data_tools as customer_data_tools
+
+    def _fake_get(url, params=None, timeout=None):
+        return httpx.Response(200, json=_JAR_SUMMARY_FOR_GUARD, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(customer_data_tools.httpx, "get", _fake_get)
+    replies = []
+    if read_summary:
+        replies.append(AIMessage(content="", tool_calls=[{"name": "get_jar_summary", "args": {}, "id": "call1"}]))
+    replies.append(AIMessage(content=final_answer))
+    fake_agent = server.build_agent(model=_ToolCallingFakeChatModel(messages=iter(replies)), checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+    response = TestClient(server.app).post(
+        "/chat",
+        json={"message": "Tăng hũ ăn uống lên 4,2 triệu", "user_id": "CIF_0001", "thread_id": "guard"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _edit_jar_answer(jar_id: str) -> str:
+    return (
+        "Hũ Ăn uống tăng lên 4.200.000đ/tháng.\n\n"
+        '```ui-json\n{"type": "edit_jar", "jar_id": "' + jar_id + '", "jar_name": "Ăn uống", '
+        '"allocation_amount": 4200000, "reason": "Khách yêu cầu tăng hạn mức"}\n```'
+    )
+
+
+def test_chat_keeps_an_edit_jar_whose_jar_id_was_in_the_summary_read_this_turn(monkeypatch):
+    body = _chat_with_summary_read_then(monkeypatch, _edit_jar_answer("food"))
+    assert body["ui"]["type"] == "edit_jar" and body["ui"]["jar_id"] == "food"
+
+
+def test_chat_drops_an_edit_jar_with_an_invented_jar_id_but_keeps_the_answer(monkeypatch):
+    body = _chat_with_summary_read_then(monkeypatch, _edit_jar_answer("an-uong"))
+    assert body["ui"] is None
+    assert "4.200.000đ" in body["answer"] and "ui-json" not in body["answer"]
+
+
+def test_chat_drops_an_edit_jar_when_the_model_never_read_the_summary_this_turn(monkeypatch):
+    body = _chat_with_summary_read_then(monkeypatch, _edit_jar_answer("food"), read_summary=False)
+    assert body["ui"] is None
 
 
 def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):

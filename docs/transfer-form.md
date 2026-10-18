@@ -117,7 +117,7 @@ bạ đã lưu):
 | `beneficiary_id` | string | ✅ | Phải khớp đúng 1 `id` trong `GET /api/beneficiaries?cif=` — sai/không tồn tại thì frontend/`pfm` nên bỏ qua form, chỉ hiện `answer` |
 | `amount` | number | ✅ | Số tiền đề xuất, luôn dương |
 | `note` | string | ✅ | Nội dung chuyển khoản |
-| `category` | string | ✅ | 1 trong 10 giá trị: `housing`, `utilities`, `subscriptions`, `insurance`, `dining`, `transport`, `shopping`, `groceries`, `entertainment`, `health` |
+| `category` | string | ✅ | `id` danh mục chi tiêu (`kind: "expense"`) **của khách**, từ `GET /api/categories?cif=` — không phải danh sách cố định: 10 danh mục mặc định (`housing`, `utilities`, `subscriptions`, `insurance`, `dining`, `transport`, `shopping`, `groceries`, `entertainment`, `health`) cộng danh mục khách tự tạo (`c_<slug>`) |
 
 Frontend/`pfm` cần tự phân biệt 2 dạng bằng sự **có mặt của `beneficiary_id`**
 (dạng 2) so với `recipient`/`account_number` (dạng 1) — không có field
@@ -158,7 +158,8 @@ việc gợi ý lấy tiền từ hũ khác là form `rebalance_jars` riêng, xe
 
 `ui` là kết quả model tự sinh, đã được `server.py` validate lại nghiêm
 ngặt (loại bỏ hoàn toàn nếu thiếu field, sai kiểu, `amount` ≤ 0, `category`
-không hợp lệ, hoặc trộn field của cả 2 dạng) trước khi trả về — nhưng
+không phải id danh mục hợp lệ — mặc định hoặc `c_<slug>` — hoặc không có trong `GET /api/categories`
+agent vừa đọc ở lượt đó, hoặc trộn field của cả 2 dạng) trước khi trả về — nhưng
 **frontend vẫn nên coi mọi field là "đề xuất cần khách hàng tự xem lại"**,
 không tự động thực hiện giao dịch mà không qua bước xác nhận rõ ràng của
 khách hàng.

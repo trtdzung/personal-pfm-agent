@@ -22,6 +22,7 @@ TOOL_RUN_LIMITS = {
     "calculate_deposit_interest": 2,
     # once to read the jars, once more to compare another month; more means the model is looping
     "get_jar_summary": 2,
+    "get_categories": 2,
 }
 
 

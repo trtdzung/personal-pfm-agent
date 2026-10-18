@@ -1,5 +1,7 @@
-# server.py only needs: requirements.txt, server.py, text_utils.py,
-# instructions.md, middleware/, data/, tools/memory_tools.py,
+# server.py only needs: requirements.txt, server.py, text_utils.py, llm.py,
+# ui_guard.py, jar_checks.py, jar_endpoint.py, prompts/ (read per request by
+# jar_endpoint.py -- never ignore it), instructions.md, middleware/, data/,
+# tools/memory_tools.py,
 # skills/project/ (data-visualization SKILL.md, read via FilesystemBackend --
 # see server.py's build_agent()). Everything else below is excluded --
 # whenever a new file/directory is added at the repo root that server.py

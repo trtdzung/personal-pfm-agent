@@ -133,7 +133,8 @@ its own `Dockerfile`.
   each source PDF and flags scans nobody has reviewed -- see `curated/reviewed.json`). Have
   someone at MSB check those files against the PDFs before real use, and re-transcribe when
   MSB issues a new rate decision.
-- `SERVER_API_KEY` -- shared secret; every `POST /chat` request must send
+- `SERVER_API_KEY` -- shared secret; every endpoint except `GET /health`
+  (`POST /chat`, `GET`/`DELETE /chat/history`, `POST /jar-rebalance`) must send
   it back in the `X-API-Key` header, or the request is rejected with 401
 - `MEMORY_ID` -- id of a GreenNode AgentBase Memory resource used for both
   (a) short-term conversation history per `(thread_id, user_id)` (see
@@ -190,6 +191,14 @@ docker run -p 8080:8080 \
   `{"message": str, "user_id": str, "thread_id": str | null}`, returns
   `{"answer": str, "thread_id": str}`. `thread_id` is optional -- see
   "Default thread per user" below.
+- `POST /jar-rebalance` -- requires `X-API-Key` header. Jar proposals for
+  screens that need no chat, one endpoint with two modes:
+  `{"user_id": str, "mode": "cover", "target_jar_id": str, "spend_amount": int | null}`
+  (cover a short jar) or `{"user_id": str, "mode": "distribute", "amount": int}`
+  (share an amount the customer has into the balances of their jars). Returns `{"answer": str, "ui": {...} | null}`
+  (`rebalance_jars` / `distribute_amount`). No thread, no memory; its own
+  agent, separate from `/chat`. Contract and error codes:
+  [`docs/jar-rebalance-endpoint.md`](docs/jar-rebalance-endpoint.md).
 - `GET /chat/history?user_id=...&thread_id=...` -- requires `X-API-Key`
   header, `thread_id` optional, returns `{"thread_id": str, "messages": [{"role": "user" | "assistant", "content": str}]}`.
   Reads straight from the same GreenNode Memory checkpointer `/chat` writes
@@ -250,15 +259,27 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── instructions.md          # system prompt -> synced to Context Hub on deploy
 ├── identity.py              # who may call the deployment (LangSmith API key by default)
 ├── memory.py                # durable memory (on) — customer_budgets.json lives here
-├── text_utils.py             # extract_final_text() shared by notebook, script, server.py
+├── text_utils.py             # extract_final_text() shared by notebook, script, server.py; ui-block validators (create_jar/edit_jar/rebalance_jars/distribute_amount)
+├── ui_guard.py               # drops a ui whose jar/category ids are not among what the agent read this turn (server.py /chat)
+├── jar_endpoint.py           # POST /jar-rebalance: jar proposals for screens with no chat (mounted by server.py)
+├── jar_checks.py             # deterministic side of that endpoint: shortfall, preferred plan, hard/soft checks
+├── llm.py                    # the chat model factory shared by /chat and /jar-rebalance
+├── prompts/                  # read per request by jar_endpoint.py (never .dockerignore these)
+│   ├── jar_cover.md          #   mode "cover": cover a short jar from other jars' balances
+│   └── jar_distribute.md     #   mode "distribute": share an amount into the jars' balances
 ├── pyproject.toml           # dependencies + packaging (includes data/customer_data.json)
 ├── .env                     # OPENAI_API_KEY / LANGSMITH_API_KEY (never committed)
 │
 ├── data/
 │   └── customer_data.json   # sample customer data, re-read into every session
 ├── skills/
-│   └── project/data-visualization/SKILL.md  # server.py's chart-on-demand skill (see docs/chart-visualization.md)
+│   └── project/
+│       ├── data-visualization/SKILL.md  # server.py's chart-on-demand skill (see docs/chart-visualization.md)
+│       ├── spending-jar/SKILL.md        # create_jar / edit_jar / moving a category (docs/spending-jar.md)
+│       ├── jar-rebalance/SKILL.md       # rebalance_jars in chat (docs/jar-rebalance.md)
+│       └── transfer-form/SKILL.md       # transfer_form (docs/transfer-form.md)
 ├── tools/
+│   ├── customer_data_tools.py  # get_jar_summary / get_categories / query_beneficiaries: live reads from the pfm backend
 │   └── memory_tools.py         # remember_preference/recall_preference — server.py's long-term memory tools (not used by agent.py)
 ├── middleware/
 │   ├── audit.py              # wrap_tool_call middleware that logs every tool call

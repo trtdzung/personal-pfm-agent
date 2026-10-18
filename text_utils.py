@@ -11,6 +11,9 @@ _FENCED_BLOCK_RE = re.compile(r"```[a-zA-Z0-9_-]*\s*\n?(.*?)\n?```", re.DOTALL)
 _FENCE_MARKER_RE = re.compile(r"```[a-zA-Z0-9_-]*")
 _BLANK_RUN_RE = re.compile(r"\n{3,}")
 _VALID_CHART_TYPES = {"bar", "line", "pie"}
+# The 10 default expense categories every pfm customer has. Not the whole story: a customer can also create
+# their own (id `c_<slug>`), so a category id is valid when it is a default OR looks like a custom one. That is a
+# SHAPE check; whether this customer really has it is checked from `get_categories` (ui_guard.py) and by pfm.
 _VALID_EXPENSE_CATEGORIES = {
     "housing",
     "utilities",
@@ -23,6 +26,13 @@ _VALID_EXPENSE_CATEGORIES = {
     "entertainment",
     "health",
 }
+
+
+_CUSTOM_CATEGORY_RE = re.compile(r"^c_[a-z0-9][a-z0-9_-]*$")
+
+
+def _is_valid_category_id(value: object) -> bool:
+    return isinstance(value, str) and (value in _VALID_EXPENSE_CATEGORIES or bool(_CUSTOM_CATEGORY_RE.match(value)))
 
 
 def _strip_think_tags(text: str) -> str:
@@ -179,7 +189,7 @@ def _is_valid_transfer_form(raw: dict) -> bool:
       instead of looking it up.
     - Case B, transfer to a saved beneficiary: `beneficiary_id` (must be an
       `id` from `query_beneficiaries()`, never a name/account the model
-      invented) + `category` (one of _VALID_EXPENSE_CATEGORIES) -- `pfm`
+      invented) + `category` (a valid category id, see _is_valid_category_id) -- `pfm`
       looks up the real name/account/bank itself from `beneficiary_id`, so
       this repo must never emit `recipient`/`account_number` for this case.
 
@@ -207,7 +217,7 @@ def _is_valid_transfer_form(raw: dict) -> bool:
         if "recipient" in raw or "account_number" in raw:
             return False
         category = raw.get("category")
-        if category not in _VALID_EXPENSE_CATEGORIES:
+        if not _is_valid_category_id(category):
             return False
         return True
 
@@ -224,14 +234,14 @@ def _is_valid_transfer_form(raw: dict) -> bool:
 
 
 def _is_valid_category_ids(value: object) -> bool:
-    """`category_ids` of a jar: a list (may be empty) of distinct expense categories.
+    """`category_ids` of a jar: a list (may be empty) of distinct category ids (see _is_valid_category_id).
 
     Distinct because pfm keeps one category in exactly one jar; a repeat inside one
     payload can only be a model slip.
     """
     return (
         isinstance(value, list)
-        and all(isinstance(c, str) and c in _VALID_EXPENSE_CATEGORIES for c in value)
+        and all(_is_valid_category_id(c) for c in value)
         and len(set(value)) == len(value)
     )
 
@@ -295,8 +305,8 @@ def _is_valid_rebalance_jars(raw: dict) -> bool:
     Only what can be checked without the customer's data: the shape, and that
     the moves really add up to the shortfall (the model does that arithmetic in
     text, so a wrong total is the likeliest failure). Whether each source has
-    that much to give, and that no `goal` jar is raided, is pfm's job -- it
-    re-checks every rebalance against the real numbers and drops what fails.
+    that much to give, is pfm's job -- it re-checks every rebalance against the
+    real numbers and drops what fails. (That the ids are real ones is checked by ui_guard.py.)
     """
     target = raw.get("target_jar_id")
     if not isinstance(target, str) or not target or target == _POOL_SOURCE_ID:
@@ -330,6 +340,33 @@ def _is_valid_rebalance_jars(raw: dict) -> bool:
     return isinstance(reason, str) and bool(reason)
 
 
+def _is_valid_distribute_amount(raw: dict) -> bool:
+    """Validate a parsed distribute_amount payload (raw["type"] == "distribute_amount"): share the "Chưa phân bổ"
+    (unallocated) money into several jars. The pool is the implicit source, so `allocations` only names the
+    receiving jars.
+
+    Shape only, like the other jar forms: positive amounts, each jar once, a real-looking jar id (never `"pool"`,
+    that is the source). Whether the total fits in the pool and whether the ids exist is checked from the summary
+    the agent read (ui_guard.py, jar_checks.py) and again by pfm.
+    """
+    allocations = raw.get("allocations")
+    if not isinstance(allocations, list) or not allocations:
+        return False
+    receivers: set[str] = set()
+    for allocation in allocations:
+        if not isinstance(allocation, dict):
+            return False
+        receiver = allocation.get("to_jar_id")
+        if not isinstance(receiver, str) or not receiver or receiver == _POOL_SOURCE_ID or receiver in receivers:
+            return False
+        receivers.add(receiver)
+        amount = allocation.get("amount")
+        if not _is_finite_number(amount) or amount <= 0:
+            return False
+    reason = raw.get("reason")
+    return isinstance(reason, str) and bool(reason)
+
+
 # Dispatch table: ui block "type" -> validator. Add an entry here (and a new
 # _is_valid_<type> function above) for each new widget type -- every type
 # shares the same ```ui-json fence and the same envelope shape
@@ -340,6 +377,7 @@ _UI_VALIDATORS = {
     "create_jar": _is_valid_create_jar,
     "edit_jar": _is_valid_edit_jar,
     "rebalance_jars": _is_valid_rebalance_jars,
+    "distribute_amount": _is_valid_distribute_amount,
 }
 
 
@@ -348,6 +386,11 @@ def _is_valid_ui(raw: object) -> bool:
         return False
     validator = _UI_VALIDATORS.get(raw.get("type"))
     return validator is not None and validator(raw)
+
+
+def is_valid_ui(raw: object) -> bool:
+    """Public form of the ui shape check, for code that builds a `ui` itself (jar_endpoint.py)."""
+    return _is_valid_ui(raw)
 
 
 def _find_json_objects(text: str) -> list[tuple[int, int, object]]:

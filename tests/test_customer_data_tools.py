@@ -3,8 +3,11 @@ from langchain_core.runnables.config import var_child_runnable_config
 
 from tools.customer_data_tools import (
     PFM_BASE_URL,
+    fetch_jar_summary,
+    get_categories,
     get_jar_summary,
     query_beneficiaries,
+    render_jar_summary,
 )
 
 
@@ -29,7 +32,6 @@ _JAR_SUMMARY = {
             "id": "food",
             "label": "Ăn uống",
             "categoryIds": ["dining", "groceries"],
-            "role": "spending",
             "budgetLimit": 4000000,
             "spent": 1622000,
             "remaining": 2378000,
@@ -50,7 +52,6 @@ _JAR_SUMMARY = {
             "id": "savings",
             "label": "Tiết kiệm",
             "categoryIds": [],
-            "role": "goal",
             "budgetLimit": None,
             "spent": 0,
             "remaining": None,
@@ -86,7 +87,7 @@ def test_get_jar_summary_lists_every_jar_with_the_endpoint_fields(monkeypatch):
     result = _invoke_with_actor(get_jar_summary, "CIF_0001")
     food = _summary_lines(result)["food"]
     assert "Ăn uống" in food
-    assert "role: spending" in food
+    assert "role" not in food  # pfm has no jar roles any more
     assert "dining" in food and "groceries" in food
     assert "budgetLimit: 4.000.000đ" in food
     assert "spent: 1.622.000đ" in food
@@ -114,7 +115,6 @@ def test_get_jar_summary_flags_an_over_limit_jar_and_keeps_its_negative_remainin
     lifestyle = _summary_lines(_invoke_with_actor(get_jar_summary, "CIF_0001"))["lifestyle"]
     assert "remaining: -400.000đ" in lifestyle
     assert "overLimit: có" in lifestyle
-    assert "role" not in lifestyle  # a jar without a role is left as the endpoint sent it
 
 
 def test_get_jar_summary_never_turns_null_into_zero(monkeypatch):
@@ -195,6 +195,126 @@ def test_get_jar_summary_treats_a_missing_endpoint_or_server_error_the_same_way(
         assert str(status) in result
 
 
+def test_get_jar_summary_ignores_a_stray_role_field_instead_of_teaching_the_model_about_roles(monkeypatch):
+    payload = {**_JAR_SUMMARY, "jars": [{**_JAR_SUMMARY["jars"][0], "role": "goal"}]}
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(payload))
+    result = _invoke_with_actor(get_jar_summary, "CIF_0001")
+    assert "role" not in result and "goal" not in result
+
+
+def _tool_call(name: str, args: dict | None = None) -> dict:
+    return {"type": "tool_call", "name": name, "args": args or {}, "id": "call-1"}
+
+
+def _invoke_as_tool_call(tool, actor_id: str, args: dict | None = None):
+    token = var_child_runnable_config.set({"configurable": {"actor_id": actor_id}})
+    try:
+        return tool.invoke(_tool_call(tool.name, args))
+    finally:
+        var_child_runnable_config.reset(token)
+
+
+def test_get_jar_summary_hands_the_raw_summary_to_the_server_as_the_tool_artifact(monkeypatch):
+    # server.py checks the ids in an emitted ui against the summary read THIS turn (ui_guard.py)
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY))
+    message = _invoke_as_tool_call(get_jar_summary, "CIF_0001")
+    assert message.artifact == _JAR_SUMMARY
+    assert "budgetLimit: 4.000.000đ" in message.content
+
+
+def test_get_jar_summary_artifact_is_empty_when_pfm_failed(monkeypatch):
+    def _raise(url, params=None, timeout=None):
+        raise httpx.ConnectError("boom", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _raise)
+    message = _invoke_as_tool_call(get_jar_summary, "CIF_0001")
+    assert message.artifact is None
+    assert "Không thể đọc thông tin hũ" in message.content
+
+
+# --- fetch_jar_summary / render_jar_summary: the tool's two halves, reused by POST /jar-rebalance ---------------
+
+
+def test_fetch_jar_summary_takes_the_customer_id_explicitly_and_returns_the_payload(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY, captured=captured)
+    )
+    assert fetch_jar_summary("CIF_0002", "2026-08") == _JAR_SUMMARY
+    assert captured["params"] == {"cif": "CIF_0002", "month": "2026-08"}
+
+
+def test_fetch_jar_summary_raises_instead_of_hiding_a_failure(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get", _fake_jar_summary_response({"error": "x"}, status_code=500)
+    )
+    try:
+        fetch_jar_summary("CIF_0001")
+    except httpx.HTTPError:
+        pass
+    else:
+        raise AssertionError("a failed read must raise, not return something that looks like an empty jar list")
+
+
+def test_render_jar_summary_is_what_the_tool_shows_the_model():
+    rendered = render_jar_summary(_JAR_SUMMARY)
+    assert "casaBalance: 16.000.000đ" in rendered and "budgetLimit: 4.000.000đ" in rendered
+
+
+# --- get_categories(): 1:1 with GET /api/categories?cif= ---------------------------------------------------
+
+_CATEGORIES = [
+    {"id": "dining", "label": "Ăn uống ngoài", "kind": "expense", "fixed": True},
+    {"id": "c_cafe", "label": "Cà phê", "kind": "expense", "fixed": False},
+    {"id": "transfer", "label": "Chuyển khoản", "kind": "transfer", "fixed": True},
+]
+
+
+def _fake_categories_response(payload, status_code=200, captured=None):
+    def _fake_get(url, params=None, timeout=None):
+        assert url == f"{PFM_BASE_URL}/api/categories"
+        if captured is not None:
+            captured["params"] = params
+        return httpx.Response(status_code, json=payload, request=httpx.Request("GET", url))
+
+    return _fake_get
+
+
+def test_get_categories_lists_the_customers_own_categories_with_their_kind(monkeypatch):
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_categories_response(_CATEGORIES))
+    result = _invoke_with_actor(get_categories, "CIF_0001")
+    assert "id: dining" in result and "Ăn uống ngoài" in result
+    assert "id: c_cafe" in result and "Cà phê" in result  # a category the customer created themselves
+    assert "kind: expense" in result
+    assert "id: transfer" in result and "kind: transfer" in result
+
+
+def test_get_categories_sends_the_actor_id_as_cif_and_never_asks_for_archived_ones(monkeypatch):
+    captured = {}
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_categories_response(_CATEGORIES, captured=captured))
+    _invoke_with_actor(get_categories, "CIF_0003")
+    assert captured["params"] == {"cif": "CIF_0003"}
+
+
+def test_get_categories_hands_the_raw_list_to_the_server_as_the_tool_artifact(monkeypatch):
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_categories_response(_CATEGORIES))
+    assert _invoke_as_tool_call(get_categories, "CIF_0001").artifact == _CATEGORIES
+
+
+def test_get_categories_customer_id_is_not_a_model_supplied_parameter():
+    assert set(get_categories.args) == set()
+
+
+def test_get_categories_tells_the_model_not_to_guess_when_pfm_fails(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_categories_response({"error": "x"}, status_code=500),
+    )
+    message = _invoke_as_tool_call(get_categories, "CIF_0001")
+    assert "Không thể đọc danh mục" in message.content and "đừng đoán" in message.content.lower()
+    assert message.artifact is None
+
+
 # --- query_beneficiaries(): real HTTP call to the pfm backend, mocked here ---
 
 
@@ -256,3 +376,8 @@ def test_query_beneficiaries_returns_friendly_message_on_network_error(monkeypat
     monkeypatch.setattr("tools.customer_data_tools.httpx.get", _raise)
     result = _invoke_with_actor(query_beneficiaries, "CIF_0001")
     assert "Không thể lấy danh sách người nhận" in result
+
+
+def test_the_tool_and_render_jar_summary_show_the_model_the_same_text(monkeypatch):
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY))
+    assert _invoke_with_actor(get_jar_summary, "CIF_0001") == render_jar_summary(_JAR_SUMMARY)

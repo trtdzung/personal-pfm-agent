@@ -112,10 +112,12 @@ chuyển tiền của `pfm`. Việc lấy tiền từ hũ khác để bù hũ th
      - **Không tìm thấy, nhưng khách hàng tự cho đủ số tài khoản + ngân
        hàng trong câu hỏi:** dùng schema cũ (`recipient`/`account_number`,
        không có `beneficiary_id`/`category`) với đúng thông tin đó.
-   - **Chọn `category`:** suy ra từ nội dung/mục đích chuyển tiền khách
-     hàng nêu (hoặc `note`), chọn đúng 1 trong 10 giá trị hợp lệ — xem bảng
-     gợi ý bên dưới. Nếu không rõ mục đích, chọn `shopping` (mặc định khi
-     không thể suy luận tốt hơn) thay vì bỏ trống `category`.
+   - **Chọn `category`:** gọi tool `get_categories` (danh mục của **chính khách**),
+     rồi suy ra từ nội dung/mục đích chuyển tiền khách hàng nêu (hoặc `note`) và
+     chọn đúng 1 `id` có `kind: "expense"` — xem bảng gợi ý bên dưới. Nếu không
+     rõ mục đích, chọn `shopping` (mặc định khi không thể suy luận tốt hơn) thay
+     vì bỏ trống `category`; nếu khách không có `shopping`, chọn 1 `id` khác trong
+     danh sách của họ.
 
 4. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời — đúng
    1 trong 2 dạng dưới, KHÔNG trộn field của cả 2 dạng:
@@ -137,10 +139,13 @@ chuyển tiền của `pfm`. Việc lấy tiền từ hũ khác để bù hũ th
 - `beneficiary_id` (bắt buộc): string — lấy nguyên `id` từ đúng entry
   `query_beneficiaries()` khớp tên. KHÔNG tự bịa/gõ số tài khoản hay tên
   ngân hàng — `pfm` tự tra từ `id` này.
-- `category` (bắt buộc): string — đúng 1 trong 10 giá trị:
-  `housing`, `utilities`, `subscriptions`, `insurance`, `dining`,
-  `transport`, `shopping`, `groceries`, `entertainment`, `health`. Gợi ý
-  suy luận từ nội dung chuyển: tiền ăn/nhà hàng/cà phê → `dining`; tiền
+- `category` (bắt buộc): string — `id` danh mục chi tiêu (`kind: "expense"`) của
+  **khách**, lấy từ `get_categories`; chép nguyên văn, không suy từ tên. **Không phải
+  danh sách cố định:** mỗi khách có 10 danh mục mặc định (`housing`, `utilities`,
+  `subscriptions`, `insurance`, `dining`, `transport`, `shopping`, `groceries`,
+  `entertainment`, `health`) **cộng** danh mục tự tạo (`c_<slug>`, ví dụ `c_cafe`) —
+  nếu khách có danh mục tự tạo hợp với mục đích hơn thì dùng nó; danh mục đã lưu
+  trữ không dùng. Gợi ý suy luận (cho 10 danh mục mặc định) từ nội dung chuyển: tiền ăn/nhà hàng/cà phê → `dining`; tiền
   nhà/thuê nhà → `housing`; điện/nước/internet/điện thoại → `utilities`;
   Netflix/Spotify/gói cước → `subscriptions`; bảo hiểm → `insurance`; xe
   ôm/taxi/xăng/gửi xe → `transport`; mua sắm/quần áo/đồ dùng → `shopping`;
@@ -302,7 +307,7 @@ Kèm khối:
 # SAI — thiếu category cho dạng beneficiary_id
 {"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount": 500000, "note": "an trua"}
 
-# SAI — category không thuộc 10 giá trị hợp lệ
+# SAI — category không phải id có trong get_categories của khách ("food" không tồn tại)
 {"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount": 500000, "note": "an trua", "category": "food"}
 ```
 

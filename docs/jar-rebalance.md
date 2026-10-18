@@ -7,7 +7,12 @@ Loại UI thứ 3 về hũ chi tiêu (cùng envelope `ui` với `chart`, `transf
 ## Khi nào agent trả `rebalance_jars`
 
 - **(a)** khách định chi 1 khoản lớn hơn số dư hũ (`spendable` không đủ), hoặc
-- **(b)** khách **đã chi vượt** hũ (`remaining` < 0, `overLimit: true`).
+- **(b)** hũ **cần bù**: khách đã tiêu quá số dư (`remaining` < 0).
+
+**Hai trục khác nhau:** số dư (`remaining`, `spendable`) và kế hoạch (`budgetLimit`, `overLimit` = đã chi vượt hạn mức khách
+đặt). Bù giữa hũ chỉ dịch chuyển số dư; **không** sửa `budgetLimit` và **không** xoá `overLimit`. Hũ "cần bù" là hũ có
+`remaining` < 0, không phải hũ có `overLimit`. Agent không nói "số dư âm" với khách (`pfm` hiện 0): nói "số dư 0, còn thiếu
+… chưa được bù", và chỉ nói "đã vượt hạn mức" riêng khi `overLimit` là `true`.
 
 Agent đề xuất **lấy phần thiếu từ hũ/tiền chưa phân bổ nào**. Form này **không** chuyển tiền thật và **không**
 đổi hạn mức (`budgetLimit`) — chỉ điều chỉnh số dư (`remaining`) giữa các hũ **trong tháng hiện tại**; sang
@@ -52,30 +57,29 @@ Agent chỉ trả `id` và con số — không trả lại tên hũ; hiện tên
 
 ## Quy tắc cứng
 
-`server.py` kiểm ngay khi nhận từ model, bỏ hẳn `ui` nếu vi phạm (chỉ kiểm được điều không cần dữ liệu ngoài):
+`server.py` kiểm ngay khi nhận từ model, bỏ hẳn `ui` nếu vi phạm:
 
 1. Đủ field, đúng kiểu; `moves` không rỗng, mỗi `amount` > 0.
 2. **Σ `moves[].amount` đúng bằng `shortfall`.**
 3. `from_jar_id` ≠ `target_jar_id`, không lặp nguồn; `target_jar_id` không phải `"pool"`.
+4. **Mọi id có thật:** `target_jar_id` và mọi `from_jar_id` (trừ `"pool"`) phải có trong `jar-summary` mà agent vừa đọc **ở lượt đó**
+   (`ui_guard.py`). Hũ vừa được đề xuất tạo ở lượt trước chưa được khách xác nhận nên chưa tồn tại; agent không bịa `id`.
 
 `pfm` **phải kiểm lại** với số thật khi khách xác nhận, và bỏ đề xuất nếu vi phạm bất kỳ điều nào:
 
-4. `shortfall` khớp số `pfm` tự tính từ hũ đích.
-5. Mỗi hũ cho chỉ cho tối đa `spendable` của nó (không đẩy hũ cho xuống âm); hũ `spendable: null` (chưa đặt
+5. `shortfall` khớp số `pfm` tự tính từ hũ đích.
+6. Mỗi hũ cho chỉ cho tối đa `spendable` của nó (không đẩy hũ cho xuống âm); hũ `spendable: null` (chưa đặt
    hạn mức) không được cho.
-6. Nguồn `"pool"` chỉ cho tối đa `max(0, unallocated)` (khác `allocationHeadroom`).
-7. Hũ `role: "goal"` (mục tiêu, được bảo vệ) **không được có trong `moves`**. Nếu chỉ hũ `goal` mới đủ bù, agent
-   nói trong `answer` để khách tự quyết và **không** trả `ui`.
+7. Nguồn `"pool"` chỉ cho tối đa `max(0, unallocated)` (khác `allocationHeadroom`).
 
 **Thứ tự ưu tiên agent theo** (cùng thứ tự engine `pfm` dùng; là gợi ý, không phải quy tắc cứng):
-`pool` → hũ `buffer` (dự phòng/tiết kiệm) → hũ `spending` (vắng `role` = `spending`) → hũ `essential` (thiết
-yếu, cuối cùng). Trong cùng nhóm, hũ có `spendable` lớn nhất lấy trước. Mỗi nguồn lấy `min(spendable, phần còn
-thiếu)` rồi dừng khi đủ.
+`pool` trước, sau đó các hũ còn lại theo `spendable` giảm dần (hũ nhiều tiền nhất lấy trước). Không hũ nào được bảo vệ — hũ
+không có vai trò. Mỗi nguồn lấy `min(spendable, phần còn thiếu)` rồi dừng khi đủ; nếu 1 nguồn đủ một mình thì chỉ dùng nguồn đó.
 
 ## Khi nào agent KHÔNG trả `ui`
 
-Chỉ có `answer`, `ui = null` khi: tổng các nguồn (trừ `goal`) vẫn không đủ bù; chỉ hũ `goal` mới đủ; đọc `jar-summary`
-lỗi hoặc số cần thiết là `null`; hũ đích không tồn tại hoặc chưa đặt hạn mức. Nhiều hũ cùng vượt hạn mức: agent
+Chỉ có `answer`, `ui = null` khi: tổng các nguồn vẫn không đủ bù; đọc `jar-summary` lỗi hoặc số cần thiết là `null`; hũ đích
+không có trong `jar-summary` (kể cả hũ vừa đề xuất tạo mà khách chưa xác nhận) hoặc chưa đặt hạn mức. Nhiều hũ cùng vượt hạn mức: agent
 chỉ xử lý **1 hũ mỗi lượt** (hũ `remaining` âm nhất trước) và nói trong `answer` còn hũ nào cần bù.
 
 ## Luồng UI gợi ý
@@ -96,7 +100,7 @@ Hũ Ăn uống (`food`) `remaining` 2.378.000đ; khách định chi 3.878.000đ 
 500.000đ lấy từ hũ Hưởng thụ (`lifestyle`, `spendable` 2.088.000đ) → `moves` như JSON ở trên. Sau khi áp dụng và chi:
 Ăn uống `remaining` = 2.378.000 − 3.878.000 + 1.500.000 = 0.
 
-Trường hợp (b), hũ đã chi vượt:
+Trường hợp (b), hũ cần bù (`remaining` = −400.000, khách chưa được bù):
 
 ```json
 {
@@ -104,6 +108,12 @@ Trường hợp (b), hũ đã chi vượt:
   "target_jar_id": "lifestyle",
   "shortfall": 400000,
   "moves": [{ "from_jar_id": "emergency", "amount": 400000 }],
-  "reason": "Hũ Hưởng thụ chi vượt 400.000đ; tiền chưa phân bổ hết, hũ Dự phòng còn 3.000.000đ nên lấy 400.000đ từ đó"
+  "reason": "Hũ Hưởng thụ còn thiếu 400.000đ chưa được bù; tiền chưa phân bổ hết, hũ Dự phòng còn 3.000.000đ nên lấy 400.000đ từ đó"
 }
 ```
+
+## Endpoint không cần chat
+
+Cùng bộ quy tắc bù này cũng được gọi trực tiếp, không qua chat, bằng `POST /jar-rebalance` (`mode: "cover"`), kèm loại `ui` mới
+`distribute_amount` (chia một số tiền khách nêu vào số dư các hũ, `mode: "distribute"`). Xem tài liệu riêng:
+[`docs/jar-rebalance-endpoint.md`](./jar-rebalance-endpoint.md).
