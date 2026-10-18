@@ -260,8 +260,8 @@ def chat_history(
         text, ui = extract_ui_block(text)
         if role == "assistant":
             text = strip_foreign_script(text)  # never rewrite what the user typed
-        if not text:
-            continue  # e.g. an AIMessage whose only content was a tool call
+        if not text and ui is None:
+            continue  # e.g. an AIMessage whose only content was a tool call -- nothing to show at all
 
         history.append(HistoryMessage(role=role, content=text, ui=ui))
 

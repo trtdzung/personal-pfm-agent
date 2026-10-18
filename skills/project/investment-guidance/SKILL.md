@@ -35,6 +35,12 @@ cổ phiếu, vàng...) và nêu **1 phương án ưu tiên** kèm lý do. Khôn
 
 ## Quy trình
 
+0. **Khách chủ động muốn được hỏi để nêu nhu cầu** (ví dụ "hỏi tôi các câu hỏi để biết nhu cầu đầu tư của
+   tôi") — đọc skill `clarify-options` (nhánh A2 — khảo sát sở thích) và hỏi bằng `clarify_options`
+   (khoảng số tiền, mục tiêu, khung thời gian, mức rủi ro), không hỏi bằng text tự do và không tự suy luận
+   vốn đề xuất ở bước 2. Chỉ áp dụng khi khách rõ ràng muốn được hỏi kiểu này; câu hỏi đầu tư bình thường
+   (đã nêu số tiền/mục tiêu, hoặc chỉ hỏi "nên đầu tư gì") vẫn theo quy trình tự suy luận ở bước 2 như cũ,
+   không dừng lại hỏi thêm.
 1. **Đọc dữ liệu khách** (đã có trong prompt; ngày hiện tại cũng có sẵn): thu nhập,
    chi tiêu trung bình 3 tháng → khoản dư/tháng, số dư tài khoản, dư nợ thẻ và lãi
    thẻ, quỹ dự phòng ≈ 3 tháng chi tiêu. Còn bao nhiêu tháng đến 31/12.

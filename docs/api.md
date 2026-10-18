@@ -166,7 +166,7 @@ thể trả ra, phân biệt bằng field `type` bên trong. **Frontend cần đ
 đọc `body.chart` sang `body.ui`, và luôn kiểm tra `ui.type` trước khi đọc
 các field còn lại.**
 
-`ui` là `null` ở hầu hết câu trả lời. Hiện có 6 loại `ui.type`:
+`ui` là `null` ở hầu hết câu trả lời. Hiện có 7 loại `ui.type`:
 
 - `"chart"` — biểu đồ cho câu hỏi phân tích/so sánh, xem
   [`docs/chart-visualization.md`](./chart-visualization.md).
@@ -180,6 +180,13 @@ các field còn lại.**
 - `"distribute_amount"` — đề xuất chia một số tiền khách nêu vào số dư nhiều hũ. **Không** đến từ
   `POST /chat` mà từ `POST /jar-rebalance` (bên dưới), xem
   [`docs/jar-rebalance-endpoint.md`](./jar-rebalance-endpoint.md).
+- `"clarify_options"` — hỏi lại bằng 2–4 nút bấm thay vì 1 câu mở, dùng chung cho mọi flow (không riêng
+  hũ), kể cả câu hỏi khảo sát sở thích (nhóm lựa chọn chuẩn, không cần dữ liệu thật của khách). `ui.questions`
+  là **mảng 1–4 câu hỏi độc lập** (thường chỉ 1). `answer` vẫn có nội dung — chỉ là 1 câu dẫn ngắn, không
+  lặp lại nội dung `ui.questions[].question`/`options`; frontend hiện cả `answer` (câu dẫn) và `ui.questions`
+  (câu hỏi + nút bấm). Khách trả lời xong hết các câu → frontend gộp các lựa chọn (mỗi câu 1 string trong
+  `options`) thành 1 tin nhắn `POST /chat`, nối nhau bằng `". "` theo đúng thứ tự câu hỏi — không có cơ chế
+  riêng. Xem [`docs/clarify-options.md`](./clarify-options.md).
 
 Sau này có thêm loại khác, frontend chỉ cần thêm nhánh xử lý theo `ui.type`
 mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.

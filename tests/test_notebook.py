@@ -60,6 +60,10 @@ def test_the_intro_lists_option_j_and_k():
     assert "Option J" in intro and "Option K" in intro
 
 
+def test_the_intro_lists_option_l():
+    assert "Option L" in _source(_cells()[0])
+
+
 def test_option_j_explains_both_modes_and_points_at_the_endpoint_doc():
     description, _ = _option_j()
     assert "POST /jar-rebalance" in description
@@ -107,3 +111,64 @@ def test_option_k_covers_the_category_move_the_rebalance_and_the_jar_that_does_n
     assert "rebalance_jars" in code and "check_cover" in code and "hard == []" in code
     # a jar proposed last turn is not confirmed, so it must not be editable: no ui
     assert "Liên thiên" in code and 'ui is None' in code
+
+
+# --- Option L: the clarify_options skill -----------------------------------------------------------------
+
+
+def test_option_l_explains_the_skill_and_the_no_backend_change_tap_mechanism():
+    description, _ = _option("L")
+    assert "clarify_options" in description and "clarify-options" in description
+    assert "budgetLimit" in description or "options" in description  # what the buttons are built from
+
+
+def test_option_l_uses_a_real_customer_and_real_tools_no_stubbing():
+    # per explicit user request: no mocked/stubbed pfm data -- a real persona, real get_jar_summary call
+    _, code = _option("L")
+    for banned in ("STUBBED_SUMMARY", "_fake_get", "customer_data_tools.httpx", "monkeypatch"):
+        assert banned not in code, banned
+    assert "CIF_0001" in code
+
+
+def test_option_l_invokes_the_agent_directly_like_the_earlier_options_not_the_endpoint():
+    _, code = _option("L")
+    assert "InMemorySaver" in code
+    assert "build_agent" in code and ".invoke(" in code  # same style as Options C-I
+    assert "TestClient" not in code and '"/chat"' not in code  # NOT the HTTP-endpoint style used in J/K
+
+
+def test_option_l_asks_a_vague_question_that_does_not_lexically_match_any_real_jar_name():
+    # CIF_0001's real jars (via pfm) are Thiết yếu/Ăn uống/Di chuyển/Hưởng thụ/Sức khỏe/Tiết kiệm -- none
+    # named/collide by name with each other, so a hint-free question has to be SEMANTICALLY vague (not a
+    # substring of any real label) for the model to have a genuine reason to ask at all.
+    _, code = _option("L")
+    assert "không rõ" not in code  # must not tip the model off
+    for real_label in ("Thiết yếu", "Ăn uống", "Di chuyển", "Hưởng thụ", "Sức khỏe"):
+        assert real_label not in code.split("question = ")[1].split("\n")[0]
+
+
+def test_option_l_shows_the_clarify_options_ui_then_simulates_tapping_a_button():
+    _, code = _option("L")
+    assert "extract_ui_block" in code and "extract_final_text" in code
+    assert "clarify_options" in code
+    assert "options" in code and "[0]" in code  # picks one of the returned options
+    assert code.count("config=config") >= 2 or code.count("config") >= 3  # same config/thread both turns
+
+
+def test_option_l_does_not_hard_assert_the_widget_always_fires():
+    # verified for real, twice: with no natural jar/card/beneficiary name collision in ANY demo persona,
+    # the model sometimes lists every jar in an open question instead of clarify_options, and even once
+    # leaked its own reasoning into the answer. A hard assert would make the notebook fail on an unlucky
+    # (but not wrong) real run.
+    _, code = _option("L")
+    assert "assert ui" not in code.replace(" ", "")
+
+
+def test_option_l_is_honest_about_the_real_ambiguity_it_relies_on():
+    # CIF_0001 really has 6 jars, one more than the schema's 4-option cap -- so a fully unscoped "which
+    # jar" question can't legally list all of them as buttons (the skill's own >4 rule forbids it). The
+    # cell states the amount up front and names a jar description that matches none of the 6 real labels,
+    # so the model must ask which real jar was meant, offering up to 4 -- not a stubbed collision.
+    description, _ = _option("L")
+    assert "CIF_0001" in description
+    assert "6" in description and "4" in description

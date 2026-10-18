@@ -129,7 +129,8 @@ Câu trả lời nêu rõ hũ nào mất danh mục và hạn mức không đổ
 ## Khi KHÔNG chèn khối `ui-json`, chỉ nói trong câu trả lời
 
 - `get_jar_summary` lỗi, hoặc số cần thiết là `null` — không đoán số.
-- `jar_id` khách nhắc không có trong kết quả — hỏi lại. Kể cả hũ vừa đề xuất tạo ở lượt trước: chưa được khách xác
+- `jar_id` khách nhắc không có trong kết quả — hỏi lại bằng text, hoặc bằng `clarify_options` (skill
+  `clarify-options`) nếu có 2–4 hũ thật tên gần giống khách vừa nói. Kể cả hũ vừa đề xuất tạo ở lượt trước: chưa được khách xác
   nhận thì chưa tồn tại; không bịa `id`.
 - Tên hũ mới trùng `label` hũ đang có (`create_jar`).
 - `allocationHeadroom` không đủ (tạo hũ mới hoặc tăng hạn mức).

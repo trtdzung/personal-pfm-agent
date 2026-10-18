@@ -1657,6 +1657,168 @@ bộ lọc nội dung phía **GreenNode/VNG Cloud MaaS** (hạ tầng ModelArts)
 - **Test:** `test_chat_endpoint_resumes_once_after_the_content_filter_and_succeeds` (agent giả lập, kiểm cuộc gọi thứ 2 có `input=None`), `test_chat_endpoint_returns_503_when_the_retry_is_rejected_too` (kiểm đúng 2 lần gọi, không lặp thêm), `test_chat_endpoint_gives_up_without_resuming_when_there_is_no_pending_task` (nhánh phòng hờ), `test_readme_mentions_the_content_filter_503`. 577 pass (497 khi không có `requirements.txt`).
 - **Còn lại:** vẫn có thể bị chặn cả 2 lần (khi đó khách mới phải tự gửi lại, hiếm hơn nhiều); chưa rõ mẫu nội dung nào hay kích hoạt bộ lọc để né trước bằng prompt; `jar_endpoint.py` (`POST /jar-rebalance`) vốn đã tự thử lại theo cách khác (gọi model mới kèm phản hồi lỗi, không dùng checkpoint vì không có thread) — không đổi gì ở đó.
 
+### 1.30. [Đã làm] Skill mới `clarify-options`: hỏi lại bằng nút bấm (2–4 lựa chọn) thay vì hỏi mở
+
+**Yêu cầu:** khi agent cần khách quyết định thay vì hỏi 1 câu mở, cho khách bấm chọn giữa vài phương án — giống cách `AskUserQuestion` hỏi lại trong chính phiên làm việc này. **Đã chọn phương án B** (loại `ui` mới dạng nút bấm, không phải text đánh số) sau khi hỏi lại người dùng.
+
+- **Loại `ui.type` mới `clarify_options`** `{options: [{id, label}, ...]}`, 2–4 phần tử, không có `reason`/`question` (câu hỏi nằm trong `answer`). Validator trong `text_utils.py` (`_is_valid_clarify_options`).
+  **Cách khách trả lời không cần đổi gì ở `/chat`:** khi bấm 1 nút, frontend gửi đúng `label` của nút đó làm **tin nhắn `/chat` bình thường** ở lượt sau, agent nhận như khách tự gõ — không có endpoint/field riêng.
+- **Skill mới `skills/project/clarify-options/SKILL.md`** — cross-cutting, không riêng flow nào. Nhấn mạnh đây là **phương án cuối cùng sau khi đã thử tự quyết định** (đối lại đúng rủi ro "hỏi quá nhiều" đã né được ở các skill khác — `transfer-form`'s tự chọn thẻ theo hạn gần nhất, `instructions.md` rule 1 "Không liệt kê mọi cách hiểu"): chỉ dùng khi thật sự còn ≥ 2 phương án hợp lý ngang nhau và có 2–4 phương án cụ thể dựa trên dữ liệu thật.
+- **Gắn vào chỗ "hỏi lại" đã có sẵn** (không đổi hành vi mặc định, chỉ thêm lựa chọn nút bấm khi phù hợp): `spending-jar`/`jar-rebalance` (hũ tên gần giống, không có trong `get_jar_summary`), `transfer-form` (nhiều thẻ cùng dư nợ mà `due_date` cũng gần bằng nhau — tie-break sau bước tự chọn theo hạn gần nhất, không đổi rule tự chọn hiện có). `instructions.md` thêm mục "Khi cần khách quyết định giữa vài phương án cụ thể".
+- **Doc:** `docs/clarify-options.md` mới (loại `ui` thứ 7), `docs/api.md` cập nhật danh sách; đã chép sang `pfm/agent_backend_docs/`.
+- **Chạy model thật (jar-summary giả lập 2 hũ tên gần giống "Ăn uống nhà"/"Ăn uống ngoài", qua `/chat`):**
+  - **Lỗi thật bắt được, đã sửa trong skill:** lần chạy đầu model tự thêm field `question` và đổi `id` → `value` (đúng thói quen tên field hay gặp ở nơi khác), bị validator bỏ toàn bộ khối → khách chỉ nhận câu hỏi mở bằng text, không có nút bấm. Thêm ví dụ SAI đúng lỗi này + nhấn mạnh "chỉ 2 field `id`/`label`" → chạy lại ra đúng schema.
+  - **Lỗi thật thứ hai, đã sửa trong skill:** sau khi mô phỏng khách bấm 1 nút (gửi đúng `label` làm tin nhắn lượt sau), model **bỏ qua** việc gọi lại `get_jar_summary` ở lượt đó (có lẽ vì số liệu đã có sẵn trong `label`), nên `ui_guard.py` bỏ khối `edit_jar` do "hũ đọc được không phải của lượt này" — khách thấy câu "xem lại rồi xác nhận nhé" nhưng **không có form**. Thêm luật rõ trong skill: "`label` không thay thế việc đọc lại dữ liệu", lượt khách bấm nút vẫn phải theo đúng quy tắc "việc đầu tiên là gọi lại tool" của skill đang dùng. Chạy lại: đúng `edit_jar` với `ui` không còn `null`.
+  - Xác nhận toàn luồng: hỏi mơ hồ → `clarify_options` đúng 2 hũ thật kèm số liệu thật → mô phỏng bấm nút đầu tiên → lượt sau ra đúng `edit_jar`.
+- **Notebook:** thêm **Option L** vào `notebooks/try_agent.ipynb` — gọi agent **trực tiếp** (`server.build_agent()` +
+  `agent.invoke()`, giống Option C–I) chứ không qua `TestClient`/`/chat` như J/K. Câu hỏi lượt 1 cố ý **bâng quơ**, không nói
+  "không rõ hũ nào" để khỏi mớm ý cho model.
+  **Cập nhật 2026-09-23 (theo yêu cầu người dùng "đừng mock dữ liệu nữa, để user gọi thật với user thật, cho phép dùng tool thật"):**
+  bỏ hẳn việc giả lập `httpx.get`/`get_jar_summary` — cell giờ dùng đúng khách **CIF_0001 thật** và gọi tool thật vào pfm. Kiểm tra
+  thật cả 3 persona demo (CIF_0001/0002/0003) qua pfm: **không ai có hũ/thẻ/người nhận trùng hoặc gần tên nhau** — nên không thể ép
+  `clarify_options` bằng dữ liệu thật hiện có. Câu hỏi đổi thành "Tăng hạn mức hũ **chi tiêu chung** của tôi thêm 200 nghìn giúp
+  tôi." — không khớp tên hũ thật nào của CIF_0001 (Thiết yếu/Ăn uống/Di chuyển/Hưởng thụ/Sức khỏe/Tiết kiệm), tạo mơ hồ thật thay vì
+  giả tên trùng. Lượt 2 vẫn mô phỏng bấm nút đầu tiên (gửi lại `label` làm tin nhắn, cùng `config`).
+  **Không assert cứng phải ra `clarify_options`:** chạy thật nhiều lần với dữ liệu/tool thật — có lúc ra đúng `clarify_options` (4 hũ
+  thật làm lựa chọn, đúng `id`/`label`), có lúc model liệt kê hết hũ bằng câu hỏi mở (hợp lý, vì đây không phải 1 collision tên
+  thật), một lần còn lộ luôn suy luận nội bộ vào câu trả lời (lỗi khác, `instructions.md` đã cấm, không phải lỗi của skill này) —
+  nên cell chỉ **in kết quả**, có nhánh else báo "chạy lại ô này để thử lại". Ngoài lề, cũng chạy thật CIF_0002 (2 hũ đang âm thật:
+  Thiết yếu −2.389.000, Hưởng thụ −1.002.000) với câu "Các hũ chi tiêu của tôi đang âm hết rồi, bù giúp tôi với." — agent **đúng
+  theo quy tắc "phương án cuối cùng"**: tự chọn hũ âm nhất (Thiết yếu) và trả `rebalance_jars`, không dùng `clarify_options` (không
+  có ambiguity thật ở đây, quy tắc jar-rebalance đã có sẵn cách quyết định).
+  `tests/test_notebook.py` thêm test kiểm không còn `STUBBED_SUMMARY`/`monkeypatch`/`customer_data_tools.httpx`, dùng đúng
+  `CIF_0001`, câu hỏi không trùng tên hũ thật nào, và markdown nêu rõ cả 3 persona demo không có collision tên thật. Đã chạy thật
+  cell cuối cùng (thoát mã 0). 613 pass (533 khi không có `requirements.txt`).
+  **Lỗi hỏng file phát hiện và sửa trong lúc làm việc này (không liên quan clarify-options):** ô code cuối notebook
+  (`Verification checklist`) bị dính một khối văn bản tiếng Việt (nội dung giống `docs/jar-rebalance-endpoint.md`) chèn lẫn vào
+  giữa từ một lần chỉnh sửa trước đó trong phiên này (khi thêm Option J/K/L, không phải lỗi có từ trước — bản commit `e419f87`
+  vẫn sạch), làm gãy cú pháp Python (`test_every_code_cell_is_valid_python` phát hiện ra). Đã cắt bỏ đúng đoạn dư, khôi phục lại
+  đúng nội dung gốc của ô đó (Row 10 print statement).
+- **Test:** `tests/test_text_utils.py` (validator, ~14 ca), `tests/test_clarify_options_skill.py` mới (skill + doc + wiring vào 3 skill khác + instructions.md, ví dụ ĐÚNG/SAI chạy qua đúng validator). 605 pass (525 khi không có `requirements.txt`).
+- **Còn lại:** `ui_guard.py` chưa kiểm riêng cho `clarify_options` (không cần, vì `id`/`label` không được agent đọc lại ở lượt sau — chỉ `label` text mới quay lại, dưới dạng tin nhắn thường); rủi ro "gọi lại data" ở trên là rủi ro chung của MỌI form sau 1 lượt `clarify_options`, không riêng `edit_jar` — đã cảnh báo chung trong skill nhưng chưa kiểm bằng test cho từng form khác (`create_jar`, `rebalance_jars`, `transfer_form`); dữ liệu thật của `CIF_0001` không có sẵn hũ/thẻ trùng tên nên phải giả lập `jar-summary` để test — chưa thử được với dữ liệu ambiguity tự nhiên qua pfm thật.
+
+### 1.31. [Đã làm] Siết skill `clarify-options` sau khi người dùng báo lỗi field `question`/`value` vẫn lặp lại
+
+**Người dùng gửi log thật (2026-09-23):** model vẫn hỏi lại đúng kiểu cũ (liệt kê hết hũ bằng text, `ui: None`) dù đã có ví dụ SAI cho lỗi field `question`/`value` từ mục 1.30. Kiểm tra lại bằng chạy thật: đúng, lỗi field
+này vẫn lặp lại — ví dụ SAI cũ đặt ở cuối skill, không đủ nổi bật.
+
+- **Hỏi người dùng chọn hướng:** giữ nguyên chấp nhận % lỗi (đúng triết lý "no auto-fixing" nhất quán của mọi validator trong repo — `_is_valid_chart`/`_is_valid_create_jar`... đều ghi rõ "pure validation only")
+  hay thêm bước tự sửa `question`/`value` ở `text_utils.py` (phá vỡ tính nhất quán đó). **Người dùng chọn: tối ưu skill và thử lại**, không đổi code validator.
+- **2 vòng siết, đo bằng chạy thật mỗi vòng (đúng câu hỏi trong log người dùng gửi: "Tăng hạn mức hũ chi tiêu của tôi thêm 200 nghìn giúp tôi."):**
+  - Vòng 1: chuyển quy tắc "chỉ 2 field `id`/`label`, không `question`/`value`" lên đầu mục "QUAN TRỌNG NHẤT" (trước đó chỉ có ở mục Schema và Ví dụ SAI, cả hai đều ở dưới). Chạy 4 lần → 3/4 đúng (trước đó quan sát được khoảng 2/3).
+  - Vòng 2: thêm ngay **ví dụ SAI y hệt lỗi hay gặp nhất** cạnh quy tắc (không chỉ mô tả bằng lời), và thêm bước **tự kiểm tra trước khi trả lời** ("đọc lại từng field... thấy field nào khác → sửa lại ngay"). Chạy 8 lần → **8/8 đúng**.
+- **Test:** `tests/test_clarify_options_skill.py` thêm 2 test giữ đúng vị trí (ở đầu skill) và nội dung (JSON sai y hệt lỗi thật + câu tự kiểm). 616 pass (536 khi không có `requirements.txt`).
+- **Còn lại:** mẫu 8 lần vẫn nhỏ, không chứng minh 100% — đây là hành vi model, không tất định tuyệt đối được kể cả với prompt tốt nhất; nếu sau này lại thấy lặp lỗi, quay lại 2 lựa chọn ở trên (đặc biệt lựa chọn tự sửa ở validator, người dùng đã từ chối lần này nhưng có thể đổi ý nếu skill vẫn không đủ).
+
+### 1.32. [Đã làm] Mở rộng `clarify-options` thành điểm quyết định chung cho MỌI lúc cần hỏi lại khách
+
+**Yêu cầu người dùng (2026-09-23):** "Tôi muốn là các câu hỏi mà cần agent hỏi lại user, thì sẽ gọi skill này" — không chỉ giới hạn ở 3 chỗ đã gắn trước đó (hũ gần tên, thẻ tie-break). (Ngắt giữa chừng việc tự sửa field
+`question`/`value` ở validator — xem "còn treo" bên dưới.)
+
+- **Rà toàn bộ chỗ "hỏi lại"** trong `instructions.md` và mọi skill (`grep`) trước khi sửa, để không bỏ sót: rule 1 "Không liệt kê mọi cách hiểu" (từ nhiều nghĩa), mục Ngân sách (chưa biết ngân sách), `transfer-form`
+  (người nhận không có trong danh bạ, cần số tài khoản tự do) — đều là ca **text tự do**, khác hẳn ca "2–4 phương án cụ thể" ban đầu.
+- **Skill `clarify-options` giờ có 2 nhánh rõ ràng:** (A) có 2–4 phương án cụ thể dựa trên dữ liệu thật → `clarify_options` (nút bấm, giữ nguyên nội dung/quy tắc cũ); (B) không có phương án cố định (từ nhiều nghĩa
+  đã có nghĩa phổ biến hơn hẳn, cần khách gõ tự do, hoặc > 4 phương án) → hỏi bằng text, **KHÔNG** trả khối `ui-json`. Cả 2 nhánh gộp lại thành 1 skill duy nhất, thay vì rải rác mỗi nơi tự viết hướng dẫn riêng.
+  Frontmatter `description` đổi từ "có 2–4 phương án" thành "BẤT KỲ khi nào cần hỏi lại" để skill được cân nhắc nạp rộng hơn.
+- **`instructions.md`:** đổi heading "Khi cần khách quyết định giữa vài phương án cụ thể" → "Khi cần hỏi lại khách một câu — luôn đọc skill `clarify-options` trước" (áp dụng cho mọi lượt cần hỏi lại, không riêng ca
+  hũ/thẻ); rule 1 và mục Ngân sách đều thêm câu trỏ tới nhánh (B) của skill này thay vì tự có logic riêng.
+- **Chạy thật kiểm không hồi quy (rủi ro chính của việc mở rộng: ép dùng nút bấm sai chỗ):**
+  - "Chuyển 200 nghìn cho Nam giúp tôi." (người nhận không có trong danh bạ) → đúng hỏi lại số tài khoản bằng text, `ui: None`, không bị ép `clarify_options`.
+  - "Số dư của tôi là bao nhiêu?" (từ nhiều nghĩa) → trả lời thẳng bằng nghĩa phổ biến (dư nợ), `ui: None`, không bị ép hỏi bằng nút.
+  - Ca nút bấm cũ (2 hũ tên gần giống) chạy lại 4 lần → 4/4 vẫn đúng `clarify_options`, đúng `id`/`label` — không hồi quy sau khi mở rộng phạm vi.
+- **Test:** `tests/test_clarify_options_skill.py` thêm 5 test (frontmatter mở rộng, nhánh (B) đủ nội dung, `instructions.md`/rule 1/mục Ngân sách trỏ đúng chỗ). 621 pass (541 khi không có `requirements.txt`).
+- **Còn treo — người dùng gửi log cho thấy lỗi field `question`/`value` (mục 1.31) vẫn tái diễn ngay trước yêu cầu mở rộng này; tôi đã bắt đầu giải thích phương án tự sửa ở `text_utils.py` (đổi `value`→`id`, bỏ
+  `question` thừa trước khi kiểm, chỉ áp dụng riêng cho `clarify_options`) thì bị ngắt để làm việc mở rộng phạm vi ở trên.** Chưa triển khai phương án tự sửa đó — việc mở rộng phạm vi không thay đổi gì ở chỗ field
+  sai khi nhánh (A) được chọn; cần hỏi lại người dùng có còn muốn làm hay không, vì đó là ngoại lệ cho nguyên tắc "no auto-fixing" nhất quán của mọi validator khác trong repo.
+
+### 1.33. [Đã làm] Đổi schema `clarify_options` — bỏ `id`/`label`, thêm `question` vào `ui`, `options` là mảng string
+
+**Người dùng gửi log thật cho thấy lỗi field vẫn lặp lại sau mọi lần siết skill (mục 1.31, 1.32).** Khi giải thích cơ chế bằng cách so sánh với `AskUserQuestion` (tool tôi dùng để hỏi lại người dùng trong chính phiên này),
+người dùng chỉ ra: "sao lại có id, label, nó phải là Câu hỏi, và câu trả lời mẫu" — đúng, `id` trong thiết kế cũ **không được đọc lại ở đâu cả** (chỉ nội dung `label` mới quay lại làm tin nhắn), nên nó chỉ là gánh nặng thừa
+khiến model liên tục cố đặt tên khác cho nó (`value`, `text`...). Và việc cấm `question` trong `ui` (bắt để trong `answer`) là quy tắc tôi tự đặt, không phải nhu cầu thật — model liên tục làm trái một cách nhất quán, tức
+là đang cho biết cấu trúc tự nhiên hơn của nó là `question` nằm cùng `options`.
+
+- **Schema mới:** `{"type": "clarify_options", "question": "...", "options": ["...", "..."]}` — bỏ hẳn `id`, `options` là **mảng string thuần** (không phải mảng object), `question` là field bắt buộc trong chính khối `ui`.
+- **`answer` bị `server.py` tự xoá thành `""`** bất cứ khi nào `ui.type == "clarify_options"` hợp lệ (kể cả khi model lỡ viết câu dẫn ngoài khối JSON) — quyết định của người dùng (phương án (a) trong 2 lựa chọn được hỏi):
+  `ui.question` là nơi duy nhất chứa câu hỏi, giống hệt cách `AskUserQuestion` không lặp câu hỏi ở đâu khác. Đây là quy tắc **trình bày** (không phải "tự sửa dữ liệu sai" như đề xuất bị từ chối ở mục 1.31) — không đụng gì tới
+  nội dung `ui`, chỉ xoá field `answer` không cần dùng nữa.
+- **Bắt được thêm 1 lỗi khi sửa:** `/chat/history` đang bỏ qua hẳn tin nhắn có `content` rỗng (`if not text: continue`) — với schema mới, MỌI lượt `clarify_options` sạch đều có `content` rỗng, nên sẽ **mất trắng cả câu hỏi
+  lẫn nút bấm** khỏi lịch sử nếu không sửa. Đổi điều kiện thành `if not text and ui is None: continue`; gộp logic xoá `answer` thành 1 hàm dùng chung `_clear_answer_for_clarify_options()` cho cả `/chat` và `/chat/history`.
+- **Viết lại toàn bộ:** `text_utils._is_valid_clarify_options` (schema mới), `skills/project/clarify-options/SKILL.md` (ví dụ SAI mới là lỗi thật hay gặp — bọc lựa chọn thành object thay vì string thuần), `docs/clarify-options.md`
+  (nêu rõ đặc điểm riêng: câu hỏi nằm trong `ui`, `answer` luôn rỗng), `docs/api.md`, Option L trong `notebooks/try_agent.ipynb`.
+- **Chạy thật xác nhận:** 7/7 lần gần đây ra đúng schema mới (`question`+`options` string thuần, không lệch field); chạy đủ 2 lượt (hỏi mơ hồ → `clarify_options` đúng → mô phỏng bấm nút → `edit_jar` đúng `jar_id`, agent có
+  gọi lại `get_jar_summary` ở lượt bấm nút, không tin số có sẵn trong lựa chọn).
+- **Test:** viết lại toàn bộ test schema cũ trong `tests/test_text_utils.py` và `tests/test_clarify_options_skill.py`; thêm test mới trong `tests/test_server.py` (`answer` bị xoá khi hợp lệ, giữ nguyên khi `ui` không hợp lệ,
+  `/chat/history` không bỏ sót lượt `content` rỗng). 625 pass (542 khi không có `requirements.txt`).
+- **Còn lại:** đây là thay đổi phá vỡ hợp đồng cũ (`id`/`label` → `question`/`options` string) — pfm nếu đã bắt đầu làm UI theo schema cũ (mục 1.30) cần sửa lại; đã chép `api.md`/`clarify-options.md` sang `pfm/agent_backend_docs/`.
+  Mẫu 7 lần vẫn nhỏ — như mọi lần trước, không chứng minh 100%, chỉ là tín hiệu tích cực rõ rệt hơn nhiều so với schema cũ (từng thấy sai tới 1/4–1/3 lần).
+
+### 1.34. [Đã làm] `clarify_options` hỗ trợ nhiều câu hỏi độc lập trong 1 lượt — `questions` là mảng
+
+**Người dùng hỏi:** "bạn có nhiều câu hỏi không hay chỉ có 1 Question? Thông thường tôi thấy 1 lượt hỏi Claude hỏi tôi nhiều câu hỏi, mỗi câu hỏi có các options cho tôi chọn" — đúng, `AskUserQuestion` (tool tôi dùng để
+hỏi lại người dùng) nhận `questions` là **mảng tối đa 4 câu**, mỗi câu có `options` riêng. Bản `clarify_options` trước đó (mục 1.33) chỉ có đúng 1 câu hỏi mỗi lượt. Hỏi lại người dùng có tình huống thật cần nhiều câu
+không — trả lời "Có".
+
+- **Schema v3:** `{"type": "clarify_options", "questions": [{"question": "...", "options": ["...", "..."]}]}` — luôn dùng dạng mảng (kể cả chỉ 1 câu hỏi, để chỉ có 1 schema duy nhất), 1–4 phần tử, mỗi phần tử `options`
+  vẫn 2–4 string thuần (không đổi so với v2, chỉ khác chỗ chứa: trong từng phần tử của `questions` thay vì ở cấp ngoài).
+- **Cơ chế trả lời khi có > 1 câu hỏi (điểm khó nhất):** `/chat` chỉ nhận text nên khách phải trả lời **hết** các câu trước, frontend mới **gộp** các lựa chọn đã chọn thành **1 tin nhắn**, nối theo đúng thứ tự câu hỏi
+  trong `questions`, cách nhau bằng `". "`. Model đọc lại tin nhắn gộp ở lượt sau, dựa vào chính các câu hỏi mình vừa hỏi (còn trong lịch sử hội thoại) để hiểu đúng phần nào trả lời câu nào.
+- **Chạy thật xác nhận (dùng đúng dữ liệu thật CIF_0001, không giả lập):** câu "Tăng hạn mức hũ chi tiêu của tôi giúp tôi." (không nói hũ nào, không nói số tiền — 2 điều chưa biết, độc lập nhau) → 3/3 lần ra đúng 2 câu hỏi
+  độc lập ("hũ nào" + "bao nhiêu"), đúng 4 hũ thật + 3 mức tiền làm lựa chọn. Mô phỏng gộp trả lời (chọn hũ Ăn uống + 1.000.000đ, gộp thành "Hũ Ăn uống (hạn mức 4.000.000đ). 1.000.000đ.") → lượt sau ra đúng `edit_jar`
+  với đúng `jar_id: "food"` và đúng `allocation_amount: 5000000` (= 4.000.000 + 1.000.000) — model đọc đúng cả 2 phần của câu trả lời gộp.
+- **Viết lại toàn bộ** cho schema v3: `text_utils._is_valid_clarify_options` (+ `_is_valid_clarify_question` cho từng phần tử), `skills/project/clarify-options/SKILL.md` (thêm mục "Khi nào hỏi nhiều câu" — chỉ khi các
+  quyết định thật sự độc lập và đều cần thiết, không hỏi thêm câu phụ), `docs/clarify-options.md`, `docs/api.md`, `tests/test_server.py` (2 fixture còn dùng schema v2), Option L trong `notebooks/try_agent.ipynb` (đổi hẳn
+  kịch bản: không cần giả lập tên trùng nữa, chỉ cần để trống cả tên hũ lẫn số tiền là đủ tạo 2 câu hỏi độc lập thật).
+- **Test:** viết lại toàn bộ test schema trong `tests/test_text_utils.py` và phần lớn `tests/test_clarify_options_skill.py`, cập nhật `tests/test_notebook.py`. 630 pass (547 khi không có `requirements.txt`).
+- **Còn lại:** thay đổi phá vỡ hợp đồng lần thứ 2 liên tiếp (`question`+`options` cấp ngoài → `questions` mảng) — đã chép `api.md`/`clarify-options.md` sang `pfm/agent_backend_docs/`; nếu bên pfm đã làm UI theo schema v2
+  (mục 1.33) cần sửa lại theo v3. Chưa kiểm cách UI thật sự hiện 2 câu hỏi cùng lúc (tuần tự hay cùng màn hình) — để pfm tự quyết theo UX, doc chỉ nói "khách trả lời hết trước khi gửi".
+
+### 1.35. [Đã làm] Sửa kịch bản Option L (notebook) để `clarify_options` ra được thật, không phải chạy lại nhiều lần
+
+**Người dùng:** "tôi muốn option L ra được đâu clarify" rồi sửa lại hướng: "Không phải tăng bao nhiêu tiền, ví dụ câu hỏi 'Tăng hạn mức hũ của tôi giúp tôi' thì phải hỏi lại, đưa các option về hũ" — tức là quan tâm việc
+hỏi lại **hũ nào** ra nút bấm ổn định, không phải việc hỏi thêm số tiền.
+
+- **Vì sao kịch bản cũ (mục 1.34, để trống cả hũ lẫn số tiền) không ổn định:** `CIF_0001` có **6 hũ thật**
+  (Thiết yếu/Ăn uống/Di chuyển/Hưởng thụ/Sức khỏe/Tiết kiệm) — nhiều hơn giới hạn 4 phương án của schema.
+  Skill `clarify-options` tự nó đã cấm liệt kê > 4 phương án cho 1 câu hỏi (nhánh B). Nên khi hỏi "hũ nào"
+  hoàn toàn không định hướng trên 6 hũ, model **đúng theo skill** phải chuyển sang hỏi bằng text thay vì
+  nút bấm — lần chạy fallback trước đó không phải lỗi, mà là skill hoạt động đúng.
+- **Sửa câu hỏi trong Option L:** nêu sẵn số tiền ("...lên 300.000đ giúp tôi"), và mô tả hũ bằng cụm không
+  khớp chữ với bất kỳ 1 trong 6 tên hũ thật ("hũ chi tiêu hàng ngày") — không phải giả lập dữ liệu, chỉ là
+  cách khách nói không khớp tên hũ thật nào. Model không tìm thấy hũ tên đó nên buộc phải hỏi lại **đúng hũ
+  nào trong số hũ thật**, tự giới hạn còn ≤ 4 hũ theo đúng giới hạn schema.
+- **Chạy thật xác nhận:** 5/5 lần cho ra `clarify_options` sạch — đúng 1 câu hỏi, đúng 4 hũ thật (tên +
+  `budgetLimit` thật) làm lựa chọn (bộ 4 hũ được chọn có khác nhau giữa các lần, nhưng luôn ≤ 4 và luôn là
+  hũ thật). Chạy full 2 lượt (hỏi → bấm hũ đầu tiên) cho ra đúng `edit_jar` với `jar_id: essentials`,
+  `allocation_amount: 8300000` (= 8.000.000 hạn mức hiện tại + 300.000 khách yêu cầu).
+- **File sửa:** `notebooks/try_agent.ipynb` (Option L — markdown + code cell, viết lại hoàn toàn theo kịch
+  bản 1 câu hỏi này), `tests/test_notebook.py` (2 test cập nhật theo thiết kế mới: không còn đòi multi-
+  question, đòi giải thích rõ ràng buộc "6 hũ thật > 4 phương án" làm lý do chọn kịch bản).
+- **Không đổi:** schema `clarify_options` (mục 1.34) vẫn là mảng `questions` — Option L chỉ dùng đúng 1
+  phần tử trong mảng đó, khả năng hỏi nhiều câu vẫn còn nguyên cho các tình huống khác (ví dụ giữ ví dụ 2
+  câu hỏi trong `SKILL.md`/`docs/clarify-options.md`).
+- **Test:** 630 pass.
+
+### 1.36. [Đã làm] `clarify_options` mở rộng nhánh (A2) — dùng được cho câu hỏi khảo sát sở thích, không chỉ phân biệt thực thể thật
+
+**Người dùng thử:** "Hỏi tôi các câu hỏi để biết nhu cầu đầu tư của tôi." → model trả lời bằng text liệt kê 4 câu hỏi (số tiền, mục tiêu, thời hạn, mức rủi ro), `ui: None` — đúng theo skill CŨ, vì nhánh (A) khi đó chỉ
+cho phép lựa chọn là **dữ liệu thật của khách** (tên hũ/thẻ/người nhận có thật), còn "Không dùng skill này để" liệt kê thẳng số tiền/mục tiêu là ví dụ phải hỏi tự do. Người dùng: "tôi muốn câu hỏi này sử dụng clarify để
+agent trả ra các option, hãy xem lại skill" — hỏi lại phạm vi mở rộng, người dùng chọn "Có, mở rộng cho mọi câu khảo sát sở thích" (không chỉ riêng đầu tư) và "khoảng số tiền cũng đưa option" (không cần dựa số dư thật).
+
+- **Nhánh mới (A2)** trong `skills/project/clarify-options/SKILL.md`, thêm cạnh (A1) (thực thể thật) và (B) (text tự do): dùng khi khách chủ động muốn được hỏi để nêu sở thích/nhu cầu — lựa chọn là **nhóm phân loại
+  chuẩn, hợp lý** (mức rủi ro: an toàn/cân bằng/rủi ro cao; khung thời gian: <6 tháng/6–12 tháng/>1 năm; khoảng số tiền: <10tr/10–50tr/50–200tr/>200tr; mục tiêu: cụ thể/dài hạn/bảo toàn vốn) — KHÔNG cần và KHÔNG
+  nên giả là dữ liệu thật riêng của khách (khác hẳn A1). Rõ ràng phân biệt với (B)'s "số tiền cụ thể" (số tiền CHÍNH XÁC cho 1 hành động thật, ví dụ số tiền chuyển khoản — vẫn phải hỏi tự do) vs (A2)'s "khoảng số
+  tiền" (khách tự xếp mình vào 1 mức, chưa phải số chính xác).
+- **Ràng buộc quan trọng:** (A2) không được dùng để né việc 1 skill đã có quy tắc tự quyết định từ dữ liệu thật (ví dụ `investment-guidance` tự suy vốn đề xuất = 50% số dư khi khách không nêu số tiền) — chỉ dùng khi
+  khách CHỦ ĐỘNG muốn được hỏi kiểu khảo sát, không phải mặc định cho mọi câu hỏi đầu tư.
+- **Wiring:** `investment-guidance/SKILL.md` thêm bước 0 trỏ sang `clarify-options` (A2) đúng cho trường hợp "khách chủ động muốn được hỏi"; các câu đầu tư bình thường (đã nêu số tiền/mục tiêu, hoặc chỉ hỏi "nên đầu
+  tư gì") vẫn theo quy trình tự suy luận cũ ở bước 2, không bị ảnh hưởng.
+- **Chạy thật xác nhận:** 4/4 lần cho đúng câu hỏi gốc ra `clarify_options` sạch — đúng 4 câu hỏi độc lập (số tiền/mục tiêu/thời hạn/rủi ro), đúng các nhóm lựa chọn chuẩn đã thiết kế, khớp bit-for-bit với ví dụ
+  trong skill ở cả 4/4 lần (model chép đúng ví dụ, không lệch).
+- **File sửa:** `skills/project/clarify-options/SKILL.md` (frontmatter description, nhánh A2 mới, đổi tên (A)→(A1), sửa "PHẢI" #3 và "KHÔNG ĐƯỢC" cho phép nhóm chuẩn, thêm ví dụ ĐÚNG 4-câu-hỏi), `skills/project/
+  investment-guidance/SKILL.md` (bước 0 mới), `docs/clarify-options.md` (2 trường hợp dùng + ví dụ), `tests/test_clarify_options_skill.py` (5 test mới). 634 pass.
+- **Chưa làm:** chưa đồng bộ lại `docs/clarify-options.md` sang `pfm/agent_backend_docs/` cho lần đổi này (chỉ thêm mô tả, không đổi schema — có thể đồng bộ sau cùng các thay đổi khác).
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

@@ -49,6 +49,13 @@ Thông tin của **từng hũ** trong 1 tháng, do chính engine của `pfm` tí
 đọc được **giống hệt số khách thấy trên màn Tổng quan / Ngân sách**, Agent không cần
 tự cộng giao dịch.
 
+> ⚠️ **Thay đổi phá vỡ tương thích (2026-09-23):** response này **không còn field
+> `casaBalance`** — đã tách sang endpoint riêng `GET /api/account-summary?cif=` (mục 2).
+> Code Agent đang đọc `summary.get("casaBalance")` từ `jar-summary`
+> (`tools/customer_data_tools.py`, hàm `render_jar_summary`) sẽ nhận `None`/thiếu field
+> thay vì số thật — không lỗi, nhưng model sẽ nghĩ CASA "chưa biết". Agent team cần gọi
+> thêm `GET /api/account-summary?cif=` để lấy lại số này.
+
 **Query param:** `cif` (bắt buộc); `month` (tuỳ chọn, dạng `YYYY-MM`, mặc định là
 tháng hiện tại của demo). Thiếu `cif` hoặc `month` sai định dạng → `422`.
 
@@ -57,7 +64,6 @@ tháng hiện tại của demo). Thiếu `cif` hoặc `month` sai định dạng
 ```json
 {
   "month": "2026-09",
-  "casaBalance": 18000000,
   "unallocated": 13044000,
   "allocationHeadroom": 1000000,
   "jars": [
@@ -103,9 +109,12 @@ tháng hiện tại của demo). Thiếu `cif` hoặc `month` sai định dạng
 
 | Field | Ý nghĩa |
 |---|---|
-| `casaBalance` | tiền thật trong tài khoản thanh toán (`null` nếu không có tài khoản thanh toán) |
-| `unallocated` | **"Chưa phân bổ"** = `casaBalance − Σ spendable`. Là nguồn `"pool"` khi chia tiền giữa hũ (B4). Có thể âm |
-| `allocationHeadroom` | **"Chờ phân bổ"** = `casaBalance − Σ budgetLimit`. Là phần hạn mức **còn được đặt thêm**; đây đúng là trần server kiểm khi tạo/sửa hũ (B2, B3). **Âm = tổng hạn mức đã vượt CASA** → không tăng thêm hạn mức được (ví dụ trên: +1.000.000, còn chỗ đặt thêm tối đa 1.000.000) |
+| `unallocated` | **"Chưa phân bổ"** = CASA − Σ `spendable`. Là nguồn `"pool"` khi chia tiền giữa hũ (B4). Có thể âm |
+| `allocationHeadroom` | **"Chờ phân bổ"** = CASA − Σ `budgetLimit`. Là phần hạn mức **còn được đặt thêm**; đây đúng là trần server kiểm khi tạo/sửa hũ (B2, B3). **Âm = tổng hạn mức đã vượt CASA** → không tăng thêm hạn mức được (ví dụ trên: +1.000.000, còn chỗ đặt thêm tối đa 1.000.000) |
+
+Cả hai đều tính từ CASA (tiền thật trong tài khoản thanh toán) nội bộ — muốn đọc riêng số
+CASA, gọi `GET /api/account-summary?cif=` (mục 2). `unallocated`/`allocationHeadroom` vẫn
+`null` khi khách không có tài khoản thanh toán, dù `casaBalance` không còn nằm trong response này.
 
 **Về "số dư hiện tại" của hũ:** đây là số **tính ra**, không có trường nào để ghi
 trực tiếp. Muốn tăng số dư hũ có 2 cách, tương ứng 2 form khác nhau:
@@ -127,17 +136,32 @@ Các số tiền `null` nghĩa là **chưa biết** — đừng coi là 0. `500`
 
 ## 2. Endpoint khác (tham khảo — không bắt buộc cho form hũ)
 
+Agent hiện thực sự gọi `jar-summary` (Phần 1), `categories` và `beneficiaries` dưới đây
+(`tools/customer_data_tools.py`) — **cần gọi thêm `account-summary`** để lấy lại
+`casaBalance` (xem cảnh báo đầu Phần 1). Bảng này bớt các endpoint đọc dữ liệu thô mà
+Agent không tự gọi (`/api/jars`, `/api/accounts`, `/api/transactions`,
+`/api/manual-transactions`, `/api/corrections`) — `jar-summary` đã gộp sẵn các con số cần
+cho form hũ, và `/api/transactions-full` dưới đây đã gộp sẵn 3 endpoint giao dịch thô đó
+cho trường hợp cần liệt kê từng giao dịch.
+
 | Endpoint | Dùng để |
 |---|---|
-| `GET /api/jars?cif=` | cấu hình hũ thô (`id`, `label`, `categoryIds`, `budgetLimit`) — `jar-summary` đã bao gồm |
 | `GET /api/beneficiaries?cif=` | danh sách người nhận đã lưu — cần cho `transfer_form` (B1) |
-| `GET /api/accounts?cif=` | tài khoản; CASA = Σ `availableBalance` của `type: "current"` |
-| `GET /api/transactions?cif=&from=&to=` | giao dịch ngân hàng (chỉ đọc) |
-| `GET /api/manual-transactions?cif=` | giao dịch tự khai báo + các dòng bù giữa hũ (`categoryId: "dieu-chinh-hu"`) |
-| `GET /api/corrections?cif=` | nhãn danh mục do khách sửa đè lên giao dịch |
 | `GET /api/categories?cif=` | danh mục chi tiêu **của khách** (khách có thể tự thêm/đổi tên/lưu trữ) — cần `cif` |
+| `GET /api/account-summary?cif=` | `{ casaBalance: number \| null }` — số dư tài khoản thanh toán, **không kèm hũ**. **Thay cho `casaBalance` đã bỏ khỏi `jar-summary`** — Agent cần gọi endpoint này để có lại số CASA |
+| `GET /api/transactions-full?cif=&from=&to=` | **toàn bộ giao dịch** (ngân hàng + tự khai báo) với `categoryId` **đã gộp corrections** — xem chi tiết ngay dưới; **chưa được Agent gọi**, thêm sẵn cho nhu cầu liệt kê giao dịch sau này |
 
-Tất cả đều cần `cif` và trả `422` khi thiếu.
+Cả 4 đều cần `cif` và trả `422` khi thiếu.
+
+`GET /api/transactions-full?cif=&from=&to=` trả `(Transaction & { hidden: boolean })[]`,
+mới nhất trước — gộp sẵn `/api/transactions` + `/api/manual-transactions` rồi áp
+`/api/corrections` đè lên `categoryId`, đúng logic `jar-summary` dùng để tính `spent`. Dùng
+endpoint này khi cần liệt kê **từng giao dịch** kèm category đúng như khách đang thấy trên
+app (ví dụ trả lời "tháng này tôi chi gì ở Ăn uống"); `jar-summary` chỉ có số tổng theo hũ,
+không có danh sách. `from`/`to` là khoảng ISO đóng hai đầu, cùng quy ước `/api/transactions`.
+Giao dịch bị khách ẩn khỏi báo cáo **vẫn có trong danh sách**, chỉ đánh dấu `hidden: true`
+(khác `jar-summary`, nơi các dòng này bị loại khỏi số tổng) — bỏ qua các dòng `hidden: true`
+nếu muốn khớp đúng số `jar-summary` đã tính.
 
 `GET /api/beneficiaries?cif=` trả `Beneficiary[]`:
 
@@ -370,45 +394,35 @@ Hưởng thụ (`spendable` 1.296.000) → `moves` như JSON trên. Sau khi
 (hết tiền nhưng **không âm**), còn `overLimit` vẫn `true` vì `spent` 5.500.000 > hạn mức
 4.000.000 — bù giữa hũ không xoá việc khách đã chi vượt kế hoạch.
 
-### `distribute_amount` — gợi ý chia "Chờ phân bổ" (sheet "Chia ngay")
+### Dùng trong luồng Chuyển tiền (khi bấm "Tiếp tục" mà hũ nguồn không đủ)
 
-Không đi qua chat. `pfm` gọi endpoint riêng của Agent `POST /jar-rebalance`, chế độ
-`distribute` (không thread, không nhớ gì; xem `docs/jar-rebalance-endpoint.md` bên repo
-Agent) qua proxy `POST /api/agent/jar-rebalance`:
-
-```json
-{ "user_id": "CIF_0001", "mode": "distribute", "amount": 1000000 }
-```
-
-Ở màn Ngân sách, thẻ **"Chờ phân bổ"** (`CASA − Σ budgetLimit`) → **"Chia ngay"** mở sheet
-"Đặt hạn mức cho hũ". Trong sheet có nút **"Gợi ý cách chia từ M-Your"**: `pfm` gửi
-`amount` = số "Chờ phân bổ" hiện tại (nút chỉ hiện khi số này > 0 và có ít nhất 1 hũ đã
-có hạn mức). Agent trả (~20 s, đã đo 20 s):
+Không phải form mới — vẫn là `rebalance_jars` ở trên, nhưng **không đi qua chat**: `pfm`
+gọi endpoint riêng của Agent `POST /jar-rebalance` (chế độ `cover`, không thread, không nhớ
+gì; xem `docs/jar-rebalance-endpoint.md` bên repo Agent) qua proxy
+`POST /api/agent/jar-rebalance`:
 
 ```json
-{
-  "type": "distribute_amount",
-  "allocations": [
-    { "to_jar_id": "essentials", "amount": 51000 },
-    { "to_jar_id": "transport", "amount": 400000 },
-    { "to_jar_id": "food", "amount": 300000 },
-    { "to_jar_id": "lifestyle", "amount": 249000 }
-  ],
-  "reason": "Thiết yếu còn 51.000đ nên bù trước; Di chuyển và Ăn uống chi nhiều nên rót tiếp."
-}
+{ "user_id": "CIF_0001", "mode": "cover", "target_jar_id": "food", "spend_amount": 14000000 }
 ```
 
-`allocations[].amount` là số **cộng thêm** cho hũ đó. `pfm` đổi thành hạn mức mới của từng
-hũ (= hạn mức hiện tại + phần thêm; hũ không có trong `allocations` giữ nguyên hạn mức) và
-**chỉ điền sẵn vào form**; khách xem, sửa, rồi tự bấm "Lưu hạn mức" (chặn trần CASA của
-server vẫn áp dụng). `pfm` bỏ cả đề xuất (chỉ hiện lời nhắn) khi: `to_jar_id` không có
-trong cấu hình hũ hiện tại, hũ đó chưa có hạn mức (chỉ hũ đã có hạn mức mới nhận được),
-lặp hũ, `"pool"`, amount không nguyên dương, hoặc Σ vượt số "Chờ phân bổ". Không có `ui`
-(ví dụ chưa hũ nào có hạn mức) → hiện `answer` của Agent.
+Ở màn Chuyển tiền, khi khách chọn một hũ làm nguồn, nhập số tiền lớn hơn `spendable` của
+hũ đó rồi bấm "Tiếp tục", `pfm` mở popup "Hũ chưa đủ tiền" (phần thiếu do engine tính).
+"Chưa phân bổ" luôn được lấy trước: nếu pool đủ bù hết phần thiếu thì cách rót của engine
+(chỉ pool) chính là gợi ý và **không gọi Agent**. Chỉ khi phần thiếu **vượt quá pool**, `pfm`
+gọi endpoint trên với `spend_amount` = số khách nhập để Agent chia phần còn lại từ các hũ khác. Agent tự tính `shortfall` và trả
+`rebalance_jars` (~21 s, đã đo), nên popup hiện ngay cách rót của engine, ghi nhãn
+"Cách rót tạm tính" và dòng "M-Your đang phân tích…", rồi thay bằng đề xuất của Agent +
+`reason` khi về. Khi khách bấm "Đồng ý rót", `pfm` **kiểm lại** đề xuất với số hiện tại (các
+quy tắc cứng 1–4 ở trên, `shortfall` lấy theo engine) — không khớp / không có `ui` / lỗi /
+quá 60 s → dùng cách rót của engine. Lúc xác nhận chuyển tiền, `pfm` kiểm lại lần nữa với
+số mới nhất trước khi ghi các bản ghi bù (ghi với `origin: "manual"`). Nguồn "Chưa phân
+bổ" (pool) **không** hỏi Agent, vì `target_jar_id` phải là một hũ.
 
-Khác với `rebalance_jars`/`cover` (luôn "pool trước rồi hũ nhiều tiền nhất" — trùng
-engine), `distribute` là chỗ Agent **thực sự quyết định** chia thế nào (dựa trên dữ liệu
-chi tiêu của khách), nên đây là nơi gợi ý của Agent có giá trị.
+**Lưu ý thứ tự nguồn:** endpoint này luôn ép "pool trước, rồi hũ nhiều tiền nhất". Khi
+"Chưa phân bổ" đủ bù thì đề xuất chỉ có `pool` (đã đo: CIF_0001, Ăn uống chi 14.000.000đ →
+12.187.000đ từ pool). Nếu sản phẩm muốn gợi ý **chia giữa các hũ** thay vì pool, cần Agent
+thêm tuỳ chọn cho `cover` (ví dụ `exclude_pool`/`prefer: "jars"`) — `pfm` chưa có cách nào
+ép điều đó qua endpoint hiện tại.
 
 ---
 

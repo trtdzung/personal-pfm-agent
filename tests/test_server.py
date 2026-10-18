@@ -314,6 +314,56 @@ def test_chat_drops_an_edit_jar_when_the_model_never_read_the_summary_this_turn(
     assert body["ui"] is None
 
 
+def test_chat_endpoint_keeps_the_lead_sentence_for_a_valid_clarify_options_block(monkeypatch):
+    # schema v4 (2026-09-23): the question lives in ui.question, but `answer` is no longer cleared -- the
+    # model's short lead sentence outside the fence is kept so the customer sees both.
+    leaky_answer = (
+        "Bạn đang có 2 hũ tên gần giống nhau.\n\n"
+        '```ui-json\n{"type": "clarify_options", "questions": [{"question": "Bạn muốn tăng hạn mức hũ nào?", '
+        '"options": ["Hũ Ăn uống nhà", "Hũ Ăn uống ngoài"]}]}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[leaky_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "Tăng hạn mức hũ ăn uống thêm 200 nghìn giúp tôi.", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Bạn đang có 2 hũ tên gần giống nhau."
+    assert body["ui"] == {
+        "type": "clarify_options",
+        "questions": [{"question": "Bạn muốn tăng hạn mức hũ nào?", "options": ["Hũ Ăn uống nhà", "Hũ Ăn uống ngoài"]}],
+    }
+
+
+def test_chat_endpoint_leaves_answer_alone_when_clarify_options_is_invalid(monkeypatch):
+    # an invalid clarify_options is dropped like any other malformed ui -- `answer` is left exactly as the
+    # model wrote it (server no longer clears `answer` for clarify_options at all, valid or not)
+    bad_answer = (
+        "Bạn muốn tăng hạn mức hũ nào?\n\n"
+        '```ui-json\n{"type": "clarify_options", "questions": [{"question": "Bạn muốn tăng hạn mức hũ nào?", '
+        '"options": ["Hũ Ăn uống nhà"]}]}\n```'  # only 1 option -- invalid
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[bad_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "Tăng hạn mức hũ ăn uống thêm 200 nghìn giúp tôi.", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    body = response.json()
+    assert body["ui"] is None
+    assert body["answer"] == "Bạn muốn tăng hạn mức hũ nào?"
+
+
 def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):
     fake_model = _ToolCapableFakeChatModel(responses=["ok"])
     fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
@@ -406,6 +456,36 @@ def test_chat_history_includes_ui_for_a_past_turn_that_had_a_chart(monkeypatch):
         "title": "Chi tiêu theo danh mục",
         "labels": ["Mua sắm", "Ăn uống"],
         "series": [{"name": "VND", "data": [16280000, 10500000]}],
+    }
+
+
+def test_chat_history_keeps_the_lead_sentence_for_a_clarify_options_turn(monkeypatch):
+    # schema v4: `content` in history is the model's actual lead sentence (not cleared to ""), same as
+    # what /chat returned live for that turn.
+    clarify_answer = (
+        "Mình cần hỏi thêm để xác định đúng hũ.\n\n"
+        '```ui-json\n{"type": "clarify_options", "questions": [{"question": "Bạn muốn tăng hạn mức hũ nào?", '
+        '"options": ["Hũ Ăn uống nhà", "Hũ Ăn uống ngoài"]}]}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[clarify_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    client.post(
+        "/chat",
+        json={"message": "Tăng hạn mức hũ ăn uống thêm 200 nghìn giúp tôi.", "user_id": "CIF_0001", "thread_id": "t1"},
+        headers=headers,
+    )
+
+    response = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+    messages = response.json()["messages"]
+    assistant_message = next(m for m in messages if m["role"] == "assistant")
+    assert assistant_message["content"] == "Mình cần hỏi thêm để xác định đúng hũ."
+    assert assistant_message["ui"] == {
+        "type": "clarify_options",
+        "questions": [{"question": "Bạn muốn tăng hạn mức hũ nào?", "options": ["Hũ Ăn uống nhà", "Hũ Ăn uống ngoài"]}],
     }
 
 

@@ -367,6 +367,53 @@ def _is_valid_distribute_amount(raw: dict) -> bool:
     return isinstance(reason, str) and bool(reason)
 
 
+_MIN_CLARIFY_OPTIONS = 2
+_MAX_CLARIFY_OPTIONS = 4
+_MIN_CLARIFY_QUESTIONS = 1
+_MAX_CLARIFY_QUESTIONS = 4
+
+
+def _is_valid_clarify_question(raw: object) -> bool:
+    """One entry of `questions`: `{question: str, options: [str, ...]}`, nothing else."""
+    if not isinstance(raw, dict) or set(raw) != {"question", "options"}:
+        return False
+    question = raw["question"]
+    if not isinstance(question, str) or not question:
+        return False
+    options = raw["options"]
+    if not isinstance(options, list) or not (_MIN_CLARIFY_OPTIONS <= len(options) <= _MAX_CLARIFY_OPTIONS):
+        return False
+    seen: set[str] = set()
+    for option in options:
+        if not isinstance(option, str) or not option or option in seen:
+            return False
+        seen.add(option)
+    return True
+
+
+def _is_valid_clarify_options(raw: dict) -> bool:
+    """Validate a parsed clarify_options payload (raw["type"] == "clarify_options"). A cross-cutting
+    widget any skill can emit instead of an open-ended follow-up question when there are 1-4 independent
+    decisions, each with 2-4 concrete, mutually exclusive choices grounded in real data (see
+    skills/project/clarify-options/SKILL.md).
+
+    Schema v3 (2026-09-23): `questions` is a list (matching the AskUserQuestion tool's own `questions`
+    array), always used even for a single question, so there is exactly one shape to get right. Each
+    question's `question`/`options` live together (schema v2's fix, kept: server.py clears `answer` to ""
+    whenever this type is valid, so nothing is ever shown twice). `options` stays a plain list of strings:
+    the old `{id, label}` object shape is gone, because `id` was never read back by the agent (only the
+    tapped string ever reaches the next turn as a plain chat message) and the model kept reinventing its
+    name (`value`, `text`) instead of leaving it alone -- removing the unused field removes that failure
+    mode.
+    """
+    questions = raw.get("questions")
+    if not isinstance(questions, list) or not (_MIN_CLARIFY_QUESTIONS <= len(questions) <= _MAX_CLARIFY_QUESTIONS):
+        return False
+    if not all(_is_valid_clarify_question(q) for q in questions):
+        return False
+    return set(raw) == {"type", "questions"}
+
+
 # Dispatch table: ui block "type" -> validator. Add an entry here (and a new
 # _is_valid_<type> function above) for each new widget type -- every type
 # shares the same ```ui-json fence and the same envelope shape
@@ -378,6 +425,7 @@ _UI_VALIDATORS = {
     "edit_jar": _is_valid_edit_jar,
     "rebalance_jars": _is_valid_rebalance_jars,
     "distribute_amount": _is_valid_distribute_amount,
+    "clarify_options": _is_valid_clarify_options,
 }
 
 

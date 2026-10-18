@@ -99,6 +99,9 @@ chuyển tiền của `pfm`. Việc lấy tiền từ hũ khác để bù hũ th
      - Chỉ hỏi lại khi thật sự không thể tự xác định (nhiều hơn 1 thẻ cùng
        có dư nợ chưa thanh toán) — khi đó chọn thẻ có `due_date` gần nhất
        và đề xuất luôn, kèm 1 câu ngắn nhắc còn thẻ khác cũng có dư nợ.
+     - **Nếu `due_date` các thẻ cũng gần bằng nhau** (không còn tiêu chí nào để tự chọn) → dùng
+       `clarify_options` (skill `clarify-options`), mỗi phương án là 1 thẻ kèm dư nợ + hạn thật, cho
+       khách bấm chọn thay vì tự đoán.
 
 3. **Trường hợp (B) — chuyển cho 1 người:**
    - **Check (bắt buộc):** gọi tool `query_beneficiaries()` để lấy **toàn

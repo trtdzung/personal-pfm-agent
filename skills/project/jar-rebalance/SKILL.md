@@ -41,7 +41,9 @@ Hũ đích **phải có `budgetLimit`**. Hũ chưa đặt hạn mức (`null`) t
 1. **Đọc (việc đầu tiên):** gọi `get_jar_summary` (đọc mới ở mỗi lượt — đừng dùng số cũ). Lấy `id`, `remaining`,
    `spendable`, `budgetLimit` từng hũ và `unallocated`.
 2. **Chọn hũ đích:** khách nhắc tên → khớp `label` để lấy `id`, **sao chép nguyên văn** từ kết quả.
-   Chỉ hũ có trong `get_jar_summary` **của lượt này** mới bù được. Không có hũ đó → hỏi lại, đừng đoán.
+   Chỉ hũ có trong `get_jar_summary` **của lượt này** mới bù được. Không có hũ đó → hỏi lại bằng text,
+   hoặc bằng `clarify_options` (skill `clarify-options`) nếu có 2–4 hũ thật tên gần giống khách vừa nói —
+   đừng đoán.
    Hũ vừa được đề xuất tạo ở lượt trước **chưa tồn tại** (khách chưa xác nhận) nên không nằm trong kết
    quả → không bù được. **KHÔNG bao giờ bịa `id`** (ví dụ `lien-thien` suy từ tên hũ): server sẽ bỏ cả
    form nếu `id` không có trong kết quả bạn vừa đọc.

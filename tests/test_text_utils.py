@@ -589,6 +589,102 @@ def test_distribute_amount_requires_every_field(field):
     assert _ui_of(payload) is None
 
 
+# --- clarify_options: 1-4 questions, each with 2-4 concrete choices, instead of open-ended follow-ups --------
+# Schema v3 (2026-09-23): `questions` is a list (like the AskUserQuestion tool's own `questions` array) so one
+# turn can ask more than one independent thing, e.g. "which jar" AND "how much". Always the list form, even
+# for a single question, so there is exactly one shape to get right. `question`/`options` live INSIDE each
+# item; `options` stays a plain list of strings (schema v2's fix: the old {id, label} object kept getting
+# reinvented wrong, and `id` was never read back anyway).
+
+
+def _clarify_options(**overrides) -> dict:
+    payload = {
+        "type": "clarify_options",
+        "questions": [
+            {
+                "question": "Bạn muốn lấy tiền bù từ hũ nào?",
+                "options": ["Hũ Ăn uống (còn 1.813.000đ)", "Hũ Hưởng thụ (còn 1.296.000đ)"],
+            }
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _question(question="Câu hỏi?", options=("A", "B")) -> dict:
+    return {"question": question, "options": list(options)}
+
+
+def test_extract_ui_block_splits_out_valid_clarify_options_block():
+    # unlike every other ui type, the customer-facing text lives in `ui.questions[].question`, not in the
+    # surrounding answer text -- a model that writes nothing else around the fence leaves `cleaned` empty.
+    text = _ui_text(_clarify_options())
+    cleaned, ui = extract_ui_block(text)
+    assert cleaned == ""
+    assert ui == _clarify_options()
+
+
+def test_clarify_options_accepts_up_to_4_questions_each_with_up_to_4_options():
+    payload = _clarify_options(
+        questions=[_question(f"Câu {i}?", [f"Lựa chọn {i}-{j}" for j in range(4)]) for i in range(4)]
+    )
+    assert _ui_of(payload) == payload
+
+
+def test_clarify_options_accepts_more_than_one_question_when_the_decisions_are_independent():
+    payload = _clarify_options(
+        questions=[
+            _question("Bạn muốn tăng hạn mức hũ nào?", ["Hũ Ăn uống nhà (hạn mức 4.000.000đ)", "Hũ Ăn uống ngoài (hạn mức 1.000.000đ)"]),
+            _question("Tăng thêm bao nhiêu?", ["100.000đ", "200.000đ", "500.000đ"]),
+        ]
+    )
+    assert _ui_of(payload) == payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"questions": []},
+        {"questions": [_question() for _ in range(5)]},  # more than 4 questions
+        {"questions": "food"},
+        {"questions": [{"question": "Q?", "options": []}]},
+        {"questions": [{"question": "Q?", "options": ["A"]}]},  # only 1 option -- nothing to choose between
+        {"questions": [{"question": "Q?", "options": [f"L{i}" for i in range(5)]}]},  # more than 4 options
+        {"questions": [{"question": "Q?", "options": ["A", "A"]}]},  # duplicate option text
+        {"questions": [{"question": "Q?", "options": ["", "A"]}]},
+        {"questions": [{"question": "Q?", "options": [123, "A"]}]},
+        {"questions": [{"question": "Q?", "options": [{"label": "A"}, "B"]}]},  # the old id/label object shape
+        {"questions": [{"question": "", "options": ["A", "B"]}]},
+        {"questions": [{"question": 123, "options": ["A", "B"]}]},
+        {"questions": [{"options": ["A", "B"]}]},  # missing question
+        {"questions": [{"question": "Q?"}]},  # missing options
+        {"questions": [{"question": "Q?", "options": ["A", "B"], "extra": 1}]},  # extra field per question
+    ],
+)
+def test_clarify_options_rejects_invalid_payloads(overrides):
+    assert _ui_of(_clarify_options(**overrides)) is None
+
+
+def test_clarify_options_requires_the_questions_field():
+    payload = _clarify_options()
+    del payload["questions"]
+    assert _ui_of(payload) is None
+
+
+def test_clarify_options_does_not_accept_extra_top_level_fields_like_other_forms_do():
+    # unlike the old shape, `answer` no longer carries the question -- `reason` is still not part of this
+    # schema either (there is nowhere for it to go: each question already explains what is being asked)
+    payload = _clarify_options()
+    payload["reason"] = "x"
+    assert _ui_of(payload) is None
+    payload = _clarify_options()
+    payload["question"] = "x"  # the old, now-removed top-level field
+    assert _ui_of(payload) is None
+    payload = _clarify_options()
+    payload["id"] = "x"  # the old, now-removed field
+    assert _ui_of(payload) is None
+
+
 def test_is_valid_ui_is_the_public_check_used_outside_this_module():
     assert is_valid_ui(_distribute_amount()) and is_valid_ui(_rebalance_jars())
     assert not is_valid_ui(_distribute_amount(allocations=[])) and not is_valid_ui("not a dict") and not is_valid_ui({"type": "x"})
