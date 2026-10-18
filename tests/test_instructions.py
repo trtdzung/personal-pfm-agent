@@ -139,9 +139,14 @@ def test_investment_guidance_is_short_bold_and_cites_full_urls():
     assert "mỗi câu tối đa ~25 từ" in skill
     assert "Không bảng, không tiêu đề, không emoji, không danh sách" in skill
     assert "**In đậm** 3–5 cụm quan trọng nhất" in skill
-    assert "dòng `Nguồn:`" in skill and "**link markdown** `[1] [Tên nguồn, ngày](URL đầy đủ)`" in skill
+    # sources are clickable citation numbers placed right after the claim, NOT a "Nguồn:" list at the end
+    assert "Nguồn = số trích dẫn là link" in skill and "`[[1]](URL đầy đủ)`" in skill
+    assert 'KHÔNG viết danh sách "Nguồn:" ở cuối' in skill
     assert "**URL đầy đủ chép nguyên văn**" in skill and "**không để URL trần**" in skill and "không viết tắt" in skill
-    assert "[CafeF, đăng 17/09/2026](https://cafef.vn/...)" in skill
+    assert "Ngày/tên nguồn nằm **trong câu**" in skill
+    example = skill[skill.index("## Ví dụ ĐÚNG"):skill.index("## Ví dụ SAI")]
+    assert "[[1]](https://tuoitre.vn/...)" in example and "[[2]](https://www.msb.com.vn/" in example
+    assert "Nguồn:" not in example
     assert "Tối đa 3 nguồn" in skill
     assert "Chỉ gắn mã nguồn cho điều nguồn đó thật sự nói" in skill
     assert "**Biểu đồ:** mặc định KHÔNG" in skill
@@ -170,7 +175,8 @@ def test_investment_guidance_skips_projection_and_chart_when_there_is_no_idle_mo
 def test_instructions_have_no_skill_exception_to_the_brevity_rule_and_require_fresh_lookups():
     text = _text()
     assert "Không có ngoại lệ cho skill nào" in text
-    assert "5–6 câu văn xuôi" in text and "**in đậm**" in text and "`Nguồn:` gồm các link markdown" in text
+    assert "5–6 câu văn xuôi" in text and "**in đậm**" in text
+    assert "`[[n]](URL)` ngay sau ý (không có danh sách \"Nguồn:\" cuối câu)" in text
     assert "Tra cứu ngoài phải cần thiết và mới nhất" in text
     assert "tra **1 lần mỗi nguồn**" in text
     assert "bài tin đăng quá 4 ngày là lỗi thời" in text
@@ -195,8 +201,8 @@ def test_instructions_send_msb_product_questions_to_the_offline_snapshot_with_so
     assert "`search_msb_knowledge`" in text
     assert "gọi đúng 1 lần" in text
     assert "luôn kèm nguồn" in text and "URL đầy đủ" in text and "dữ liệu lưu ngày" in text
-    assert "**link markdown** `[tên trang/quyết định, dữ liệu lưu ngày dd/mm/yyyy](URL đầy đủ)`" in text
-    assert "không để URL trần" in text and "`[tên báo, ngày đăng](URL)`" in text
+    assert "**số trích dẫn là link** `[[1]](URL đầy đủ)`" in text
+    assert "không để URL trần" in text and '**Không** viết danh sách "Nguồn:" ở cuối' in text
     assert "2–4 câu" in text
     # no separate skill: the rules live here, so answering costs no extra "read the skill" model round-trip
     assert "msb-products" not in text
