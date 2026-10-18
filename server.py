@@ -14,6 +14,8 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel
 
 from llm import LLM_BASE_URL, LLM_MODEL, default_model  # noqa: F401 -- re-exported: tests/notebooks read them off `server`
+from langchain_core.exceptions import ModelPermissionDeniedError
+
 from checkpointer_cache import invalidate as invalidate_checkpointer_cache
 from checkpointer_cache import patch_get_events_with_cache
 from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
@@ -169,6 +171,33 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+def _resume_after_content_filter(thread_id: str, actor_id: str, first_error: Exception) -> dict:
+    """One retry when the model host's own content-safety filter rejects the model's OUTPUT (not our
+    input) -- seen in production as GreenNode/VNG Cloud MaaS 403 "ModelArts.81011 Output text May contain
+    sensitive information". Transient and non-deterministic (also fired during real-model test runs of
+    unrelated jar-rebalance answers), not a bug here.
+
+    Verified empirically (not assumed) that this never duplicates the customer's turn: by the time this
+    exception can be raised, the customer's message is already checkpointed (LangGraph writes it in the
+    entry superstep, before the model node runs) and the model node is the only pending task
+    (`state.next == ("model",)`) -- so resuming with `agent.invoke(None, config=...)` re-runs exactly that
+    step instead of appending the message again. Gives up after one retry (raises 503, which the frontend
+    can retry) rather than making the customer wait through several more ~10-40s model calls.
+    """
+    logger.warning("agent.invoke rejected by the model provider's content filter for thread_id=%s, retrying: %s", thread_id, first_error)
+    config = {"configurable": {"thread_id": thread_id, "actor_id": actor_id}}
+    state = agent.get_state(config=config)
+    if not state.next:
+        # No safe resume point (should not normally happen for this exception) -- resuming with no
+        # pending task would be a meaningless no-op call, not a real retry.
+        raise HTTPException(status_code=503, detail="Model provider unavailable, try again shortly") from first_error
+    try:
+        return agent.invoke(None, config=config)
+    except ModelPermissionDeniedError as exc:
+        logger.warning("agent.invoke rejected by the model provider's content filter again for thread_id=%s, giving up", thread_id)
+        raise HTTPException(status_code=503, detail="Model provider unavailable, try again shortly") from exc
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(
     request: ChatRequest,
@@ -184,6 +213,8 @@ def chat(
             {"messages": [{"role": "user", "content": request.message}]},
             config={"configurable": {"thread_id": thread_id, "actor_id": request.user_id}},
         )
+    except ModelPermissionDeniedError as exc:
+        result = _resume_after_content_filter(thread_id, request.user_id, exc)
     except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
         logger.exception("agent.invoke failed for thread_id=%s", thread_id)
         raise HTTPException(status_code=500, detail="Agent failed to process the request") from exc

@@ -1640,6 +1640,23 @@ Chọn: tool mỏng, ánh xạ ~1-1 với endpoint; logic chia tiền nằm ở 
 - **Còn lại:** (a) đã gọi thật nhưng **chưa gọi được với pfm thật** — `jar-summary` bị giả lập; (b) mỗi lần 14–42 giây, màn hình cần trạng thái chờ (nếu cần tức thì thì `cover` có thể chuyển hẳn sang planner bằng code — `cover_plan` đã có sẵn trong `jar_checks.py`); (c) `spend_amount` khi hũ đang âm dùng công thức doc (`định chi − spendable`), chưa tính thêm phần đang thiếu;
   (d) chưa có kiểm soát tải/giới hạn tần suất; (e) `/jar-rebalance` kiểm khoá sau khi kiểm body (như `/chat`), request sai body nhận 422 trước 401.
 
+### 1.29. [Đã làm — cập nhật] `/chat` tự thử lại 1 lần khi bộ lọc nội dung của nhà cung cấp model chặn đầu ra, trước khi trả 503
+
+**Nguyên nhân (log thật người dùng gửi, 2026-09-22):** `openai.PermissionDeniedError` / `langchain_openai.OpenAIPermissionDeniedError`, mã `403 ModelArts.81011 "Output text May contain sensitive information, please try again."` —
+bộ lọc nội dung phía **GreenNode/VNG Cloud MaaS** (hạ tầng ModelArts) chặn chính **đầu ra** của model, không phải lỗi trong request hay bug của agent. Thoáng qua và không tất định — đã gặp ngẫu nhiên nhiều lần khi chạy thử thật (mục 1.25, 1.26, 1.28), cả với nội dung không nhạy cảm (ví dụ câu trả lời về hũ chi tiêu).
+
+- `jar_endpoint.py` (`POST /jar-rebalance`) **đã xử lý được từ trước**: `_run()` bắt mọi exception khi gọi model, coi là 1 lần thử thất bại, thử lại 1 lần, hết lượt vẫn lỗi thì trả `503` (`ModelUnavailable`) — không đổi gì thêm ở đây.
+- `/chat` **chưa xử lý** — rơi vào nhánh `except Exception` chung, trả `500` y hệt lỗi nội bộ thật, không phân biệt được với bug. Đã thêm nhánh bắt riêng `langchain_core.exceptions.ModelPermissionDeniedError` (lớp cha chung cho lỗi permission-denied của mọi provider, không riêng OpenAI-compatible) → trả `503` kèm log `WARNING` riêng (không phải `exception` mức lỗi nặng), không lộ chi tiết `ModelArts`/mã lỗi ra client.
+- **Người dùng hỏi lại (2026-09-22): "gọi lại được không, hiện mới đưa log chứ đã làm được gì đâu?"** — đúng, bản đầu chỉ đổi 500 → 503, chưa thật sự thử lại. Kiểm tra thật (không đoán) bằng script: sau khi `agent.invoke()` raise `ModelPermissionDeniedError`,
+  `agent.get_state(config).values["messages"]` **đã có** `HumanMessage` của khách (LangGraph ghi lượt người dùng vào checkpoint ở bước "entry", trước khi chạy node model), và `state.next == ("model",)` — nghĩa là bước duy nhất còn treo là gọi model.
+  → gọi lại bằng **`agent.invoke(None, config=...)`** (không kèm input mới) sẽ **resume đúng lượt đó**, không cần gửi lại tin nhắn, không ghi trùng lượt trong lịch sử. Đã xác nhận qua route `/chat` thật + `/chat/history` (agent thật, model giả lập chặn lần đầu):
+  trả đúng câu trả lời sau khi thử lại, lịch sử chỉ có đúng 1 lượt `user`.
+- **Cài đặt:** `_resume_after_content_filter()` trong `server.py` — bắt `ModelPermissionDeniedError`, kiểm `state.next` không rỗng (phòng hờ trường hợp không có gì để resume, dù theo cấu trúc graph thì lỗi này chỉ có thể xảy ra sau khi lượt khách đã được ghi), rồi `agent.invoke(None, ...)` **đúng 1 lần**
+  (không lặp vô hạn, tránh bắt khách chờ nhiều lượt gọi model ~10–40s); lần thử lại vẫn bị chặn thì mới trả `503`.
+- **Doc:** `docs/api.md` (dòng `503` nói rõ server đã tự thử lại trước khi trả lỗi), `README.md`; đã chép `api.md` sang `pfm/agent_backend_docs/`.
+- **Test:** `test_chat_endpoint_resumes_once_after_the_content_filter_and_succeeds` (agent giả lập, kiểm cuộc gọi thứ 2 có `input=None`), `test_chat_endpoint_returns_503_when_the_retry_is_rejected_too` (kiểm đúng 2 lần gọi, không lặp thêm), `test_chat_endpoint_gives_up_without_resuming_when_there_is_no_pending_task` (nhánh phòng hờ), `test_readme_mentions_the_content_filter_503`. 577 pass (497 khi không có `requirements.txt`).
+- **Còn lại:** vẫn có thể bị chặn cả 2 lần (khi đó khách mới phải tự gửi lại, hiếm hơn nhiều); chưa rõ mẫu nội dung nào hay kích hoạt bộ lọc để né trước bằng prompt; `jar_endpoint.py` (`POST /jar-rebalance`) vốn đã tự thử lại theo cách khác (gọi model mới kèm phản hồi lỗi, không dùng checkpoint vì không có thread) — không đổi gì ở đó.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

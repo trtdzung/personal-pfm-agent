@@ -189,7 +189,8 @@ mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.
 |---|---|
 | `401` | Thiếu/sai `X-API-Key` |
 | `422` | Thiếu `message` hoặc `user_id` |
-| `500` | Agent xử lý lỗi (model timeout, lỗi nội bộ...) — chi tiết lỗi **không** trả về client, chỉ nằm trong log server |
+| `500` | Agent xử lý lỗi (lỗi nội bộ...) — chi tiết lỗi **không** trả về client, chỉ nằm trong log server |
+| `503` | Bộ lọc nội dung của nhà cung cấp model (GreenNode/VNG Cloud MaaS) chặn chính đầu ra của model — server đã tự thử lại 1 lần (resume đúng lượt đó, không hỏi lại khách, không trùng lượt trong lịch sử) trước khi trả lỗi này. Lỗi thoáng qua, không phải bug ở agent hay ở dữ liệu khách; frontend nên coi như lỗi tạm thời và cho khách gửi lại tin nhắn |
 
 ---
 

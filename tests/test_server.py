@@ -718,6 +718,106 @@ def test_server_refuses_to_start_without_ai_platform_api_key():
     assert "AI_PLATFORM_API_KEY" in result.stderr
 
 
+# Seen in production logs: GreenNode's MaaS host randomly rejects the model's OWN generated text with 403
+# ModelArts.81011 "Output text May contain sensitive information" -- a transient, non-deterministic filter on
+# the provider side, not a bug in this repo (also seen firing during real-model test runs of unrelated
+# jar-rebalance flows). Verified empirically (not assumed): by the time this exception is raised, the
+# customer's message is already checkpointed and the model node is the only pending task (`state.next ==
+# ("model",)`), so `agent.invoke(None, config=...)` safely RESUMES that turn instead of resending the
+# message -- it never duplicates the customer's turn in the thread's history.
+from langchain_core.exceptions import ModelPermissionDeniedError
+
+
+class _ChatState:
+    def __init__(self, next):
+        self.next = next
+        self.values = {}
+
+
+def test_chat_endpoint_resumes_once_after_the_content_filter_and_succeeds(monkeypatch):
+    class _RetryingAgent:
+        checkpointer = None  # see test_chat_endpoint_masks_internal_error_details's comment
+        calls = 0
+
+        def invoke(self, input, config):
+            self.calls += 1
+            if self.calls == 1:
+                assert input is not None, "the first call sends the customer's actual message"
+                raise ModelPermissionDeniedError("Error code: 403 - ModelArts.81011 Output text May contain sensitive information")
+            assert input is None, "the retry must RESUME the checkpoint, not resend the message"
+            return {"messages": [AIMessage(content="Trả lời sau khi thử lại.")]}
+
+        def get_state(self, config):
+            return _ChatState(next=("model",))
+
+    fake_agent = _RetryingAgent()
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "hi", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Trả lời sau khi thử lại."
+    assert fake_agent.calls == 2
+
+
+def test_chat_endpoint_returns_503_when_the_retry_is_rejected_too(monkeypatch):
+    class _StillRaisingAgent:
+        checkpointer = None
+        calls = 0
+
+        def invoke(self, input, config):
+            self.calls += 1
+            raise ModelPermissionDeniedError("Error code: 403 - ModelArts.81011 Output text May contain sensitive information")
+
+        def get_state(self, config):
+            return _ChatState(next=("model",))
+
+    fake_agent = _StillRaisingAgent()
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "hi", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 503
+    assert "ModelArts" not in response.text and "81011" not in response.text  # never leak the provider's raw detail
+    assert fake_agent.calls == 2, "exactly one retry -- never loop, so the customer isn't stuck waiting"
+
+
+def test_chat_endpoint_gives_up_without_resuming_when_there_is_no_pending_task(monkeypatch):
+    # defensive: if the checkpoint somehow has nothing pending to resume, invoke(None, ...) would be a
+    # meaningless no-op call, not a real retry -- go straight to 503 instead.
+    class _NothingPendingAgent:
+        checkpointer = None
+        resume_calls = 0
+
+        def invoke(self, input, config):
+            if input is None:
+                self.resume_calls += 1
+            raise ModelPermissionDeniedError("Error code: 403 - ModelArts.81011 Output text May contain sensitive information")
+
+        def get_state(self, config):
+            return _ChatState(next=())
+
+    fake_agent = _NothingPendingAgent()
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "hi", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 503
+    assert fake_agent.resume_calls == 0
+
+
 def test_chat_endpoint_masks_internal_error_details(monkeypatch):
     class _RaisingAgent:
         # /chat reads agent.checkpointer (to invalidate the request-scoped

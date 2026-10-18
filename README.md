@@ -190,7 +190,10 @@ docker run -p 8080:8080 \
 - `POST /chat` -- requires `X-API-Key` header, body
   `{"message": str, "user_id": str, "thread_id": str | null}`, returns
   `{"answer": str, "thread_id": str}`. `thread_id` is optional -- see
-  "Default thread per user" below.
+  "Default thread per user" below. Errors: `401` bad/missing key, `422` missing
+  fields, `500` internal error, `503` the model provider's own content filter
+  rejected the model's output even after the server retried once internally
+  (transient -- see `docs/api.md`), worth the frontend retrying too.
 - `POST /jar-rebalance` -- requires `X-API-Key` header. Jar proposals for
   screens that need no chat, one endpoint with two modes:
   `{"user_id": str, "mode": "cover", "target_jar_id": str, "spend_amount": int | null}`
