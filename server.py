@@ -32,7 +32,7 @@ from tools.customer_data_tools import get_categories, get_jar_summary, query_ben
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
-# from tools.memory_tools import recall_preference, remember_preference
+from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
 
@@ -47,9 +47,19 @@ if not SERVER_API_KEY:
         "financial data with no authentication."
     )
 
+USER_PREFERENCE_STRATEGY_ID = os.environ.get("USER_PREFERENCE_STRATEGY_ID")
+if not USER_PREFERENCE_STRATEGY_ID:
+    raise RuntimeError(
+        "USER_PREFERENCE_STRATEGY_ID is not set. Refusing to start without "
+        "a strategy ID for the memory service."
+    )
+
 MEMORY_ID = os.environ.get("MEMORY_ID")
-
-
+if not MEMORY_ID:
+    raise RuntimeError(
+        "MEMORY_ID is not set. Refusing to start without "
+        "a memory ID for the memory service."
+    )
 AI_PLATFORM_API_KEY = os.environ.get("AI_PLATFORM_API_KEY")
 if not AI_PLATFORM_API_KEY:
     raise RuntimeError(
@@ -94,8 +104,8 @@ def build_agent(
         tools=tools
         if tools is not None
         else [
-            # remember_preference,
-            # recall_preference,
+            remember_preference,
+            recall_preference,
             get_jar_summary,
             get_categories,
             query_beneficiaries,
