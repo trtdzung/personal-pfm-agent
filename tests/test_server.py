@@ -548,6 +548,34 @@ class _DeleteTrackingSaver(InMemorySaver):
         super().delete_thread(thread_id)
 
 
+def test_delete_chat_history_works_against_a_real_inmemorysaver_not_only_the_test_double():
+    # Regression: server.py's default checkpointer (`checkpointer or MemorySaver()`) is a genuine
+    # `InMemorySaver`, whose `delete_thread(self, thread_id)` takes ONE positional argument -- unlike
+    # AgentBaseMemoryEvents.delete_thread(thread_id, actor_id=""), which takes two. `_DeleteTrackingSaver`
+    # below happens to accept both, which let this bug hide behind green tests: the endpoint called
+    # `checkpointer.delete_thread(thread_id, user_id)` unconditionally and crashed with a `TypeError`
+    # (caught and turned into a 500) against the real class. Uses the real `InMemorySaver`, no subclass.
+    fake_model = _ToolCapableFakeChatModel(responses=["reply 1"])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    server_module_agent = server.agent
+    server.agent = fake_agent
+    try:
+        client = TestClient(server.app)
+        headers = {"X-API-Key": "test-key-for-pytest"}
+        client.post("/chat", json={"message": "hello", "user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+
+        before = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+        assert before.json()["messages"]  # has history before delete
+
+        response = client.delete("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+        assert response.status_code == 200, response.text
+
+        after = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t1"}, headers=headers)
+        assert after.json()["messages"] == []  # really gone, not just a 200 with nothing deleted
+    finally:
+        server.agent = server_module_agent
+
+
 def test_delete_chat_history_removes_thread(monkeypatch):
     fake_model = _ToolCapableFakeChatModel(responses=["reply 1"])
     tracking_saver = _DeleteTrackingSaver()

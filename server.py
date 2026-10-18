@@ -1,4 +1,5 @@
 import hmac
+import inspect
 import logging
 import os
 from pathlib import Path
@@ -11,7 +12,6 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
 from llm import LLM_BASE_URL, LLM_MODEL, default_model  # noqa: F401 -- re-exported: tests/notebooks read them off `server`
@@ -19,7 +19,9 @@ from langchain_core.exceptions import ModelPermissionDeniedError
 
 from checkpointer_cache import invalidate as invalidate_checkpointer_cache
 from checkpointer_cache import patch_get_events_with_cache
+from checkpointer_delete_pagination import patch_delete_events_reads_page_one_every_time
 from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
+from checkpointer_local_cache_race import patch_merge_local_cache_into_fetch
 from jar_endpoint import router as jar_router
 from insight_endpoint import router as insight_router
 from proactive_endpoint import router as proactive_router
@@ -77,7 +79,7 @@ def build_agent(
     tools: list[BaseTool] | None = None,
 ):
     instructions = (REPO_ROOT / "instructions.md").read_text(encoding="utf-8")
-    checkpointer = checkpointer or MemorySaver()
+    checkpointer = checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID)
     # Works around a real perf bug in AgentBaseMemoryEvents: LangGraph's
     # get_state()/invoke() call checkpointer.get_tuple() once per
     # accumulated checkpoint (the `messages` channel needs the whole chain
@@ -99,6 +101,22 @@ def build_agent(
     # InMemorySaver threads (they never produce such a blob) -- see
     # checkpointer_delta_snapshot.py.
     patch_preserve_delta_snapshots()
+    # Works around a race in AgentBaseMemoryEvents.get_tuple(): it discards its own
+    # correct read-your-writes local cache whenever a remote read merely LOOKS fresh
+    # enough (same-or-newer checkpoint id), even if that read is missing a sibling event
+    # of that very checkpoint -- silently forgetting the conversation until the next
+    # write happens to repopulate the cache. Own soak test against real GreenNode
+    # AgentBase Memory: wrong on ~1 in 6 real, back-to-back turns, unrelated to elapsed
+    # time. No-op for InMemorySaver (tests/notebooks). Idempotent -- see
+    # checkpointer_local_cache_race.py.
+    patch_merge_local_cache_into_fetch()
+    # Works around AgentBaseEventClient.delete_events() advancing to the next page
+    # number after deleting a page's worth of events -- since deleting shifts later
+    # events back a page, that skips whatever just shifted into the page already
+    # cleared. Own test against real GreenNode AgentBase Memory: a ~300-event thread
+    # left 2 messages behind after "successful" deletion. No-op below one page (100
+    # events) -- see checkpointer_delete_pagination.py.
+    patch_delete_events_reads_page_one_every_time()
     return create_deep_agent(
         model=model or _default_model(),
         tools=tools
@@ -166,6 +184,18 @@ class HistoryMessage(BaseModel):
 class ChatHistoryResponse(BaseModel):
     thread_id: str
     messages: list[HistoryMessage]
+
+
+def _delete_thread(checkpointer: BaseCheckpointSaver, thread_id: str, actor_id: str) -> None:
+    """`AgentBaseMemoryEvents.delete_thread(thread_id, actor_id="")` (the production checkpointer)
+    scopes the delete to one customer (thread_id alone is not enough: different actor_ids can share a
+    thread_id). `InMemorySaver.delete_thread(self, thread_id)` (the local/test default) takes only the
+    thread id and raises `TypeError` on a second positional argument. Inspect the real signature instead
+    of assuming either shape, so this keeps working whichever checkpointer `agent` was built with."""
+    if len(inspect.signature(checkpointer.delete_thread).parameters) >= 2:
+        checkpointer.delete_thread(thread_id, actor_id)
+    else:
+        checkpointer.delete_thread(thread_id)
 
 
 def _default_thread_id(user_id: str) -> str:
@@ -295,7 +325,7 @@ def delete_chat_history(
     thread_id = thread_id or _default_thread_id(user_id)
     invalidate_checkpointer_cache(agent.checkpointer, thread_id, user_id)
     try:
-        agent.checkpointer.delete_thread(thread_id, user_id)
+        _delete_thread(agent.checkpointer, thread_id, user_id)
     except Exception as exc:  # noqa: BLE001 -- deliberately generic: never leak internals to the client
         logger.exception("checkpointer.delete_thread failed for thread_id=%s", thread_id)
         raise HTTPException(status_code=500, detail="Failed to delete conversation history") from exc

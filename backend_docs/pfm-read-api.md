@@ -6,8 +6,9 @@ Tài liệu gồm 2 phần:
   endpoint**: `GET /api/jar-summary` (thông tin từng hũ: hạn mức đã set, số dư hiện
   tại…). `pfm` là bên serve dữ liệu, Agent là bên gọi — khác hướng với
   `agent_backend_docs/` (mô tả field `ui` mà Agent trả VỀ cho `pfm` qua `/chat`).
-- **Phần B — contract `ui` Agent trả ra** để gợi ý 3 form về hũ (`create_jar`,
-  `edit_jar`, `rebalance_jars`) và form chuyển tiền (`transfer_form`).
+- **Phần B — contract `ui` Agent trả ra** để gợi ý 4 form về hũ (`create_jar`,
+  `edit_jar`, `distribute_amount`, `rebalance_jars`), form chuyển tiền (`transfer_form`) và câu hỏi
+  bằng nút bấm (`clarify_options`).
 
 **Phân vai:** Agent chỉ **đọc** thông tin hũ rồi **gợi ý form** (điền sẵn giá trị).
 Việc **thực hiện thay đổi hũ luôn do repo `pfm` làm**, sau khi khách xem lại và
@@ -25,7 +26,7 @@ không phải CIF MSB thật.
 
 **Trạng thái (đối chiếu với repo và bản deploy ngày 2026-09-21):** `GET /api/jar-summary`
 đã có trong repo và đã chạy trên URL trên (`200`; thiếu `cif` hoặc `month` sai → `422`).
-Bản deploy đã bỏ `role` của hũ (hũ không còn vai trò/hũ mục tiêu, xem B4).
+Bản deploy đã bỏ `role` của hũ (hũ không còn vai trò/hũ mục tiêu).
 
 **Agent gọi đúng URL này** (`PFM_BASE_URL` trong `tools/customer_data_tools.py` của repo
 Agent): tool `get_jar_summary(month)` ↔ `GET /api/jar-summary`, tool `query_beneficiaries` ↔
@@ -123,7 +124,7 @@ tháng hiện tại của demo). Thiếu `cif` hoặc `month` sai định dạng
 
 | Field | Ý nghĩa |
 |---|---|
-| `unallocated` | **"Chưa phân bổ"** = CASA − Σ `spendable`. Là nguồn `"pool"` khi chia tiền giữa hũ (B4). Có thể âm |
+| `unallocated` | **"Chưa phân bổ"** = CASA − Σ `spendable`. Là nguồn duy nhất của `distribute_amount` (B5). Có thể âm |
 | `allocationHeadroom` | **"Chờ phân bổ"** — từ 2026-09-23 **bằng `unallocated`** (CASA − Σ `spendable`). Là số tiền **còn nạp được vào hũ**: trần cho `initial_balance` của `create_jar` (B2); server kiểm lại khi tạo hũ (`422` kèm `overBy`). **Không** còn là trần cho hạn mức — tăng hạn mức không cần chỗ trống |
 
 Cả hai đều tính từ CASA (tiền thật trong tài khoản thanh toán) nội bộ — muốn đọc riêng số
@@ -138,12 +139,12 @@ CASA, gọi `GET /api/account-summary?cif=` (mục 2). `unallocated`/`allocation
    nhưng khách tự làm, **không qua Agent**. Nghĩa là số dư 2 hũ có thể đã đổi giữa các lượt hỏi mà
    Agent không đề xuất gì — luôn đọc lại `jar-summary` mới nhất trước khi gợi ý (B0);
 3. **Tạo hũ** kèm `initial_balance` (`create_jar`, B2);
-4. **Lấy từ hũ/pool khác** (`rebalance_jars`, B4).
+4. **Chia tiền chưa phân bổ vào hũ** (`distribute_amount`, B5) hoặc **chuyển số dư từ hũ khác** (`rebalance_jars`, B4).
 
 **Tăng hạn mức (`edit_jar`) KHÔNG tăng số dư** — hạn mức chỉ là kế hoạch chi mỗi tháng.
 
 **Hai trục độc lập** (đừng nhầm):
-- **Số dư** (`balance`, `spendable`): tiền còn trong hũ, cộng dồn qua tháng. Bù giữa hũ (B4) chỉ dịch chuyển trục này.
+- **Số dư** (`balance`, `spendable`): tiền còn trong hũ, cộng dồn qua tháng. Chia tiền (B5) và chuyển giữa hũ (B4) chỉ dịch chuyển trục này.
 - **Hạn mức** (`limit`, `overLimit`): khách có chi vượt kế hoạch tháng này không; đặt lại mỗi tháng. Bù giữa hũ **không** sửa `limit` và **không** xoá `overLimit`.
 Hũ **"cần bù"** = `balance < 0` (không phải `overLimit`).
 
@@ -223,8 +224,8 @@ hiện `answer`**. Nguyên tắc: **Agent chỉ trả `id` và con số đề xu
 tên/số tài khoản), điền sẵn form cho khách xem lại; `pfm` mới thực hiện thay đổi,
 và chỉ khi khách bấm xác nhận.
 
-> Trạng thái phía `pfm`: cả 5 loại (`transfer_form`, `create_jar`, `edit_jar`, `rebalance_jars`,
-> `clarify_options` — loại cuối xem mục "Hỏi lại bằng nút bấm" ở cuối Phần B) đã có card trên UI
+> Trạng thái phía `pfm`: cả 6 loại (`transfer_form`, `create_jar`, `edit_jar`, `distribute_amount`,
+> `rebalance_jars`, `clarify_options` — loại cuối xem B6) đã có card trên UI
 > (màn Chat và ô kết quả của Voice tab). Mỗi card tự kiểm lại với số liệu thật
 > trước khi cho khách bấm xác nhận; đề xuất không còn khớp thì hiện "không còn khớp số liệu" và
 > không có nút áp dụng.
@@ -241,14 +242,15 @@ một lượt. Sau khi khách xác nhận 1 thay đổi, số trong `jar-summary
 | Đổi tên / hạn mức / category của hũ | `edit_jar` | dùng `jar_id` từ `jar-summary` |
 | **Chuyển danh mục** từ hũ A sang hũ B | `edit_jar` cho **hũ nhận B** | xem "Chuyển danh mục giữa hai hũ" ở B3 — **không** sửa hũ cho A |
 | "Cho hũ X chi nhiều hơn mỗi tháng" | `edit_jar` tăng hạn mức | không cần headroom; nói rõ tăng hạn mức **không** thêm tiền vào hũ |
-| Hũ X **cần bù** (`balance < 0`), hoặc không đủ số dư cho khoản khách định chi, hoặc khách muốn chia lại tiền giữa các hũ | `rebalance_jars` | target phải có `balance` ≠ `null`; hũ chưa có số dư thì nhắc khách nạp số dư trong `pfm` trước (không có `ui`) |
+| Khách muốn đưa tiền vào hũ mà **không nêu hũ nguồn** ("chuyển 300k vào hũ Tiết kiệm", "bù giúp tôi" cho hũ hết số dư) | `distribute_amount` | tiền lấy từ `unallocated`; Σ ≤ `max(0, unallocated)`; hũ chưa có số dư vẫn nhận được |
+| Khách chuyển **từ một hũ** sang hũ khác ("chuyển 500k từ Ăn uống sang Di chuyển"), hoặc hũ cần bù / định chi quá số dư mà tiền chưa phân bổ không đủ | `rebalance_jars` | **1 hũ nguồn**, Σ ≤ `spendable` của nó; hũ nguồn phải có `balance` ≠ `null`; **hũ nhận** phải có `balance` ≠ `null` (chưa có thì dùng `distribute_amount` hoặc nhắc nạp tiền trong `pfm`, không trả `ui`) |
 | Chuyển tiền cho người đã lưu | `transfer_form` | độc lập với các form hũ |
 | Không chắc khách muốn gì (≥ 2 phương án hợp lý ngang nhau) | `clarify_options` | xem "Hỏi lại bằng nút bấm" bên dưới — hỏi bằng nút bấm thay vì đoán |
 | Chỉ hỏi số dư / hạn mức / đã chi | không có `ui` (hoặc `chart` nếu phù hợp) | trả lời bằng số từ `jar-summary` |
 
-**Nhiều hũ cùng cần bù:** chỉ xử lý **1 hũ mỗi lượt** — hũ có `balance` âm nhất
-trước; nêu trong `answer` còn hũ nào cần bù, làm ở lượt sau (sau khi gọi lại `jar-summary`,
-vì tiền "Chưa phân bổ" có thể đã được dùng hết).
+**Nhiều hũ cùng cần bù / nhiều hũ nguồn:** chỉ xử lý **1 form mỗi lượt** — hũ có `balance` âm
+nhất (hoặc hũ nguồn đầu tiên khách nêu) trước; nêu trong `answer` còn hũ nào, làm ở lượt sau (sau
+khi gọi lại `jar-summary`, vì tiền "Chưa phân bổ" có thể đã được dùng hết).
 
 **Không trả `ui`, chỉ nói trong `answer`** khi:
 - `jar-summary` lỗi (`500`) hoặc số cần thiết là `null` — **không đoán số**;
@@ -258,7 +260,7 @@ vì tiền "Chưa phân bổ" có thể đã được dùng hết).
   suy từ tên hũ);
 - tên hũ mới trùng `label` một hũ đang có (`create_jar`);
 - khách muốn tạo hũ với số dư lớn hơn `allocationHeadroom` (đề xuất số dư nhỏ hơn, kể cả `0`, thì vẫn trả `create_jar` được);
-- các nguồn cộng lại vẫn không đủ để bù (B4).
+- tiền chưa phân bổ (`distribute_amount`) hoặc `spendable` của hũ nguồn (`rebalance_jars`) không đủ cho khoản khách muốn chuyển (nói còn bao nhiêu).
 
 **Nội dung `answer` đi kèm `ui`:** 1–3 câu, nêu con số chính lấy từ `jar-summary` (vd
 "hạn mức 4.000.000đ → 4.500.000đ", "hũ Ăn uống thiếu 1.500.000đ, lấy từ …"; không nói "số dư âm", xem "Cách nói với khách") và nhắc khách
@@ -285,7 +287,7 @@ tiền ăn uống" → `transfer_form`) với **chuyển giữa hũ** (`rebalanc
 | `note` | ✅ | nội dung chuyển khoản |
 | `category` | ✅ | `id` category chi tiêu (`kind: "expense"`) của khách, từ `GET /api/categories?cif=` |
 
-Form chuyển tiền **không liên quan** đến chia tiền giữa các hũ (B4): không có field
+Form chuyển tiền **không liên quan** đến chia tiền giữa các hũ (B4, B5): không có field
 hũ nguồn, khách chọn nguồn tiền trên màn chuyển tiền của `pfm`.
 
 ## B2. `create_jar` — Form 1: tạo hũ mới
@@ -323,14 +325,14 @@ Agent **không gửi `id`** (`pfm` tự sinh). Khi gợi ý phải tôn trọng:
   **không đổi**: vẫn phải có `allocation_amount > 0` và `initial_balance` như bảng trên. Ngược
   lại khi đọc `jar-summary`, Agent gặp `limit: null` là bình thường — nói "chưa đặt hạn mức", không
   coi là 0.
-- **`category_ids` của `create_jar` chỉ được gồm danh mục "chưa xếp hũ".** Một danh mục là
-  chưa xếp khi **không hũ nào** giữ nó (từ 2026-09-24 xoá hũ là xoá hẳn — danh mục của hũ đó
-  thành "chưa xếp hũ", không còn hũ "Khác" tự sinh) — suy ra từ
-  `categoryIds` của từng hũ trong `jar-summary` so với danh sách `GET /api/categories?cif=`.
-  Form tạo hũ trên `pfm` **chỉ cho chọn trong các danh mục chưa xếp** và **bỏ** danh mục đang
-  thuộc hũ khác khỏi đề xuất (kèm dòng "… đang thuộc hũ X nên không chọn được"). Muốn lấy danh
-  mục từ hũ khác: tạo hũ trước (không kèm danh mục đó), rồi ở lượt sau trả `edit_jar` cho hũ
-  vừa tạo với `category_ids` đầy đủ (xem "Chuyển danh mục giữa hai hũ" ở B3).
+- **`category_ids` của `create_jar`:** Agent nên chỉ đưa danh mục "chưa xếp hũ" (không hũ nào giữ nó —
+  từ 2026-09-24 xoá hũ là xoá hẳn, danh mục của hũ đó thành "chưa xếp hũ", không còn hũ "Khác" tự
+  sinh; suy ra từ `categoryIds` của từng hũ trong `jar-summary` so với `GET /api/categories?cif=`).
+  Khi khách **yêu cầu rõ** một danh mục đang thuộc hũ khác, Agent có thể đưa vào `category_ids` và nói
+  rõ trong `answer` hũ nào sẽ mất danh mục. Form tạo hũ trên `pfm` cho khách chọn **mọi** danh mục
+  chi tiêu; danh mục đang ở hũ khác hiện dòng "… sẽ chuyển từ hũ X" và server lấy nó khỏi hũ cũ
+  trong cùng lần ghi (một danh mục chỉ thuộc một hũ). Form **không hiện `reason`** của Agent (chỉ
+  hiện `answer` ở bong bóng chat phía trên) — Agent nên đặt phần giải thích vào `answer`.
 
 ## B3. `edit_jar` — Form 2: điều chỉnh hũ
 
@@ -358,8 +360,8 @@ Sửa tên, hạn mức, category của 1 hũ đã có.
 - **Tăng / giảm hạn mức** luôn được — hạn mức là kế hoạch, không kiểm `allocationHeadroom`.
 - Đổi hạn mức **không** đổi `balance`. Giảm xuống dưới số đã chi (`spent`) thì
   `overLimit` thành `true` (vượt hạn mức) — nói rõ trong `reason`; số dư giữ nguyên.
-- `edit_jar` không có field số dư: muốn thêm tiền cho hũ thì dùng `rebalance_jars` hoặc
-  nhắc khách tự nạp trong `pfm`.
+- `edit_jar` không có field số dư: muốn thêm tiền cho hũ thì dùng `distribute_amount` /
+  `rebalance_jars` hoặc nhắc khách tự nạp trong `pfm`.
 
 ### Chuyển danh mục giữa hai hũ (chỉ là `edit_jar`, không phải `rebalance_jars`)
 
@@ -392,100 +394,152 @@ dùng `rebalance_jars` (B4).
 > **một lần khi đóng sheet** (không lưu từng lần chạm). Chỉ là hành vi giao diện — contract `edit_jar`
 > không đổi.
 
-## B4. `rebalance_jars` — Form 3: điều chỉnh số dư giữa các hũ
+## B4. `rebalance_jars` — Form 3: chuyển số dư từ một hũ sang hũ khác
 
-Dùng khi **(a)** khách định chi một khoản lớn hơn số dư hũ (`spendable` không đủ), hoặc
-**(b)** hũ **cần bù**: khách đã tiêu quá số dư (`balance < 0`). Agent đề xuất
-**lấy phần thiếu từ hũ/pool nào**. Không đổi `limit`, không chuyển tiền thật —
-chỉ dịch chuyển `balance` giữa các hũ (số dư cộng dồn, còn nguyên sang tháng sau). Form
-này **độc lập** với `transfer_form` (B1).
+> **Đổi dạng 2026-09-24 (breaking):** dạng cũ `{target_jar_id, shortfall, moves[]}` — 1 hũ đích nhận
+> từ nhiều nguồn, có nguồn `"pool"` — **đã bỏ**. Dạng mới là **1 hũ nguồn cho tiền sang 1 hoặc nhiều
+> hũ khác**; không còn `"pool"` ở đâu cả (tiền chưa phân bổ chuyển vào hũ bằng `distribute_amount`,
+> B5). Payload dạng cũ không qua được kiểm hình dạng của `pfm` → chỉ hiện `answer`. Nguồn:
+> `agent_backend_docs/jars/rebalance-jars.md`.
+
+Dùng khi khách nêu "chuyển 500 nghìn từ hũ Ăn uống sang hũ Di chuyển" (1 hoặc nhiều hũ nhận, có
+thể nêu số cho từng hũ), hoặc hũ hết số dư / định chi quá số dư mà không nêu nguồn ("lấy từ hũ
+khác bù" → Agent chọn **1 hũ nguồn** có `spendable` lớn nhất và đủ một mình). Không đổi `limit`,
+không chuyển tiền thật — chỉ dịch chuyển `balance` giữa các hũ (số dư cộng dồn, còn nguyên sang
+tháng sau). Form này **độc lập** với `transfer_form` (B1).
 
 ```json
 {
   "type": "rebalance_jars",
-  "target_jar_id": "food",
-  "shortfall": 1500000,
-  "moves": [
-    { "from_jar_id": "pool", "amount": 1000000 },
-    { "from_jar_id": "lifestyle", "amount": 500000 }
+  "from_jar_id": "food",
+  "allocations": [
+    { "to_jar_id": "transport", "amount": 300000 },
+    { "to_jar_id": "health", "amount": 200000 }
   ],
-  "reason": "Hũ Ăn uống thiếu 1.500.000đ; lấy 1.000.000đ từ tiền chưa phân bổ và 500.000đ từ hũ Hưởng thụ"
+  "reason": "Chuyển 500.000đ từ hũ Ăn uống sang hũ Di chuyển và hũ Sức khỏe theo đúng số khách nêu"
 }
 ```
 
 | Field | Bắt buộc | Ghi chú |
 |---|---|---|
-| `target_jar_id` | ✅ | hũ đang thiếu (id thật, **phải có `balance` ≠ `null`**) |
-| `shortfall` | ✅ | VND còn thiếu, > 0. Trường hợp (a): `số tiền định chi − spendable` của hũ đích. Trường hợp (b): `−balance` của hũ đích |
-| `moves` | ✅ | ≥ 1 phần tử `{ from_jar_id, amount }` |
-| `moves[].from_jar_id` | ✅ | id hũ cho tiền, hoặc `"pool"` = `unallocated` ("Chưa phân bổ") |
-| `moves[].amount` | ✅ | VND lấy từ nguồn đó, > 0 |
-| `reason` | ✅ | giải thích vì sao chọn các nguồn này |
+| `from_jar_id` | ✅ | hũ cho tiền (id thật trong `jar-summary`); **không** phải `"pool"` |
+| `allocations` | ✅ | ≥ 1 phần tử `{ to_jar_id, amount }`, mỗi hũ nhận **một lần** |
+| `allocations[].to_jar_id` | ✅ | hũ nhận; khác `from_jar_id`; không phải `"pool"` |
+| `allocations[].amount` | ✅ | số nguyên VND > 0, cộng vào `balance` hũ nhận và trừ khỏi hũ nguồn |
+| `reason` | ✅ | vì sao chia như vậy, có số thật |
 
-**Quy tắc cứng** (`pfm` kiểm lại; vi phạm bất kỳ điều nào → bỏ cả `ui`, chỉ hiện `answer`):
-1. `Σ moves[].amount` **đúng bằng** `shortfall`, và `shortfall` khớp số `pfm` tự tính.
-2. `from_jar_id` ≠ `target_jar_id`, không lặp nguồn, không bịa id.
-3. Mỗi hũ cho chỉ cho tối đa **`spendable`** của nó (không đẩy hũ cho xuống âm). Hũ có
+**Quy tắc cứng** (`pfm` kiểm lại; vi phạm điều nào thì bỏ cả `ui`, chỉ hiện `answer`):
+1. `Σ allocations[].amount ≤ spendable` của hũ nguồn (không đẩy hũ nguồn xuống âm). Hũ nguồn có
    `spendable: null` (chưa có số dư) **không được cho**.
-4. Nguồn `"pool"` chỉ cho tối đa `max(0, unallocated)`. (Chú ý: khác `allocationHeadroom`.)
+2. `from_jar_id` ≠ `to_jar_id`, mỗi hũ nhận một lần, không có `"pool"`, không bịa id.
+3. Chỉ **1 hũ nguồn mỗi form**: khách nêu nhiều hũ nguồn thì làm hũ đầu và nói còn hũ nào để lượt sau.
 
-**Thứ tự ưu tiên nên theo** (cùng thứ tự engine `pfm` dùng; là gợi ý, không phải quy
-tắc cứng): `pool` trước, sau đó các hũ còn lại theo `spendable` giảm dần (hũ nhiều
-tiền nhất lấy trước). Không có hũ nào được bảo vệ — hũ không có vai trò. Mỗi nguồn lấy
-`min(spendable, phần còn thiếu)` rồi dừng khi đủ. Tổng mọi nguồn vẫn không đủ →
-**không trả `ui`**, nói rõ trong `answer` là không đủ.
+**Khác với hợp đồng phía Agent — hũ chưa có số dư không nhận được chuyển giữa hũ.** Tài liệu Agent
+cho phép hũ nhận là hũ bất kỳ; nhưng `pfm` từ chối ghi một khoản chuyển vào hũ `balance: null`
+(`rebalance-leg-guard.ts` trả `422 jar has no balance`), vì số dư chưa được neo. Card hiện lỗi
+"nạp tiền vào hũ trước khi nhận chuyển" và không cho áp dụng. Muốn đưa tiền vào hũ chưa có số dư
+thì dùng `distribute_amount` (khoản nạp chính là số dư đầu tiên). Agent nên nêu điều này trong
+`answer` thay vì trả `rebalance_jars` cho hũ nhận chưa có số dư.
 
-**Từ 2026-09-23, 4 quy tắc cứng trên còn được kiểm lại lần nữa ngay tại nơi ghi**
-(`POST`/`PATCH /api/manual-transactions`, `rebalance-leg-guard.ts`) — không chỉ ở card trước khi
-khách bấm xác nhận. Cùng giới hạn (`spendable`/`unallocated`), không phải quy tắc mới; Agent
-không cần đổi gì, chỉ là con số Agent đề xuất giờ không thể lọt qua kể cả khi có lỗi ở phía
-`pfm` render card.
+Các quy tắc trên còn được kiểm **lần nữa ngay tại nơi ghi** (`POST`/`PATCH /api/manual-transactions`,
+`rebalance-leg-guard.ts`, từ 2026-09-23): mỗi bản ghi chuyển ≤ số dư hũ nguồn tại thời điểm ghi.
 
-**Khi khách xác nhận**, `pfm` (không phải Agent) ghi mỗi `moves[]` một bản ghi bù giữa
-hũ; số dư hai hũ tự cập nhật, còn `spent` và `limit` không đổi. Số dư sau khi bù
-**được mang sang tháng sau** (không reset theo hạn mức).
+**Khi khách xác nhận**, `pfm` (không phải Agent) ghi **mỗi `allocations[]` một bản ghi** chuyển giữa
+hai hũ (`categoryId: "dieu-chinh-hu"`, `meta.fromJarId`/`toJarId`), **lần lượt từng bản ghi** để
+mỗi bản ghi thấy đúng số dư còn lại của hũ nguồn; một bản ghi lỗi thì các bản ghi đã ghi được gỡ ra.
+Số dư hai hũ tự cập nhật, `spent` và `limit` không đổi. Card cho phép khách sửa hũ nguồn, hũ nhận,
+số tiền, thêm/bớt hũ nhận trước khi áp dụng.
 
-**Ví dụ số** (minh hoạ; số của hũ lấy từ dữ liệu `jar-summary` ở trên, riêng
-`unallocated` **giả định chỉ còn 1.000.000** — dữ liệu mẫu thật đang 13.044.000, khi đó
-"Chưa phân bổ" một mình đủ bù 1.500.000 và `moves` chỉ có 1 phần tử `pool`). Ăn uống
-`balance` 1.813.000. Khách định chi 3.313.000 từ hũ này → `shortfall` = 3.313.000 −
-1.813.000 = 1.500.000. Lấy 1.000.000 từ "Chưa phân bổ" (giả định), phần còn lại 500.000 từ
-Hưởng thụ (`spendable` 1.296.000) → `moves` như JSON trên. Sau khi
-áp dụng và chi: Ăn uống `balance` = 1.813.000 − 3.313.000 + 1.500.000 = 0
-(hết tiền nhưng **không âm**), còn `overLimit` vẫn `true` vì `spent` 5.500.000 > hạn mức
-4.000.000 — bù giữa hũ không xoá việc khách đã chi vượt kế hoạch.
+**Ví dụ số:** Ăn uống `balance` 2.613.000 → `spendable` 2.613.000. Khách: "chuyển 500 nghìn từ
+Ăn uống sang Di chuyển" → `from_jar_id: "food"`, `allocations: [{transport, 500000}]`. Sau khi áp
+dụng: Ăn uống 2.113.000, Di chuyển +500.000; `limit` và `spent` của cả hai hũ không đổi.
 
 ### Dùng trong luồng Chuyển tiền (khi bấm "Tiếp tục" mà hũ nguồn không đủ)
 
-Không phải form mới — vẫn là `rebalance_jars` ở trên, nhưng **không đi qua chat**: `pfm`
-gọi endpoint riêng của Agent `POST /jar-rebalance` (chế độ `cover`, không thread, không nhớ
-gì; xem `docs/jar-rebalance-endpoint.md` bên repo Agent) qua proxy
-`POST /api/agent/jar-rebalance`:
+Không đi qua chat: `pfm` gọi endpoint riêng của Agent `POST /jar-rebalance` (không thread, không nhớ
+gì; xem `agent_backend_docs/jars/endpoints.md`) qua proxy `POST /api/agent/jar-rebalance`. Body mới
+**không còn** `mode`/`target_jar_id`/`spend_amount` (field lạ → Agent trả `422`):
 
 ```json
-{ "user_id": "CIF_0001", "mode": "cover", "target_jar_id": "food", "spend_amount": 14000000 }
+{ "user_id": "CIF_0001", "from_jar_id": "lifestyle", "amount": 500000, "to_jar_ids": ["food"] }
 ```
 
-Ở màn Chuyển tiền, khi khách chọn một hũ làm nguồn, nhập số tiền lớn hơn `spendable` của
-hũ đó rồi bấm "Tiếp tục", `pfm` mở popup "Hũ chưa đủ tiền" (phần thiếu do engine tính).
-"Chưa phân bổ" luôn được lấy trước: nếu pool đủ bù hết phần thiếu thì cách rót của engine
-(chỉ pool) chính là gợi ý và **không gọi Agent**. Chỉ khi phần thiếu **vượt quá pool**, `pfm`
-gọi endpoint trên với `spend_amount` = số khách nhập để Agent chia phần còn lại từ các hũ khác. Agent tự tính `shortfall` và trả
-`rebalance_jars` (~21 s, đã đo), nên popup hiện ngay cách rót của engine, ghi nhãn
-"Cách rót tạm tính" và dòng "M-You đang phân tích…", rồi thay bằng đề xuất của Agent +
-`reason` khi về. Khi khách bấm "Đồng ý rót", `pfm` **kiểm lại** đề xuất với số hiện tại (các
-quy tắc cứng 1–4 ở trên, `shortfall` lấy theo engine) — không khớp / không có `ui` / lỗi /
-quá 60 s → dùng cách rót của engine. Lúc xác nhận chuyển tiền, `pfm` kiểm lại lần nữa với
-số mới nhất trước khi ghi các bản ghi bù (ghi với `origin: "manual"`). Nguồn "Chưa phân
-bổ" (pool) **không** hỏi Agent, vì `target_jar_id` phải là một hũ.
+Endpoint chỉ nhận **một hũ nguồn** mỗi lần gọi. Khi khách chọn một hũ làm nguồn tiền, nhập số lớn
+hơn `spendable` của hũ đó rồi bấm "Tiếp tục", `pfm` mở popup "Hũ chưa đủ tiền" (phần thiếu `S` do
+engine tính) và chia việc như sau:
+1. **"Chưa phân bổ" là phần duy nhất do engine của `pfm` quyết** và luôn được lấy trước: nếu pool đủ
+   bù cả `S` thì đó chính là gợi ý và **không gọi Agent**.
+2. **Mọi phần vượt pool đều do Agent đề xuất.** `pfm` gọi endpoint **một lần cho mỗi hũ** mà chuỗi
+   nguồn của engine lấy tiền (tối đa 3 hũ, chạy song song): `from_jar_id` = hũ đó, `amount` = số
+   engine dự kiến lấy, `to_jar_ids: [hũ đang thiếu]`. Chuỗi nguồn quá 3 hũ thì không gọi Agent.
+3. Trong lúc chờ (~10–25 s), popup **chỉ hiện dòng "Chưa phân bổ"** cùng dòng "Phần còn lại · chờ
+   M-You chọn hũ", và nút "Đồng ý rót" bị khoá ("Đang chờ M-You…"); khách vẫn bấm được "Chọn nguồn
+   khác". Khi **mọi** lần gọi trả đúng `rebalance_jars` như đã hỏi (đúng `from_jar_id`, đúng 1 hũ
+   nhận, đúng `amount`), popup hiện các `reason` của Agent và "Đồng ý rót" mở lại.
+4. Agent không trả được (không có `ui`, khác điều đã hỏi, lỗi, quá 60 s) → popup hiện cách rót tự
+   động của engine kèm dòng "M-You chưa gợi ý được lúc này", để giao dịch không bị kẹt.
+5. Lúc xác nhận chuyển tiền, `pfm` kiểm lại kế hoạch với số mới nhất trước khi ghi các bản ghi bù
+   (`origin: "manual"`); không khớp thì dùng cách rót của engine. Nguồn "Chưa phân bổ" (pool)
+   **không** hỏi Agent.
 
-**Lưu ý thứ tự nguồn:** endpoint này luôn ép "pool trước, rồi hũ nhiều tiền nhất". Khi
-"Chưa phân bổ" đủ bù thì đề xuất chỉ có `pool` (đã đo: CIF_0001, Ăn uống chi 14.000.000đ →
-12.187.000đ từ pool). Nếu sản phẩm muốn gợi ý **chia giữa các hũ** thay vì pool, cần Agent
-thêm tuỳ chọn cho `cover` (ví dụ `exclude_pool`/`prefer: "jars"`) — `pfm` chưa có cách nào
-ép điều đó qua endpoint hiện tại.
+**Lưu ý:** hũ nguồn và số tiền của mỗi lần gọi do `pfm` (engine) chọn, Agent chỉ xác nhận/giải thích
+và có thể từ chối (`ui: null`) khi số của nó khác. Nếu sản phẩm muốn Agent **tự chọn hũ nguồn**, cần
+Agent hỗ trợ chế độ nhận `to_jar_ids` mà không cần `from_jar_id` — endpoint hiện tại chưa có. Agent
+đọc số liệu hũ từ bản `pfm` đã deploy (`PFM_BASE_URL`), nên khi `pfm` chạy local với số liệu khác,
+Agent thường từ chối và popup rơi về bước 4.
 
-## B5. `clarify_options` — hỏi lại bằng nút bấm
+## B5. `distribute_amount` — chia tiền chưa phân bổ vào hũ
+
+Loại `ui` mới (2026-09-24). Khách muốn đưa một số tiền vào 1 hoặc nhiều hũ mà **không nêu hũ nguồn**
+("chuyển 300k vào hũ Tiết kiệm", "chia 1 triệu vào Ăn uống và Di chuyển", "bù giúp tôi"): tiền
+**luôn lấy từ tiền chưa phân bổ** (`unallocated`); Agent chỉ cộng vào **số dư** hũ nhận, **không đổi
+`limit`**. Nguồn: `agent_backend_docs/jars/distribute-amount.md`.
+
+```json
+{
+  "type": "distribute_amount",
+  "allocations": [
+    { "to_jar_id": "food", "amount": 600000 },
+    { "to_jar_id": "transport", "amount": 400000 }
+  ],
+  "reason": "Chia 1.000.000đ tiền chưa phân bổ theo đúng số khách nêu cho hũ Ăn uống và hũ Di chuyển"
+}
+```
+
+| Field | Bắt buộc | Ghi chú |
+|---|---|---|
+| `allocations` | ✅ | ≥ 1 phần tử `{ to_jar_id, amount }`, mỗi hũ **một lần** |
+| `allocations[].to_jar_id` | ✅ | id hũ có trong `jar-summary`; không phải `"pool"` |
+| `allocations[].amount` | ✅ | số nguyên VND > 0, cộng vào `balance` hũ đó |
+| `reason` | ✅ | căn cứ chia, 1–2 câu |
+
+**Quy tắc cứng** (`pfm` kiểm lại; vi phạm thì bỏ cả `ui`): `Σ amount ≤ max(0, unallocated)` (không lấy
+từ hũ khác); mỗi hũ một lần; id có thật. Mọi hũ nhận được, **kể cả hũ `balance: null` hoặc chưa đặt
+hạn mức** — khoản nạp chính là số dư đầu tiên. Khách nêu số cho từng hũ → đúng số đó; chỉ nêu 1 tổng
+→ hũ cần bù (`balance < 0`) trước, phần còn lại chia đều (endpoint: theo chi tiêu 3 tháng).
+
+**Khi khách xác nhận**, `pfm` ghi **một lô nạp tiền duy nhất** qua `POST /api/jar-ledger`
+(`kind: "deposit"` cho mỗi hũ, all-or-nothing, server kiểm lại trần CASA) — cùng cửa ghi với sheet
+"Chia ngay". Sau khi ghi, `unallocated` giảm đúng tổng. Card cho khách sửa hũ, số tiền, thêm/bớt hũ
+nhận trước khi áp dụng.
+
+### Dùng ở màn "Chờ phân bổ" → "Chia ngay"
+
+Không đi qua chat: sheet "Chia tiền vào hũ" có nút **"Gợi ý cách chia từ M-You"** (hiện khi
+`unallocated > 0`). `pfm` gọi `POST /jar-distribute` qua proxy `POST /api/agent/jar-distribute`:
+
+```json
+{ "user_id": "CIF_0001", "amount": 1000000 }
+```
+
+`amount` là **toàn bộ** số "Chờ phân bổ" hiện có; Agent tự quyết chia cho hũ nào (theo chi tiêu 3
+tháng gần nhất, hũ cần bù trước). Khách chờ ~10–25 s (nút hiện "M-You đang phân tích…", vẫn nhập tay
+được). Kết quả **chỉ điền sẵn** ô "cộng thêm" của từng hũ (các hũ còn lại về 0) — khách sửa và bấm
+"Thêm vào số dư" như thường, server vẫn kiểm trần CASA. `pfm` bỏ **cả** đề xuất (không điền gì) khi:
+có hũ không tồn tại, hũ lặp, `amount` không phải số nguyên dương, hoặc `Σ amount > unallocated`.
+Không có `ui` → hiện `answer` của Agent; lỗi/quá 60 s → "Chưa lấy được gợi ý từ M-You".
+
+## B6. `clarify_options` — hỏi lại bằng nút bấm
 
 Loại `ui` dùng chung cho mọi flow: khi Agent cần khách chọn giữa vài phương án cụ thể thay vì đoán.
 Chi tiết contract phía Agent: `agent_backend_docs/clarify-options.md`. Phía `pfm`:
@@ -524,14 +578,18 @@ Chi tiết contract phía Agent: `agent_backend_docs/clarify-options.md`. Phía 
 > "headroom" cho hạn mức và `remaining = hạn mức − đã chi` là theo contract cũ. Theo contract
 > mới, `create_jar` phải kèm `initial_balance` (thiếu → `pfm` bỏ `ui`), và tăng hạn mức không
 > còn bị chặn bởi headroom. Cần đo lại sau khi Agent cập nhật.
+>
+> Các dòng và mục nói về `rebalance_jars` dạng `target_jar_id`/`shortfall`/`moves` (kể cả nguồn
+> `pool` và thứ tự nguồn ở C2) đo theo **dạng cũ đã bỏ ngày 2026-09-24** (B4); `distribute_amount`
+> (B5) chưa có kịch bản đo. Đo lại theo contract mới trước khi dùng các dòng này làm chuẩn.
 
 Agent trả `answer` + tối đa 1 khối `ui` (trong repo Agent là khối ```` ```ui-json ````, `server.py`
 tách ra thành field `ui`). Phân vai kiểm tra:
 
 | Ai | Kiểm gì | Nếu sai |
 |---|---|---|
-| **Agent** (`server.py`, `text_utils.py`) | chỉ **hình dạng**: đủ field, đúng kiểu; `create_jar` **không** có `jar_id`; `edit_jar` có `jar_id`; `category_ids` không lặp; `rebalance_jars`: `target_jar_id` ≠ `"pool"`, mỗi nguồn ≠ đích và không lặp, mỗi `amount` > 0, **Σ `moves` = `shortfall`** | bỏ `ui` (`ui = null`), chỉ còn `answer` |
-| **`pfm`** | đối chiếu với số thật: `jar_id`/nguồn có tồn tại; `initial_balance` vượt `allocationHeadroom` (hạn mức không bị giới hạn); tên hũ trùng; mỗi nguồn ≤ `spendable`; "pool" ≤ `unallocated`; `shortfall` khớp số thiếu thật của hũ âm | bỏ đề xuất, chỉ hiện `answer` |
+| **Agent** (`server.py`, `text_utils.py`) | chỉ **hình dạng**: đủ field, đúng kiểu; `create_jar` **không** có `jar_id`; `edit_jar` có `jar_id`; `category_ids` không lặp; `rebalance_jars`: `from_jar_id` ≠ `"pool"`, mỗi hũ nhận ≠ hũ nguồn và không lặp, mỗi `amount` nguyên > 0; `distribute_amount`: mỗi hũ nhận một lần, `amount` nguyên > 0 | bỏ `ui` (`ui = null`), chỉ còn `answer` |
+| **`pfm`** | đối chiếu với số thật: `jar_id`/nguồn có tồn tại; `initial_balance` vượt `allocationHeadroom` (hạn mức không bị giới hạn); tên hũ trùng; `rebalance_jars`: Σ ≤ `spendable` hũ nguồn và hũ nhận đã có số dư; `distribute_amount`: Σ ≤ `unallocated` | bỏ đề xuất, chỉ hiện `answer` |
 
 ## C1. Kịch bản → kết quả kỳ vọng
 
