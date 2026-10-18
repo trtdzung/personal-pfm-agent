@@ -1508,6 +1508,12 @@ trước dựa trên dữ liệu tìm được, rồi thêm vài lựa chọn kh
   **Còn lại:** model đôi khi dài hơn 150 từ hoặc trộn thứ tự khi khách không nêu mục tiêu số tiền; tin thị trường chỉ là bối
   cảnh (bài báo không phải lúc nào cũng có con số liên quan); cụm từ cấm ("dư sức", "chắc chắn đạt") chưa có bộ lọc đầu ra (cố ý: sửa bằng regex dễ đổi nghĩa câu; chỉ dựa vào skill/instruction).
 
+**Định dạng nguồn = link markdown (làm sau đó, theo yêu cầu):** trước đây agent trả URL trần (có lượt tự ra `[tên](url)`, không có quy định).
+Giờ `instructions.md` (quy tắc 1 + mục "Trả lời ngắn gọn") và skill `investment-guidance` bắt buộc `[Tên nguồn, ngày](URL đầy đủ)` cho mọi nguồn
+(trang/quyết định MSB kèm "dữ liệu lưu ngày", bài báo kèm ngày đăng): nhãn ngắn, URL chép nguyên văn từ kết quả tra, không URL trần, không viết tắt,
+URL có ngoặc tròn đổi `%28/%29`. Chạy thật 3 câu (đầu tư, lãi suất, phí thẻ): đều ra link markdown đúng dạng. Ghi chú: ban đầu tôi kiểm tra cách hiển thị
+bằng UI `PersonalCardAgentUI`, nhưng người dùng không dùng UI đó nữa nên không dựa vào nó; markdown link vẫn đọc được ở client thuần văn bản (URL nằm trong ngoặc).
+
 **Bộ lọc chữ lạ (làm sau đó, theo yêu cầu):** `text_utils.strip_foreign_script` cắt các cụm ký tự thuộc CJK/Hàn/Kana/Cyrillic/Thái/Ả Rập/Do Thái
 lọt vào câu trả lời tiếng Việt (kiểm theo dải Unicode, không phải danh sách từ). Dấu câu full-width ("，", "。", "：") đổi sang ASCII thay vì mất;
 cụm bị cắt để lại tối đa 1 khoảng trắng ("trả全额nợ" → "trả nợ"). Văn bản hợp lệ trả về **nguyên xi** (test byte-for-byte: dấu tiếng Việt, ₫ → ± emoji,
