@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 VERSION = "goal-coach/v1"
 
@@ -71,6 +71,10 @@ class Horizon(_Strict):
         if self.target_month is not None and not _MONTH_RE.match(self.target_month):
             raise ValueError("target_month must be YYYY-MM")
         return self
+
+    @model_serializer(mode="plain")
+    def _serialize(self) -> dict[str, int | str]:
+        return self.to_wire()
 
     def to_wire(self) -> dict[str, int | str]:
         """Compact JSON form: only the field that is set."""
