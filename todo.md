@@ -1364,6 +1364,127 @@ truyền 100% thay vì 50% số tiền khách nêu (400 triệu), tự ghi số 
 tiếng Việt ("đã trả全额 2 kỳ gần nhất") — lỗi của model GLM, cần bộ lọc đầu ra trong
 `server.py` (phát hiện ký tự CJK/cụm cấm rồi sinh lại hoặc làm sạch) nếu muốn chặn hẳn.
 
+### 1.22. [Đã làm] Thông tin sản phẩm MSB: tải về trước (snapshot có nguồn), agent chỉ tra cứu từ repo
+
+**Vấn đề (user, 2026-09-19):** câu hỏi MSB rất đơn giản mà trả lời quá lâu (log: 6 lần gọi
+model ~5–6s + 10+ lần `search_msb_products`/`read_msb_product_page` 1–5s), và **không dẫn
+nguồn**. Đề xuất của user: tải trang sản phẩm về trước, có nguồn, agent chỉ lấy từ repo.
+
+**Đã làm:**
+- `scripts/sync_msb_knowledge.py` (mới, chạy tay/cron, cần `TINYFISH_API_KEY`): crawl BFS
+  `msb.com.vn/khach-hang-ca-nhan/` (chỉ trang cá nhân, cùng allowlist với tool cũ) qua
+  TinyFish Fetch batch 10 URL, sâu 3 tầng → **72 trang sản phẩm** (thẻ 15, vay 11, tiết
+  kiệm 10, bảo hiểm 10, chuyển tiền QT 8, tài khoản 6, ngân hàng số 4, đầu tư 3...) +
+  **5 PDF có lớp chữ** (biểu lãi suất tín dụng, biểu phí thẻ ghi nợ, biểu phí tín dụng,
+  hạn mức giao dịch, ưu đãi vay thế chấp). Cố ý **bỏ PDF khuyến mãi/thể lệ** (theo thời
+  hạn, dễ cũ) và loại **widget "Công cụ tính toán"** (máy tính lãi rỗng + dòng "Lãi suất cập
+  nhật lúc 15:28 08/09/2026" — model từng trích dòng này như ngày cập nhật dữ liệu). Ghi
+  `data/msb_knowledge/pages/*.md` (front matter: `title`, `source_url`, `fetched_at`, `kind`,
+  `category`) + `manifest.json` (gồm danh sách `unreadable`: 4 PDF biểu lãi suất tiền gửi là
+  ảnh scan). Xoá trang MSB đã gỡ mỗi lần chạy; từ chối ghi đè nếu tải được 0 trang.
+  Snapshot 552 KB, nằm trong image Docker (`data/` không bị `.dockerignore`).
+- `tools/msb_knowledge_tools.py` (mới): **`search_msb_knowledge(query)`** — BM25 thuần Python
+  (không thêm phụ thuộc) trên ~450 đoạn; khớp có dấu trước, bỏ dấu sau (gõ "tiet kiem ong
+  vang" vẫn ra), boost tiêu đề (PDF có tên file không dấu). ~10 ms/lần. Mỗi đoạn trả về kèm
+  **`Nguồn: <URL đầy đủ> (lấy ngày dd/mm/yyyy)`**. Dữ liệu cũ hơn `MSB_KB_MAX_AGE_DAYS`
+  (mặc định 7) → thêm dòng CẢNH BÁO buộc model nêu ngày + nhắc xác nhận tại app; câu hỏi lãi
+  suất tiền gửi → thêm LƯU Ý "bảng lãi suất KHÔNG có trong dữ liệu" + link trang lãi suất.
+- **Xoá** 4 tool tra cứu web (`search_msb_products`, `read_msb_product_page`, `list_msb_documents`,
+  `read_msb_document`) và module `tools/msb_product_tools.py` + test của nó (code chết; ban đầu
+  tôi giữ làm "dự phòng" — không ai dùng). Các hàm script tải cần (allowlist URL, làm sạch
+  trang) chuyển vào `scripts/sync_msb_knowledge.py`, test chuyển sang `test_sync_msb_knowledge.py`.
+  **Skill `msb-products`: đã xoá lần cuối (user xác nhận)** — từng khôi phục theo yêu cầu (dùng
+  tool cục bộ thay web search) nhưng đo được thêm 1 vòng gọi model (~5s, 15–22s so với 12–17s) chỉ để
+  đọc `SKILL.md`, trong khi tool đã đăng ký trực tiếp và quy tắc nằm sẵn trong `instructions.md`.
+  2 quy tắc chỉ có trong skill (không khẳng định "đủ điều kiện"; nhắc biên độ khi nêu lãi suất vay)
+  đã chuyển vào `instructions.md`.
+- `investment-guidance` dùng `search_msb_knowledge` (1 lần, tức thì) thay 1 search + 1 read.
+- Test: `test_msb_knowledge_tools.py` (fixture nhỏ + smoke test trên snapshot thật: ≥50 trang,
+  mọi trang có nguồn hợp lệ, 7 câu hỏi điển hình ra đúng trang, tra cứu < 250 ms),
+  `test_sync_msb_knowledge.py`, cập nhật `test_instructions`/`test_tool_limits`.
+  **273 test pass.** README + Option H notebook cập nhật.
+- **Kết quả đo thật (model VNG):** câu MSB đơn giản: **1 lần gọi tool, 2 lần gọi model,
+  12–19 s** (trước: 10+ lần gọi tool, 6+ lần gọi model, > 40 s), câu trả lời 2–5 câu có nguồn
+  URL + "dữ liệu lưu ngày 19/09/2026"; hỏi lãi suất tiết kiệm → nói rõ bảng lãi suất không có
+  trong dữ liệu, dẫn trang lãi suất/app, không nêu con số.
+
+**Lỗi nghiêm trọng bắt được khi bỏ skill (2026-09-19) — ghép sai cột trong bảng PDF:** câu "phí thường
+niên thẻ ghi nợ MSB" trả **sai** (nói Napas M-Pro miễn phí / CVP VCCS 50.000đ — PDF thật ngược lại), vì
+TinyFish Fetch làm phẳng bảng PDF thành 1 chuỗi (markdown, html và json đều y hệt) nên model tự đoán cột.
+Cảnh báo bằng prompt chỉ đỡ được 2/3 lần. **Sửa thật:** `sync_msb_knowledge.py` tải thẳng PDF (chỉ URL
+trong allowlist, chặn redirect ra ngoài) và trích bằng `pdftotext -layout` → cột thẳng hàng dưới tiêu đề
+(cần poppler ở máy chạy script, KHÔNG cần trong image production; thiếu thì dự phòng bản làm phẳng + cảnh
+báo mạnh); front matter ghi `extraction: layout|flattened`. `search_msb_knowledge`: xếp hạng theo mảnh nhỏ
+nhưng **trả nguyên cả trang PDF** (tiêu đề cột đi kèm hàng phí), trong khối chữ cố định + ghi chú cách đọc
+cột; với câu hỏi phí/lãi suất vay luôn đưa trang PDF điểm cao nhất (≥ 60% top) lên đầu; trần 10.000 ký
+tự/kết quả. Đo lại: **3/3 lần đúng cả 5 loại thẻ**, 1 lần gọi tool, ~16s. (+ test: layout/flattened,
+allowlist tải PDF, trần đầu ra, ưu tiên PDF cho câu hỏi phí; **268 test pass**.) **Còn treo:** PDF
+`QD-9902` (biểu phí tín dụng, ~14K ký tự) là bảng lớn nhiều trang — trang sau có thể không lặp tiêu đề
+cột (ghi chú đã nhắc model); chưa kiểm tra riêng độ chính xác trên PDF đó.
+
+**Vận hành — QUAN TRỌNG:** snapshot chỉ mới khi có người chạy
+`uv run python scripts/sync_msb_knowledge.py` rồi commit. Chưa có lịch tự động (CI/cron cần
+secret `TINYFISH_API_KEY`) — khuyến nghị chạy hằng ngày; nếu quên, agent vẫn trả lời nhưng
+kèm cảnh báo ngày sau 7 ngày. Ngày lưu là **ngày tải**, không phải ngày MSB đổi nội dung.
+
+**Còn treo:** (a) ~~không có bảng lãi suất tiền gửi~~ → đã xử lý ở 1.23 (chép lại thủ công từ bản scan); (b) model đôi khi viết nguồn rút gọn ("msb.com.vn") thay vì URL
+đầy đủ — đã thêm quy tắc, cần theo dõi; (c) khoảng 12–19 s còn lại chủ yếu là 2 lần gọi model
+(~5–6 s mỗi lần) + đọc skill; muốn nhanh hơn nữa phải giảm vòng gọi model (ví dụ trả lời thẳng
+từ kết quả tra cứu ở lần gọi đầu); (d) xếp hạng BM25 đơn giản — đã sửa 1 lỗi thật khi chạy lại: model tự thêm "MSB" vào từ khoá ("phí thường niên thẻ ghi nợ MSB") làm PDF biểu phí rớt khỏi top 3 → coi "msb" là từ dừng (+ test hồi quy). Test cũng bắt được 2 lỗi thật khác ở kênh không dấu:
+  (i) "thế"/"vậy" (từ dừng) khi bỏ dấu thành "the"/"vay" = đúng từ khoá thẻ/vay nên bị loại nhầm →
+  loại 2 từ này khỏi stopword không dấu; (ii) truy vấn không dấu ("the tin dung hoan tien") khiến
+  PDF có tên file không dấu được cộng điểm 2 lần và thắng trang có dấu → truy vấn không dấu chỉ chấm
+  ở kênh bỏ dấu, trọng số đầy đủ. Câu hỏi lệch từ khoá (ví dụ "vay
+tín chấp" ↔ "không tài sản đảm bảo") có thể ra trang chưa tối ưu.
+
+### 1.23. [Đã làm] Bảng lãi suất tiền gửi: chép lại thủ công từ PDF scan (`data/msb_knowledge/curated/`) + tool tính lãi
+
+**Vấn đề:** 4 quyết định lãi suất tiền gửi trên trang lãi suất MSB là **ảnh scan** (không có lớp chữ), web thì tải
+bảng bằng JS → agent không có con số nào cho "lãi suất tiết kiệm 12 tháng". Người dùng cho phép **tự đọc và
+chép lại nội dung PDF** thay vì parse/OCR.
+
+**Đã làm**
+- Đọc trực tiếp ảnh scan (2 lượt: 100 dpi rồi 150 dpi để đối chiếu từng ô) và chép thành markdown có bảng:
+  `curated/qd-4144-…md` (QĐ 4144/2026/QĐ-TGĐ1 ngày 13/04/2026, hiệu lực 14/04/2026: tiết kiệm **tại quầy**,
+  ngắn ngày 1–3 tuần, ALMA, **trực tuyến**, sản phẩm "Lãi suất đặc biệt" + điều kiện) và
+  `curated/qd-2896-…md` (QĐ 2896/2023: không kỳ hạn theo gói tài khoản/số dư). Mỗi file có front matter:
+  `decision`, `effective_from`, `transcribed_at`, `source_sha256` (hash PDF gốc).
+- **Cố ý bỏ qua**, ghi trong `curated/reviewed.json`: QĐ 1175/2026 (đã bị QĐ 4144 thay thế theo Điều 2 của 4144),
+  QĐ 6895/2021 (ngoại tệ, ngoài phạm vi tiền VND). Trang mã sản phẩm (Phụ lục 03) không chép.
+- `scripts/sync_msb_knowledge.py`: **không bao giờ ghi/xoá `curated/`**; chỉ *canh gác*: tải lại PDF gốc so sánh
+  sha256 → manifest có `curated[]` (`current`/`changed`/`gone`/`unchecked`) và `unreviewed_scans[]` (scan chưa
+  chép cũng chưa review = có thể là quyết định lãi suất MỚI). In cảnh báo to khi có scan chưa review.
+  Tách `download_pdf()` dùng chung với `layout_text()`.
+- `tools/msb_knowledge_tools.py`: nạp `curated/*.md`, mỗi mục `##` là 1 đoạn nguyên bảng, xếp hạng theo **tiêu đề
+  + heading** (xếp theo cả bảng thì bảng ngắn ALMA/ngắn ngày thắng bảng chính); câu hỏi lãi suất tiền gửi được
+  ép lên đầu tối đa 2 bảng (nếu điểm ≥ 0,5 × điểm cao nhất — chứng chỉ tiền gửi không bị áp bảng tiết kiệm).
+  Kết quả ghi tên quyết định + ngày hiệu lực + ngày chép + chú thích ("—" là ô trống, quầy ≠ trực tuyến, không
+  áp cho CCTG/vay). CẢNH BÁO khi bản gốc `changed/gone/unchecked` hoặc có `unreviewed_scans`. Bỏ ghi chú cũ
+  "bảng lãi suất KHÔNG có trong dữ liệu" khi đã có bảng khớp.
+- **Lỗi thật bắt được:** "không" là stopword → "lãi suất tiền gửi **không kỳ hạn**" thành "kỳ hạn" và ra sản phẩm
+  ngược nghĩa → giữ "không kỳ hạn" thành 1 token (cả kênh có dấu/không dấu).
+- `tools/investment_tools.py`: thêm `calculate_deposit_interest` (gốc × %/năm × tháng/12 hoặc ngày/365; từ chối
+  đầu vào lạ, trần 15%/năm). **Lý do:** chạy thật, model tính lãi không kỳ hạn sai gấp 100 lần
+  (300 triệu × 0,1% → "822.000đ/năm", đúng là 300.000đ). Trần 2 lần/lượt. Sau khi thêm, 2/2 câu đúng.
+- `instructions.md` (quy tắc 1) và skill `investment-guidance`: chỉ nêu số có trong bảng chép lại + tên quyết định +
+  ngày hiệu lực + quầy hay trực tuyến; 1–3 mức đúng kỳ hạn, không bảng markdown; không tự nhân nhẩm tiền lãi.
+- Test: 299 pass (thêm: cấu trúc/độ đồng nhất của bảng thật — các cột "cao nhất/rút gốc/hợp đồng" bằng nhau, "định kỳ"
+  thấp hơn 0,2–0,3, 17 hàng kỳ hạn mỗi bảng, lãi ≤ 9%; fixture curated; cảnh báo changed/gone/unchecked/unreviewed;
+  sync: `download_pdf`, `review_curated`, `write_kb` không đụng `curated/`).
+- Chạy model thật (3 đợt, 9 câu): mọi lãi suất đọc từ bảng đều đúng (12 tháng online 6,80%/quầy 6,50%; 6 tháng quầy
+  6,10%; Premier Plus 0,1%; CCTG không bị áp bảng tiết kiệm), mỗi câu 1 lần tra cứu, 13–20 s. Lỗi duy nhất là số
+  học của model (đã xử lý bằng `calculate_deposit_interest`); model còn viết dài hơn 2–4 câu ở vài câu so sánh.
+
+**Rủi ro còn lại — cần người/nghiệp vụ**
+1. **Sai sót chép tay**: đã đối chiếu 2 lượt + kiểm tra nhất quán trong test, nhưng vẫn là người-đọc-ảnh. Nên để 1 người
+   nghiệp vụ MSB đối chiếu 2 file `curated/` với PDF gốc **trước khi dùng thật**.
+2. **Lỗi thời**: QĐ 4144 hiệu lực 14/04/2026 (>5 tháng). Sync chỉ phát hiện PDF gốc đổi/quyết định mới xuất hiện; nếu MSB đổi lãi
+   suất mà không đổi PDF thì không biết. Agent luôn nhắc xác nhận tại app/quầy.
+3. **QĐ 2896 là văn bản 2023** (căn cứ TT 07/2014 đã được thay bởi TT 48/2024) — MSB vẫn đăng nhưng chưa rõ còn hiệu lực; đã ghi rõ trong file.
+4. Chân trang PDF ghi "chỉ được lưu hành nội bộ và cung cấp ra bên ngoài theo quy định của MSB" — cần pháp chế xác nhận
+   việc đưa nội dung cho khách qua agent.
+5. Khi có quyết định mới: chép file mới vào `curated/` (đổi `source_url`, `source_sha256`), đưa file cũ vào `reviewed.json`.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

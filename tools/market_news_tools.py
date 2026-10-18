@@ -129,7 +129,7 @@ def search_market_news(query: str, days: int = DEFAULT_DAYS) -> str:
 
     Do NOT use this to look up bank deposit/savings interest rates (refused):
     never quote any bank's deposit rate from the news or compare banks. For
-    MSB's own products/rates use `search_msb_products` instead.
+    MSB's own products/rates use `search_msb_knowledge` instead.
 
     Args:
         query: Public market keywords in Vietnamese (max 200 characters).
@@ -150,8 +150,7 @@ def search_market_news(query: str, days: int = DEFAULT_DAYS) -> str:
             "tin tức: báo chí không phải nguồn chính thức và có thể lỗi thời. "
             "Đừng nêu lãi suất của ngân hàng nào lấy từ tin tức (kể cả MSB) và "
             "đừng khuyên gửi ngân hàng khác. Với sản phẩm/lãi suất của MSB, "
-            "dùng `search_msb_products` / `read_msb_product_page` (website "
-            "chính thức MSB). Vẫn có thể tra tin thị trường/vĩ mô (ví dụ lãi "
+            "dùng `search_msb_knowledge` (bản lưu website chính thức MSB). Vẫn có thể tra tin thị trường/vĩ mô (ví dụ lãi "
             "suất điều hành, lãi suất Fed)."
         )
     key = _api_key()

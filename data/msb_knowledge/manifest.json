@@ -1,0 +1,809 @@
+{
+  "fetched_at": "2026-09-19T17:48:22+07:00",
+  "source": "https://www.msb.com.vn/khach-hang-ca-nhan/",
+  "pages": [
+    {
+      "id": "index",
+      "title": "Dịch vụ Khách hàng Cá nhân - Ngân hàng MSB",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/",
+      "kind": "page",
+      "category": "tong-quan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "fbdcb26df3e974a81738e504d43650cdb1889ca4c79c0a9ef717e173a68a185a",
+      "chars": 463
+    },
+    {
+      "id": "ngan-hang-so",
+      "title": "Ngân hàng số - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/ngan-hang-so/",
+      "kind": "page",
+      "category": "ngan-hang-so",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "d9b544170e1645f2bcf596f223f26774cb987aa3208de79307584b7a6eed14f4",
+      "chars": 535
+    },
+    {
+      "id": "ngan-hang-so__msb-digital-bank",
+      "title": "MSB Digital Bank – Siêu ứng dụng tài chính chuẩn quốc tế",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/ngan-hang-so/msb-digital-bank/",
+      "kind": "page",
+      "category": "ngan-hang-so",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "855304bd363e7d0eba7697cde7ed7c2f9b4b605f8c817a9a53c162054dbb50ef",
+      "chars": 5377
+    },
+    {
+      "id": "ngan-hang-so__msb-rewards",
+      "title": "Chương trình Khách hàng thân thiết - MSB Rewards",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/ngan-hang-so/msb-rewards/",
+      "kind": "page",
+      "category": "ngan-hang-so",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "9e69a762b0e0fe21b2e1139f57601da15a2f0b37646fe9ff5763c9216df4fe16",
+      "chars": 4286
+    },
+    {
+      "id": "the",
+      "title": "Thẻ - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "1e277472e3f28fe4580fe1e13ea066c59457d5f93b23511de2ed750996625102",
+      "chars": 1772
+    },
+    {
+      "id": "the__the-msb-mastercard-green-world",
+      "title": "Thẻ tín dụng MSB Mastercard Green World - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-mastercard-green-world/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "331a2e0cd6b676bb65f44cbc76bdd1b9166bcec412503885321e54f9dd1dfe8a",
+      "chars": 3835
+    },
+    {
+      "id": "the__the-noi-dia-napas",
+      "title": "Thẻ ghi nợ nội địa Napas MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-noi-dia-napas/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "ee248fd82fdb07b4ac594c5811df6dc1cf7c8f97bdf19e6e0eed8f829f7b3bea",
+      "chars": 3046
+    },
+    {
+      "id": "the__the-msb-mastercard-hybrid",
+      "title": "Thẻ MSB Mastercard Hybrid - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-mastercard-hybrid/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "db9683348094ba9967fc631080a76b1dd6d71dfec13748e1a286c49c51c2ed74",
+      "chars": 3718
+    },
+    {
+      "id": "tai-khoan",
+      "title": "Tài khoản Ngân hàng MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tai-khoan/",
+      "kind": "page",
+      "category": "tai-khoan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "bf2c91cad8d579de7c2f629a0c963f57fbb54c9c33d3bea99f715bd81027ad5e",
+      "chars": 1235
+    },
+    {
+      "id": "tai-khoan__tai-khoan-so-dep",
+      "title": "Tài khoản số đẹp MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tai-khoan/tai-khoan-so-dep/",
+      "kind": "page",
+      "category": "tai-khoan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "a91ee17543b44e90503872ebeec6bc9a2eda132183bb1937eac61e6c1732b146",
+      "chars": 2292
+    },
+    {
+      "id": "tai-khoan__tai-khoan-luong",
+      "title": "Tài khoản lương MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tai-khoan/tai-khoan-luong/",
+      "kind": "page",
+      "category": "tai-khoan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "a2baf4184273cdc6178024f7add929ffb464b2bf3aa8a838a19f80eea0193c3f",
+      "chars": 4015
+    },
+    {
+      "id": "tiet-kiem",
+      "title": "Gửi tiết kiệm MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "9882be3b281a3e1759f250432dce0ab09bd109d0ed7c4e349baf7362e72d29bd",
+      "chars": 1197
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-lai-suat-cao-nhat",
+      "title": "Tiết kiệm lãi suất cao nhất - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-lai-suat-cao-nhat/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "2f9068225ec91d07d8c154c1255004f4b125521b098c502f48f203f7d22021e5",
+      "chars": 3934
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-ong-vang",
+      "title": "Tiết kiệm Ong vàng - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-ong-vang/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "d2bacb771ceb8c6100b24dbf486fc6769fe73fd8ad2aa773fca991d0004a199d",
+      "chars": 4215
+    },
+    {
+      "id": "vay",
+      "title": "Vay - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "36492c2d43d8ac7bcdd9b4460f718a4f473d7aaf999bab512d06fc95c2444fc2",
+      "chars": 1271
+    },
+    {
+      "id": "vay__vay-mua-nha-du-an",
+      "title": "Vay mua nhà dự án - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/vay-mua-nha-du-an/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "06e47a7dbe4d44d3c7dce249e4ce702b090c784cf116b358759d22750465c361",
+      "chars": 3331
+    },
+    {
+      "id": "vay__cho-vay-bo-sung-von-kinh-doanh",
+      "title": "Cho vay bổ sung vốn kinh doanh - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/cho-vay-bo-sung-von-kinh-doanh/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "a71d6862c816f4b53e126e1e96c92512491e41d25574ae95840741d97e395d0e",
+      "chars": 3297
+    },
+    {
+      "id": "vay__vay-tieu-dung",
+      "title": "Vay tiêu dùng - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/vay-tieu-dung/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "27385bbd46105e349eef8a93ae7225ae5a69866caf107617426423fff0baff02",
+      "chars": 3584
+    },
+    {
+      "id": "vay__vay-mua-o-to-moi",
+      "title": "Vay mua ô tô mới - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/vay-mua-o-to-moi/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "ee4d5abae2811f5f96a6b998bc94e7c7229ab1ad74982de8dd7e73df75a61cc2",
+      "chars": 2955
+    },
+    {
+      "id": "vay__vay-xay-sua-nha",
+      "title": "Vay xây sửa nhà - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/vay-xay-sua-nha/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "1c47a43329c965660f90bd5f4576e31adcf1f8d904560d0ba5d19697d381032e",
+      "chars": 3228
+    },
+    {
+      "id": "vay__thau-chi-tieu-dung",
+      "title": "Thấu chi tiêu dùng - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/thau-chi-tieu-dung/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "8a2759ac95a64ea8add02fa9e2bdc01b94de3002821f1ee5dd65ddbdc9dc55a5",
+      "chars": 3550
+    },
+    {
+      "id": "dau-tu",
+      "title": "Đầu tư - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/dau-tu/",
+      "kind": "page",
+      "category": "dau-tu",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "e52c929ce5b0a1b9a5ff1388fa4a7055f78105f2b1ebad8a20b2a171a58571fe",
+      "chars": 1146
+    },
+    {
+      "id": "dau-tu__sinh-loi-khong-ngung-cung-tai-khoan-msb",
+      "title": "Chứng chỉ tiền gửi tài khoản MSB - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/dau-tu/sinh-loi-khong-ngung-cung-tai-khoan-msb/",
+      "kind": "page",
+      "category": "dau-tu",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "216a4655c145de30f4e7e3caae3a7faca987f5ce0751b3bd5fc122ca8deacf91",
+      "chars": 2507
+    },
+    {
+      "id": "bao-hiem",
+      "title": "Bảo hiểm - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "acad1d260a625a1a81f49ddec036faa2fe35535e43e766742b9927a426d70042",
+      "chars": 1764
+    },
+    {
+      "id": "bao-hiem__bao-hiem-lien-ket-chung-pru-bao-ve-toi-da",
+      "title": "Bảo hiểm liên kết chung Pru – Bảo vệ tối đa - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-lien-ket-chung-pru-bao-ve-toi-da/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "166763589c61d557820a8e6bb0e84462bdb4430feb14257aecf17bd74f84007d",
+      "chars": 7307
+    },
+    {
+      "id": "bao-hiem__bao-hiem-suc-khoe-toan-cau-m-flexcare",
+      "title": "Bảo hiểm sức khỏe toàn cầu M-Flexcare - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-suc-khoe-toan-cau-m-flexcare/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "13415170d1c4b5ab45131e458b467c287e6d39249d1ba4809ba9a435ecce6dc8",
+      "chars": 7852
+    },
+    {
+      "id": "bao-hiem__bao-hiem-chung-cu-4-0",
+      "title": "Bảo hiểm chung cư 4.0 - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-chung-cu-4-0/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "efe8838bacf8f5230786133d3d39ee106b002aba40652c81bbbdea172cf90046",
+      "chars": 3948
+    },
+    {
+      "id": "bao-hiem__bao-hiem-lien-ket-don-vi-pru-dau-tu-vung-tien",
+      "title": "Bảo hiểm liên kết đơn vị Pru – Đầu tư vững tiến - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-lien-ket-don-vi-pru-dau-tu-vung-tien/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "7bb7bb45a7b3a254182f9e795482f6c9d98f8df863b7c58fa78134bdac8835fe",
+      "chars": 6751
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te",
+      "title": "Chuyển và nhận tiền quốc tế - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "d2ca05859b9aa9a33a14aa06df0352ac4bd1a4f71f3543c4c4e137ea4c583067",
+      "chars": 1003
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__chuyen-tien-quoc-te-qua-swift",
+      "title": "Chuyển tiền quốc tế qua SWIFT - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/chuyen-tien-quoc-te-qua-swift/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "405ce440cc5969cf93ec375c4c5b7309c0786b43627c4988552e0ddbdb65d1d7",
+      "chars": 4949
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__nhan-tien-quoc-te-kieu-hoi-qua-swift",
+      "title": "Nhận tiền quốc tế - Kiều hối qua SWIFT - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/nhan-tien-quoc-te-kieu-hoi-qua-swift/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "e31527ed0531d4cffeaddf30ccdacd7588f0b3e57f9f911b1055730aa50cb6f1",
+      "chars": 3646
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__dai-ly-doi-ngoai-te",
+      "title": "Đại lý đổi ngoại tệ - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/dai-ly-doi-ngoai-te/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "fd25080b0e51c46ea06b99dd3e0663d71e661347bda83dacf79104207512b572",
+      "chars": 3141
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__chuyen-tien-quoc-te-qua-ria",
+      "title": "Chuyển tiền quốc tế qua RIA - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/chuyen-tien-quoc-te-qua-ria/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "5761cfd9dbb84794556f9b29f4c13e6bb599d98ef0bf9b6ed6c9c52403e86662",
+      "chars": 2950
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__chuyen-tien-quoc-te-qua-western-union",
+      "title": "Chuyển tiền quốc tế qua Western Union - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/chuyen-tien-quoc-te-qua-western-union/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "7d866355ce7afa2de149720904e88300fa4972f80259cd216a39258e7bed1a9b",
+      "chars": 3368
+    },
+    {
+      "id": "lai-suat-tiet-kiem",
+      "title": "Lãi suất tiết kiệm - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/lai-suat-tiet-kiem/",
+      "kind": "page",
+      "category": "lai-suat-tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "3860dfa40af4a098879d5b7a3d69eb1ffeba26cd43cc024b0013a02bb8ea00ac",
+      "chars": 416
+    },
+    {
+      "id": "lai-suat-vay",
+      "title": "Lãi suất vay - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/lai-suat-vay/",
+      "kind": "page",
+      "category": "lai-suat-vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "37661ac83f348c38b9fa435148c6d4699141a6383704b8c9a433df82f17d05a8",
+      "chars": 363
+    },
+    {
+      "id": "bieu-mau-bieu-phi",
+      "title": "Biểu mẫu & biểu phí - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bieu-mau-bieu-phi/",
+      "kind": "page",
+      "category": "bieu-mau-bieu-phi",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "70ab1e713b95291cdd62e44fdd28772cec4a00040db4a1de372d99d45467e497",
+      "chars": 2150
+    },
+    {
+      "id": "dieu-khoan-dieu-kien",
+      "title": "Điều khoản & Điều kiện - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/dieu-khoan-dieu-kien/",
+      "kind": "page",
+      "category": "dieu-khoan-dieu-kien",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "4d058abc1c57e868e3755b5c0b73afcce95e5afaff954371c99f02e1396df764",
+      "chars": 1052
+    },
+    {
+      "id": "bao-hiem__bao-hiem-benh-hiem-ngheo",
+      "title": "Bảo hiểm bệnh hiểm nghèo - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-benh-hiem-ngheo/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "7008cc7b50eef755d5bca5d1bd5b319b54c3769775287ca4e5aad5b5689a52fa",
+      "chars": 3904
+    },
+    {
+      "id": "ngan-hang-so__tnex-by-msb-nen-tang-tai-chinh-so",
+      "title": "TNEX by MSB - Nền tảng tài chính số - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/ngan-hang-so/tnex-by-msb-nen-tang-tai-chinh-so/",
+      "kind": "page",
+      "category": "ngan-hang-so",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "20363f86680eddccf4e164cdfac5bdf48502187d10d1e4bca442da243121b5a4",
+      "chars": 2399
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-tra-lai-ngay",
+      "title": "Tiết kiệm trả lãi ngay - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-tra-lai-ngay/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "4e123aa96a818230c2d265b4c44114a40757b76c604209d71db4efaea7f5f968",
+      "chars": 4413
+    },
+    {
+      "id": "the__the-msb-mastercard-world-elite",
+      "title": "Thẻ tín dụng MSB Mastercard World Elite - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-mastercard-world-elite/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "02c0f870d500c6606a34dfe3a2692ce80d8a72aa644582e8893759e9381ba11e",
+      "chars": 4521
+    },
+    {
+      "id": "the__click-to-pay",
+      "title": "Click to Pay - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/click-to-pay/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "3a34aae4f365dbc017ab455917c1be3951199d6a4e08df31880fb7021eccb2dd",
+      "chars": 3646
+    },
+    {
+      "id": "the__google-pay",
+      "title": "Google Pay - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/google-pay/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "c11f49e9d46a46c6822bc267962496ec592cc1564c9bce224c4d5b095b6a87a1",
+      "chars": 2243
+    },
+    {
+      "id": "the__msb-visa-classic",
+      "title": "Thẻ ghi nợ quốc tế MSB Visa Classic - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/msb-visa-classic/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "064683fa9797ebf4301e49507ea1480767d0cfa4892574c09abe31c6b654be06",
+      "chars": 2989
+    },
+    {
+      "id": "the__msb-mastercard-platinum-fcb",
+      "title": "Thẻ MSB Mastercard Platinum FCB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/msb-mastercard-platinum-fcb/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "eaac8563c44a445ca020cac667e89e3636ffe4a957c78195f4607de3f10da8c7",
+      "chars": 3523
+    },
+    {
+      "id": "the__the-msb-visa-signature",
+      "title": "Thẻ tín dụng MSB Visa Signature - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-visa-signature/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "fae19909e37170bd434c469ee80a2a636eadb1ff0e712a663ff281e446081700",
+      "chars": 3739
+    },
+    {
+      "id": "the__the-msb-mastercard-family",
+      "title": "Thẻ tín dụng MSB Mastercard Family - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-mastercard-family/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "3711a5ded23b50f7a8735cceeca096518fe5ed143dfab45a4e2b674d043da116",
+      "chars": 3775
+    },
+    {
+      "id": "the__the-msb-visa-travel",
+      "title": "Thẻ tín dụng MSB Visa Travel - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-visa-travel/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "07f96c1fc167e6ec0dc990d2e57517c39cc20221ade5967d4d4a58c1582b889a",
+      "chars": 3541
+    },
+    {
+      "id": "the__the-msb-visa-online",
+      "title": "Thẻ tín dụng MSB Visa Online - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-visa-online/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "a0927aaf45f7cbf5ba0a66b6ed856ea3c85515d6177d0604e3edec632cd37a1e",
+      "chars": 3815
+    },
+    {
+      "id": "the__the-msb-mastercard-mdigi",
+      "title": "Thẻ tín dụng MSB Mastercard mDigi - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-mastercard-mdigi/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "c484fac197a8098e41864df95bc6492255184b5e2015c7af43b7548852671416",
+      "chars": 3539
+    },
+    {
+      "id": "the__the-msb-mastercard-super-free",
+      "title": "Thẻ tín dụng MSB Mastercard Super Free - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/the/the-msb-mastercard-super-free/",
+      "kind": "page",
+      "category": "the",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "2c421c319dc2afb5c8b2679e2a6d162200b40bf00c1967785c4820709adc6581",
+      "chars": 3466
+    },
+    {
+      "id": "tai-khoan__tai-khoan-ho-kinh-doanh",
+      "title": "Tài khoản hộ kinh doanh MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tai-khoan/tai-khoan-ho-kinh-doanh/",
+      "kind": "page",
+      "category": "tai-khoan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "391fbcded212f00876ec32a98e677993e9441a248ea65903858f76136c2d10a8",
+      "chars": 3730
+    },
+    {
+      "id": "tai-khoan__tai-khoan-thanh-toan",
+      "title": "Tài khoản thanh toán MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tai-khoan/tai-khoan-thanh-toan/",
+      "kind": "page",
+      "category": "tai-khoan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "5a745cb3001a42984caba1cf3fae17dbd2075741653c7228529e248b9a5ae25a",
+      "chars": 2959
+    },
+    {
+      "id": "tai-khoan__tai-khoan-thanh-toan-tnex-by-msb",
+      "title": "Tài khoản thanh toán TNEX by MSB - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tai-khoan/tai-khoan-thanh-toan-tnex-by-msb/",
+      "kind": "page",
+      "category": "tai-khoan",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "17c55fc6e1e318c5e4b8c771128d42b6936b85c11ed8f195bc712c5f55d6d603",
+      "chars": 2322
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-mang-non",
+      "title": "Tiết kiệm Măng non - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-mang-non/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "f7a0dc646d68d8b5f821d8394ff093ebe24a315c20cf8fb641f86c675f44e134",
+      "chars": 3051
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-ngoai-te",
+      "title": "Tiết kiệm ngoại tệ - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-ngoai-te/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "6931092bc6aef995f0a8e7023d445e8aebbb9de37c3e527db017c08b1f922731",
+      "chars": 3445
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-dinh-ky-sinh-loi",
+      "title": "Tiết kiệm định kỳ sinh lời - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-dinh-ky-sinh-loi/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "bc3e67ac34f85f18b58e5e21773f3a2b5b8755c83e646dc04c5fad7c47fee19b",
+      "chars": 4014
+    },
+    {
+      "id": "tiet-kiem__tiet-kiem-rut-goc-tung-phan",
+      "title": "Tiết kiệm rút gốc từng phần - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tiet-kiem-rut-goc-tung-phan/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "80af29610484c3daaa9b8302f4bdbe3efc246e0821a64f0b51b698feae1368e7",
+      "chars": 4355
+    },
+    {
+      "id": "tiet-kiem__tien-gui-co-ky-han-truc-tuyen",
+      "title": "Tiền gửi có kỳ hạn trực tuyến - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tien-gui-co-ky-han-truc-tuyen/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "dade24de3a68fcbf2f857a72f8e901b8036a7bf27bca4097fd5018bc29f6bd91",
+      "chars": 3644
+    },
+    {
+      "id": "tiet-kiem__tien-gui-tiet-kiem-tnex-by-msb",
+      "title": "Tiền gửi tiết kiệm TNEX by MSB - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/tiet-kiem/tien-gui-tiet-kiem-tnex-by-msb/",
+      "kind": "page",
+      "category": "tiet-kiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "95fa0be847b51a7088ae4750a5d90d2fb7c90d4198d27e1aa64b7efc75bd8d2d",
+      "chars": 2097
+    },
+    {
+      "id": "vay__cho-vay-kinh-doanh-bat-dong-san",
+      "title": "Cho vay kinh doanh bất động sản - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/cho-vay-kinh-doanh-bat-dong-san/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "49275baba3405fd71ac2bb332e42c6c9371e0c649f04e0027e69340963a26326",
+      "chars": 3010
+    },
+    {
+      "id": "vay__vay-mua-o-to-cu",
+      "title": "Vay mua ô tô cũ - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/vay-mua-o-to-cu/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "ead8bc553fd313467e5e6ba39cbe28b8c531eb202b078edcf1abef29c7488a40",
+      "chars": 3145
+    },
+    {
+      "id": "vay__cho-vay-dau-tu-tai-san-co-dinh",
+      "title": "Cho vay đầu tư tài sản cố định - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/cho-vay-dau-tu-tai-san-co-dinh/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "997a0e01f259e7b149668c1de1586a4c4b8caa6a899c3ce4df5b5764ee4c1d4a",
+      "chars": 3436
+    },
+    {
+      "id": "vay__vay-mua-bat-dong-san-co-so",
+      "title": "Vay mua bất động sản có sổ - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/vay/vay-mua-bat-dong-san-co-so/",
+      "kind": "page",
+      "category": "vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "a536e2840417e7591a882b5c7ebce4e1b485eaf447aa1856bda4d2e988dc1ec5",
+      "chars": 3116
+    },
+    {
+      "id": "dau-tu__m-sinh-loi",
+      "title": "M - Sinh lời - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/dau-tu/m-sinh-loi/",
+      "kind": "page",
+      "category": "dau-tu",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "fc961ed4bb1732910402c932f94d6a630290f8ee5e7520c251a94821a99a0be5",
+      "chars": 3646
+    },
+    {
+      "id": "bao-hiem__bao-hiem-o-to-bao-minh",
+      "title": "Bảo hiểm trách nhiệm dân sự xe ô tô - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-o-to-bao-minh/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "404df1293073d5e5290e5254757e25451a1f245b0464392ef82af71c11ebf506",
+      "chars": 1985
+    },
+    {
+      "id": "bao-hiem__bao-hiem-nha-tu-nhan",
+      "title": "Bảo hiểm nhà tư nhân - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-nha-tu-nhan/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "7d3d747272f839b142b63344c20f5883bb012543849fcd6efbd6b78beb253f19",
+      "chars": 2225
+    },
+    {
+      "id": "bao-hiem__bao-hiem-ung-thu-k-care",
+      "title": "Bảo hiểm ung thư K-Care - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-ung-thu-k-care/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "d7450df14ad06d3ec233f21dbb03756694843accb0379ac79a292013d85b220c",
+      "chars": 4580
+    },
+    {
+      "id": "bao-hiem__bao-hiem-tro-cap-nam-vien",
+      "title": "Bảo hiểm Trợ cấp nằm viện - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/bao-hiem/bao-hiem-tro-cap-nam-vien/",
+      "kind": "page",
+      "category": "bao-hiem",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "370316e10e86be82d54bc72ba373d8bcb2a1a13c2bf741f48d1408eb29b47f56",
+      "chars": 4113
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__nhan-tien-quoc-te-kieu-hoi-qua-ria",
+      "title": "Nhận tiền quốc tế - Kiều hối qua RIA - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/nhan-tien-quoc-te-kieu-hoi-qua-ria/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "c6f030576d59717653aa51ed8258ea569b4ae2f611f5bb920fde1eb83ff7278e",
+      "chars": 3190
+    },
+    {
+      "id": "chuyen-va-nhan-tien-quoc-te__nhan-tien-quoc-te-kieu-hoi-qua-western-union",
+      "title": "Nhận tiền quốc tế - Kiều hối qua Western Union - MSB - Ngân hàng TMCP Hàng Hải Việt Nam",
+      "url": "https://www.msb.com.vn/khach-hang-ca-nhan/chuyen-va-nhan-tien-quoc-te/nhan-tien-quoc-te-kieu-hoi-qua-western-union/",
+      "kind": "page",
+      "category": "chuyen-va-nhan-tien-quoc-te",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "2ba7e8db53501a5e7b6afc39064dbdf253b79f736861484cdcab79bd1dcef88b",
+      "chars": 2983
+    },
+    {
+      "id": "doc__lai-suat-tin-dung-tai-ngan-hang-msb-2026",
+      "title": "LAI SUAT TIN DUNG TAI NGAN HANG MSB 2026",
+      "url": "https://www.msb.com.vn/msb-website/LAI-SUAT-TIN-DUNG-TAI-NGAN-HANG-MSB-2026.pdf",
+      "kind": "pdf",
+      "category": "lai_suat_vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "a376a4dbc8bbed76191b325bb5e4860a43b676ee67237d33e57a295e07fea118",
+      "chars": 2512,
+      "extraction": "layout"
+    },
+    {
+      "id": "doc__chuong-trinh-uu-dai-lai-suat-danh-cho-khcn-vay-the-chap-tai-msb-2026",
+      "title": "CHUONG TRINH UU DAI LAI SUAT DANH CHO KHCN VAY THE CHAP TAI MSB 2026",
+      "url": "https://www.msb.com.vn/msb-website/CHUONG-TRINH-UU-DAI-LAI-SUAT-DANH-CHO-KHCN-VAY-THE-CHAP-TAI-MSB-2026.pdf",
+      "kind": "pdf",
+      "category": "lai_suat_vay",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "9b709e3ae5811a813e9a06f0f2ac414b70dd04b454524a556a0abfd835da95e1",
+      "chars": 1785,
+      "extraction": "layout"
+    },
+    {
+      "id": "doc__qd-9902-ban-hanh-bieu-phi-tin-dung-tai-nhbl-thay-qd-10560",
+      "title": "QD 9902 Ban hanh bieu phi tin dung tai NHBL thay QD 10560",
+      "url": "https://www.msb.com.vn/msb-website/QD-9902-Ban-hanh-bieu-phi-tin-dung-tai-NHBL-thay-QD-10560.pdf",
+      "kind": "pdf",
+      "category": "bieu_phi",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "c59571cd051109cc07002d90f83e31f1d50a8f81ac9a54cbd998e4821f6ef784",
+      "chars": 13727,
+      "extraction": "layout"
+    },
+    {
+      "id": "doc__bieu-phi-the-ghi-no",
+      "title": "Bieu phi The ghi no",
+      "url": "https://www.msb.com.vn/msb-website/Bieu-phi-The-ghi-no.pdf",
+      "kind": "pdf",
+      "category": "bieu_phi",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "637dd7f282cb4a9034ada6f2f3dc2d03cdafb8b224fad7285388f3bba0242869",
+      "chars": 4555,
+      "extraction": "layout"
+    },
+    {
+      "id": "doc__han-muc-giao-dich-web",
+      "title": "Hạn mức giao dịch Web",
+      "url": "https://www.msb.com.vn/msb-website/2026/04/Hạn-mức-giao-dịch-Web.pdf",
+      "kind": "pdf",
+      "category": "bieu_phi",
+      "fetched_at": "2026-09-19T17:48:22+07:00",
+      "sha256": "9eab3078e938e0d835f520a5f654bb62fca0cc24175731d6d2366acab1b64f47",
+      "chars": 2726,
+      "extraction": "layout"
+    }
+  ],
+  "unreadable": [
+    {
+      "url": "https://www.msb.com.vn/msb-website/2026/04/QD-6895-Ban-hanh-bieu-lai-suat-cac-san-pham-tien-gui-tiet-kiem-ngoai-te-la.pdf",
+      "title": "QD 6895 Ban hanh bieu lai suat cac san pham tien gui tiet kiem ngoai te la",
+      "topic": "lai_suat_tiet_kiem",
+      "reason": "PDF là bản scan (không có lớp chữ)"
+    },
+    {
+      "url": "https://www.msb.com.vn/msb-website/2026/02/QD-1175-Ban-hanh-bieu-lai-suat-cac-san-pham-tien-gui-vang-dong-viet-Nam-doi-voi-KHCN.pdf",
+      "title": "QD 1175 Ban hanh bieu lai suat cac san pham tien gui vang dong viet Nam doi voi KHCN",
+      "topic": "lai_suat_tiet_kiem",
+      "reason": "PDF là bản scan (không có lớp chữ)"
+    }
+  ],
+  "curated": [
+    {
+      "id": "qd-2896-lai-suat-tien-gui-khong-ky-han-ca-nhan",
+      "url": "https://www.msb.com.vn/msb-website/2026/04/QD-2896-Ban-hanh-bieu-Lai-suat-cac-san-pham-tien-gui-khong-ky-han-bang-dong-VN-doi-voi-KHCN.pdf",
+      "status": "current"
+    },
+    {
+      "id": "qd-4144-lai-suat-tien-gui-vnd-ca-nhan",
+      "url": "https://www.msb.com.vn/msb-website/2026/04/QD-4144-Ban-hanh-bieu-lai-suat-cac-san-pham-tien-gui-bang-dong-Viet-Nam-doi-voi-KHCN.pdf",
+      "status": "current"
+    }
+  ],
+  "unreviewed_scans": [],
+  "failed": []
+}

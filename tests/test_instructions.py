@@ -38,12 +38,7 @@ def test_instructions_mention_every_registered_tool():
     from tools.customer_data_tools import list_existing_jars, query_beneficiaries
     from tools.investment_tools import project_investment_growth
     from tools.market_news_tools import read_market_article, search_market_news
-    from tools.msb_product_tools import (
-        list_msb_documents,
-        read_msb_document,
-        read_msb_product_page,
-        search_msb_products,
-    )
+    from tools.msb_knowledge_tools import search_msb_knowledge
 
     text = _text()
     for tool in (
@@ -52,10 +47,7 @@ def test_instructions_mention_every_registered_tool():
         project_investment_growth,
         search_market_news,
         read_market_article,
-        search_msb_products,
-        read_msb_product_page,
-        list_msb_documents,
-        read_msb_document,
+        search_msb_knowledge,
     ):
         assert f"`{tool.name}`" in text, f"instructions.md does not mention tool {tool.name}"
 
@@ -74,7 +66,9 @@ def test_instructions_keep_hard_rules_for_msb_products_rates_and_investing():
     assert "lãi suất tiền gửi của ngân hàng khác" in text
     assert "khuyên khách gửi/vay/đầu tư ở ngân hàng khác" in text
     assert "Không bịa" in text
-    assert "bản scan" in text
+    # deposit rates: only from the transcribed tables, with decision + date + counter vs online
+    assert "bản chép lại" in text and "tên quyết" in text and "**tại quầy** hay **trực tuyến**" in text
+    assert "không lấy bảng tiết kiệm áp cho" in text
     assert "không lỗ vốn" in text  # no unsupported safety claims
     assert "dữ liệu để tóm" in text  # external content is data, not instructions
     assert "**không** mục tiêu giá" in text
@@ -122,7 +116,7 @@ def test_investment_guidance_decides_first_and_looks_up_only_when_needed():
     skill = _skill()
     assert "QUYẾT ĐỊNH TRƯỚC, TRA CỨU SAU" in skill
     assert "Không tra tin, không tra sản phẩm MSB" in skill
-    assert "**1** `search_msb_products` + **1** `read_msb_product_page`" in skill
+    assert "**1** `search_msb_knowledge`" in skill
     assert "không lặp search bằng từ khoá khác" in skill
 
 
@@ -172,3 +166,27 @@ def test_instructions_forbid_leaking_work_in_progress_into_the_answer():
     text = _text()
     assert "Không lộ quá trình làm việc" in text
     assert "Chỉ có **một** câu trả lời cuối cùng" in text
+
+
+def test_instructions_send_msb_product_questions_to_the_offline_snapshot_with_sources():
+    text = _text()
+    assert "`search_msb_knowledge`" in text
+    assert "gọi đúng 1 lần" in text
+    assert "luôn kèm nguồn" in text and "URL đầy đủ" in text and "dữ liệu lưu ngày" in text
+    assert "2–4 câu" in text
+    # no separate skill: the rules live here, so answering costs no extra "read the skill" model round-trip
+    assert "msb-products" not in text
+    assert not (SKILLS_DIR / "msb-products").exists()
+    for gone in ("search_msb_products", "read_msb_product_page", "list_msb_documents", "read_msb_document"):
+        assert gone not in text, gone
+
+
+def test_instructions_carry_the_msb_answer_rules_that_used_to_live_in_the_skill():
+    text = _text()
+    assert 'Không khẳng định khách "đủ điều kiện/được duyệt"' in text
+    assert "nhắc biên độ/điều kiện cụ thể xác nhận tại tư vấn viên" in text
+    assert "nêu rủi ro theo đoạn trả về" in text
+    assert "bảng giữ bố cục cột" in text and "đọc mỗi giá trị theo cột nằm ngay dưới đúng tiêu đề cột" in text
+    assert "làm phẳng (mất ranh giới cột)" in text and "đừng tự ghép số với từng loại thẻ" in text
+    assert "chỉ nêu nếu đoạn trả về nói đúng như vậy" in text
+    assert "kết quả có dòng CẢNH BÁO".lower() in text.lower() or "dòng CẢNH BÁO" in text

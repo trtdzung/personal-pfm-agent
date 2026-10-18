@@ -1,4 +1,4 @@
-"""Scenario projection for investment guidance -- pure arithmetic, no I/O.
+"""Scenario projection and deposit-interest arithmetic for investment guidance -- pure maths, no I/O.
 
 The model is bad at compounding across several checkpoints and several
 scenarios, and a wrong figure here reaches a customer as money advice, so the
@@ -24,6 +24,7 @@ from middleware import seed_customer_context
 
 DEFAULT_ASSUMED_MONTHLY_RETURN_PCT = 2.0
 MAX_ABS_MONTHLY_RETURN_PCT = 20.0
+MAX_DEPOSIT_RATE_PCT = 15.0
 _AVG_MONTH_DAYS = 30.4375
 
 
@@ -170,3 +171,40 @@ def project_investment_growth(
         lines.append("Khối biểu đồ (sao chép nguyên văn vào ```ui-json nếu cần vẽ, không tự sửa số):")
         lines.append(json.dumps(chart, ensure_ascii=False))
     return "\n".join(lines)
+
+
+@tool
+def calculate_deposit_interest(principal_vnd: float, annual_rate_pct: float, months: float = 0, days: int = 0) -> str:
+    """Interest on a bank deposit at a quoted annual rate (simple interest, paid at
+    the end): principal x rate x months/12, or principal x rate x days/365 when
+    `days` is given. Use it instead of doing the multiplication in your head -- a
+    slip of a factor 100 (300 million at 0.1%/year is 300.000đ a year, not 822.000đ)
+    reaches the customer as a wrong figure.
+
+    Use only with a rate quoted by `search_msb_knowledge` (say which product and
+    decision it came from). For a non-term payment account also pass `days=365`
+    to get the yearly interest, and answer with the yearly amount only.
+
+    Args:
+        principal_vnd: Deposited amount in VND (> 0).
+        annual_rate_pct: Annual rate in percent, e.g. 6.1 for 6,10%/year.
+        months: Deposit term in months (use this for term deposits).
+        days: Number of days (use this instead of `months` for a day count).
+    """
+    if principal_vnd <= 0 or annual_rate_pct < 0 or months < 0 or days < 0:
+        return "principal_vnd phải > 0; annual_rate_pct, months, days phải >= 0."
+    if (months > 0) == (days > 0):
+        return "Cần đúng 1 trong 2: months (kỳ hạn theo tháng) hoặc days (số ngày)."
+    if annual_rate_pct > MAX_DEPOSIT_RATE_PCT:
+        return f"annual_rate_pct vượt {MAX_DEPOSIT_RATE_PCT:g}%/năm — kiểm tra lại con số lấy từ biểu lãi suất."
+    if months > 0:
+        interest = principal_vnd * annual_rate_pct / 100 * months / 12
+        formula = f"{_vnd(principal_vnd)} x {_pct(annual_rate_pct)}%/năm x {months:g}/12 tháng"
+    else:
+        interest = principal_vnd * annual_rate_pct / 100 * days / 365
+        formula = f"{_vnd(principal_vnd)} x {_pct(annual_rate_pct)}%/năm x {days}/365 ngày"
+    return (
+        f"Tiền lãi (lãi đơn, trả cuối kỳ): {formula} = {_vnd(interest)}. "
+        f"Tổng gốc + lãi: {_vnd(principal_vnd + interest)}. Đây là ước tính theo mức lãi đã nêu; "
+        "mức lãi thực tế xác nhận tại app MSB/quầy."
+    )

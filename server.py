@@ -22,14 +22,9 @@ from middleware.seed_customer_context import SeedCustomerContext
 from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block
 from tools.customer_data_tools import list_existing_jars, query_beneficiaries
-from tools.investment_tools import project_investment_growth
+from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
-from tools.msb_product_tools import (
-    list_msb_documents,
-    read_msb_document,
-    read_msb_product_page,
-    search_msb_products,
-)
+from tools.msb_knowledge_tools import search_msb_knowledge
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
@@ -123,12 +118,10 @@ def build_agent(
             list_existing_jars,
             query_beneficiaries,
             project_investment_growth,
+            calculate_deposit_interest,
             search_market_news,
             read_market_article,
-            search_msb_products,
-            read_msb_product_page,
-            list_msb_documents,
-            read_msb_document,
+            search_msb_knowledge,
         ],
         middleware=[log_tool_calls, log_model_calls, SeedCustomerContext(), *tool_call_limits()],
         system_prompt=instructions,

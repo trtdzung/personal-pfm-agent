@@ -1,4 +1,4 @@
-"""Hard per-request caps on the slow, third-party lookup tools.
+"""Hard per-request caps on the lookup tools.
 
 The investment flow used to make 5-10 tool calls per question (several MSB
 product searches/reads plus news), even when the answer was just "pay your card
@@ -15,13 +15,11 @@ across the whole thread.
 from langchain.agents.middleware import ToolCallLimitMiddleware
 
 TOOL_RUN_LIMITS = {
-    "search_msb_products": 2,
-    "read_msb_product_page": 3,
-    "list_msb_documents": 2,
-    "read_msb_document": 2,
+    "search_msb_knowledge": 2,
     "search_market_news": 1,
     "read_market_article": 2,
     "project_investment_growth": 2,
+    "calculate_deposit_interest": 2,
 }
 
 

@@ -1,15 +1,13 @@
 from middleware.tool_limits import TOOL_RUN_LIMITS, tool_call_limits
 
 
-def test_every_slow_third_party_lookup_tool_has_a_per_request_cap():
+def test_every_lookup_tool_has_a_per_request_cap():
     assert set(TOOL_RUN_LIMITS) == {
-        "search_msb_products",
-        "read_msb_product_page",
-        "list_msb_documents",
-        "read_msb_document",
+        "search_msb_knowledge",
         "search_market_news",
         "read_market_article",
         "project_investment_growth",
+        "calculate_deposit_interest",
     }
     assert all(limit >= 1 for limit in TOOL_RUN_LIMITS.values())
 
@@ -17,7 +15,7 @@ def test_every_slow_third_party_lookup_tool_has_a_per_request_cap():
 def test_news_lookups_are_capped_tighter_than_product_lookups():
     # news is background for advice, never the point of the answer
     assert TOOL_RUN_LIMITS["search_market_news"] == 1
-    assert TOOL_RUN_LIMITS["search_msb_products"] <= 2
+    assert TOOL_RUN_LIMITS["search_msb_knowledge"] <= 2
 
 
 def test_limits_are_per_run_and_continue_instead_of_crashing_the_run():

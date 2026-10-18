@@ -110,16 +110,29 @@ its own `Dockerfile`.
   Get it from the GreenNode console's API key / Model as a Service section.
 - `LLM_MODEL` -- optional, model path passed to the MaaS endpoint. Defaults
   to `z-ai/glm-5.2-hackathon` if unset.
-- `TINYFISH_API_KEY` -- optional. API key for TinyFish Search/Fetch (free tier,
-  get it at agent.tinyfish.ai/api-keys), used by `tools/market_news_tools.py`
+- `TINYFISH_API_KEY` -- optional at runtime. Only `tools/market_news_tools.py`
   (public Vietnamese market news from cafef.vn / vietstock.vn / tuoitre.vn, as
-  background for the `investment-guidance` skill -- customers can't ask for
-  plain market news) and `tools/msb_product_tools.py` (MSB's own website and
-  PDFs for the `msb-products` skill). Without it the agent still starts; those
-  questions just get a "not configured" answer. Note the key is shared by every
-  customer of a deployment (Search is limited to 30 requests/minute per key),
-  and the container needs outbound HTTPS to `api.search.tinyfish.ai` and
-  `api.fetch.tinyfish.ai`.
+  background for the `investment-guidance` skill) calls TinyFish while the agent
+  runs (free tier, key at agent.tinyfish.ai/api-keys; shared by every customer of a
+  deployment, Search is limited to 30 requests/minute; the container needs outbound
+  HTTPS to `api.search.tinyfish.ai` / `api.fetch.tinyfish.ai`). Without it the agent
+  still starts; news lookups just answer "not configured". The same key is used by
+  the offline MSB snapshot script below (not at request time).
+- `MSB_KB_MAX_AGE_DAYS` -- optional, default 7. MSB product answers come from an
+  offline snapshot of MSB's website/PDFs (`data/msb_knowledge/`, tool
+  `search_msb_knowledge`): one instant local lookup, every passage carries its
+  source URL and fetch date. If the snapshot is older than this many days the tool
+  tells the model to state the date and send the customer to the app/advisor.
+  **Refresh it on a schedule (daily is sensible) and commit the result:**
+  `uv run python scripts/sync_msb_knowledge.py` (needs `TINYFISH_API_KEY` in `.env`, and
+  poppler's `pdftotext` on the machine that runs it -- `apt install poppler-utils` -- so PDF
+  fee/rate tables keep their columns; without it PDFs fall back to flattened text and the
+  agent is told not to pair values with card names).
+  Deposit-rate decisions are scanned images, so their tables are **hand-transcribed** into
+  `data/msb_knowledge/curated/*.md` (never touched by the sync script, which only re-hashes
+  each source PDF and flags scans nobody has reviewed -- see `curated/reviewed.json`). Have
+  someone at MSB check those files against the PDFs before real use, and re-transcribe when
+  MSB issues a new rate decision.
 - `SERVER_API_KEY` -- shared secret; every `POST /chat` request must send
   it back in the `X-API-Key` header, or the request is rejected with 401
 - `MEMORY_ID` -- id of a GreenNode AgentBase Memory resource used for both

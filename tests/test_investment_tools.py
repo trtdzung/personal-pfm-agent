@@ -8,6 +8,7 @@ from text_utils import _is_valid_chart, extract_ui_block
 from tools.investment_tools import (
     DEFAULT_ASSUMED_MONTHLY_RETURN_PCT,
     _checkpoints,
+    calculate_deposit_interest,
     project_investment_growth,
 )
 
@@ -129,3 +130,42 @@ def test_required_return_line_is_computed_when_both_principal_and_target_are_giv
 
 def test_required_return_line_absent_without_target():
     assert "Lợi suất cần có" not in _run(principal_vnd=60_000_000)
+
+
+# --- calculate_deposit_interest ---------------------------------------------------------------
+
+
+def _interest(**kwargs) -> str:
+    return calculate_deposit_interest.invoke(kwargs)
+
+
+def test_term_deposit_interest_is_principal_times_rate_times_months_over_12():
+    out = _interest(principal_vnd=50_000_000, annual_rate_pct=6.1, months=6)
+    assert "= 1.525.000đ" in out and "51.525.000đ" in out
+    assert "50.000.000đ x 6,1%/năm x 6/12 tháng" in out
+
+
+def test_no_term_yearly_interest_does_not_slip_a_factor_of_100():
+    # the real slip: 300 million at 0.1%/year was reported as 822.000đ a year
+    out = _interest(principal_vnd=300_000_000, annual_rate_pct=0.1, days=365)
+    assert "= 300.000đ" in out
+
+
+def test_day_count_uses_a_365_day_year():
+    assert "= 822đ" in _interest(principal_vnd=300_000_000, annual_rate_pct=0.1, days=1)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"principal_vnd": 0, "annual_rate_pct": 6, "months": 6},
+        {"principal_vnd": 1_000_000, "annual_rate_pct": -1, "months": 6},
+        {"principal_vnd": 1_000_000, "annual_rate_pct": 6},  # neither months nor days
+        {"principal_vnd": 1_000_000, "annual_rate_pct": 6, "months": 6, "days": 30},  # both
+        {"principal_vnd": 1_000_000, "annual_rate_pct": 61, "months": 6},  # looks like a typo
+    ],
+)
+def test_deposit_interest_rejects_inputs_that_would_give_a_wrong_number(kwargs):
+    out = _interest(**kwargs)
+    assert "đ" not in out.split("=")[-1] or "phải" in out or "Cần đúng" in out or "vượt" in out
+    assert "Tiền lãi" not in out
