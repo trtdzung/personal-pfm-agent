@@ -209,3 +209,63 @@ class GoalExtraction(_Strict):
     horizon: ExtractedHorizon | None = None
     flexibility: ExtractedFlexibility | None = None
     opening_amount: ExtractedAmount | None = None
+
+
+# ---------------------------------------------------------------- narration (G14)
+
+Verdict = Literal["feasible", "stretch", "not_feasible", "unknown"]
+PlanId = Literal["keep_deadline", "extend_deadline", "reduce_amount"]
+DialogueAction = Literal[
+    "ask_purpose", "ask_amount", "ask_horizon", "ask_opening",
+    "reflect", "present_plans", "confirm", "handle_objection",
+]
+NarrateSource = Literal["llm", "template"]
+FallbackReason = Literal["flag_off", "model_error", "invalid"]
+
+
+class HistoryTurn(_Strict):
+    role: Literal["customer", "coach"]
+    text: str = Field(min_length=1, max_length=280)
+
+
+class NarrateFacts(_Strict):
+    """What is already known, never numbers."""
+
+    goal_name: str | None = Field(default=None, max_length=40)
+
+
+class NarrateRequest(_Strict):
+    """No numbers anywhere: verdict and plan ids come from the engine, numbers are filled in by pfm."""
+
+    user_id: str = Field(min_length=1, max_length=64)
+    mode: Literal["explain", "converse"]
+    verdict: Verdict | None = None
+    plan_ids: list[PlanId] = Field(default_factory=list, max_length=3)
+    category_names: list[str] = Field(default_factory=list, max_length=5)
+    data_quality: Literal["ok", "partial", "unknown"] = "ok"
+    action: DialogueAction | None = None
+    facts: NarrateFacts = Field(default_factory=NarrateFacts)
+    history: list[HistoryTurn] = Field(default_factory=list, max_length=6)
+
+    @model_validator(mode="after")
+    def _mode_shape(self) -> "NarrateRequest":
+        if self.mode == "explain" and (self.verdict is None or not self.plan_ids):
+            raise ValueError("explain needs verdict and plan_ids")
+        if self.mode == "converse" and self.action is None:
+            raise ValueError("converse needs action")
+        return self
+
+
+class NarrateBlock(_Strict):
+    id: str = Field(min_length=1, max_length=40)
+    kind: Literal["verdict", "plan", "say"]
+    plan_id: PlanId | None = None
+    text: str = Field(min_length=1, max_length=280)
+
+
+class NarrateResponse(_Strict):
+    version: Literal["goal-coach/v1"] = VERSION
+    request_id: str = Field(min_length=1, max_length=40)
+    source: NarrateSource
+    fallback_reason: FallbackReason | None = None
+    blocks: list[NarrateBlock]

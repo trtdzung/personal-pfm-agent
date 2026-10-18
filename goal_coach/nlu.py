@@ -158,7 +158,7 @@ def coerce_extraction(data: Any, text: str) -> GoalExtraction:
     return GoalExtraction.model_validate(out)
 
 
-def _unwrap(raw: Any) -> tuple[Any, str | None]:
+def unwrap(raw: Any) -> tuple[Any, str | None]:
     """Handle `include_raw=True` results: prefer parsed, else the raw tool-call arguments."""
     if isinstance(raw, dict) and "parsed" in raw and "raw" in raw:
         if raw.get("parsed") is not None:
@@ -176,7 +176,7 @@ def _unwrap(raw: Any) -> tuple[Any, str | None]:
 # ---------------------------------------------------------------- model call
 
 
-def _structured(timeout: float):  # type: ignore[no-untyped-def]
+def structured_model(schema: Any, timeout: float):  # type: ignore[no-untyped-def]
     # Imported here: `llm` needs langchain_openai, which not every env has.
     from llm import default_model
 
@@ -184,9 +184,9 @@ def _structured(timeout: float):  # type: ignore[no-untyped-def]
     # Same client config as the platform default, only the model name differs.
     model = model.model_copy(update={"model_name": os.environ.get("GOAL_COACH_MODEL") or DEFAULT_MODEL})
     try:
-        return model.with_structured_output(GoalExtraction, method="function_calling", include_raw=True)
+        return model.with_structured_output(schema, method="function_calling", include_raw=True)
     except TypeError:
-        return model.with_structured_output(GoalExtraction, include_raw=True)
+        return model.with_structured_output(schema, include_raw=True)
 
 
 def extract(text: str) -> GoalExtraction:
@@ -201,8 +201,8 @@ def extract(text: str) -> GoalExtraction:
             logger.warning("nlu retry skipped: %.1fs left", remaining)
             break
         try:
-            structured = _structured(max(1.0, remaining))
-            data, err = _unwrap(structured.invoke(messages))
+            structured = structured_model(GoalExtraction, max(1.0, remaining))
+            data, err = unwrap(structured.invoke(messages))
             if err:
                 raise ValueError(err)
             result = coerce_extraction(data, text)
