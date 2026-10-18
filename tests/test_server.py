@@ -202,6 +202,7 @@ def test_chat_endpoint_splits_ui_json_create_jar_block_into_ui_field(monkeypatch
     jar_answer = (
         "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng.\n\n"
         '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, '
+        '"category_ids": ["dining", "groceries"], '
         '"reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng"}\n```'
     )
     fake_model = _ToolCapableFakeChatModel(responses=[jar_answer])
@@ -222,8 +223,36 @@ def test_chat_endpoint_splits_ui_json_create_jar_block_into_ui_field(monkeypatch
         "type": "create_jar",
         "jar_name": "Ăn uống",
         "allocation_amount": 3000000,
+        "category_ids": ["dining", "groceries"],
         "reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng",
     }
+
+
+def test_chat_endpoint_splits_ui_json_rebalance_jars_block_into_ui_field(monkeypatch):
+    rebalance_answer = (
+        "Hũ Ăn uống thiếu 1.500.000đ, mình đề xuất lấy từ tiền chưa phân bổ và hũ Hưởng thụ; bạn xem lại rồi xác nhận nhé.\n\n"
+        '```ui-json\n{"type": "rebalance_jars", "target_jar_id": "food", "shortfall": 1500000, '
+        '"moves": [{"from_jar_id": "pool", "amount": 1000000}, {"from_jar_id": "lifestyle", "amount": 500000}], '
+        '"reason": "Lấy 1.000.000đ từ tiền chưa phân bổ và 500.000đ từ hũ Hưởng thụ"}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[rebalance_answer])
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+
+    client = TestClient(server.app)
+    response = client.post(
+        "/chat",
+        json={"message": "Hũ ăn uống của tôi hết tiền rồi.", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "```ui-json" not in body["answer"]
+    assert body["ui"]["type"] == "rebalance_jars"
+    assert body["ui"]["moves"] == [
+        {"from_jar_id": "pool", "amount": 1000000},
+        {"from_jar_id": "lifestyle", "amount": 500000},
+    ]
 
 
 def test_chat_endpoint_defaults_thread_id_to_user_id_when_omitted(monkeypatch):

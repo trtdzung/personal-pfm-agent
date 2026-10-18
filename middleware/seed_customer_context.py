@@ -97,10 +97,10 @@ class SeedCustomerContext(AgentMiddleware):
     calculation (see todo.md 1.16).
 
     Note: `jars`/`beneficiaries` are intentionally NOT part of
-    data/customers/<id>.json anymore -- they're hardcoded mock data inside
-    tools/customer_data_tools.py, only reachable via that module's
-    list_existing_jars()/query_beneficiaries(), so this middleware has
-    nothing to filter out here.
+    data/customers/<id>.json anymore -- they're read live from the pfm
+    backend by tools/customer_data_tools.py, only reachable via that
+    module's get_jar_summary()/query_beneficiaries(), so this middleware
+    has nothing to filter out here.
     """
 
     def before_agent(self, state: AgentState, runtime: Runtime) -> dict:

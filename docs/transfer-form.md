@@ -126,6 +126,12 @@ discriminator riêng khác `type`. Với dạng 2, `pfm` tự dùng `beneficiary
 /api/beneficiaries`, ghép với `amount`/`note`/`category` agent trả về rồi
 hiện đủ 6 field lên form.
 
+## Không liên quan đến hũ chi tiêu
+
+`transfer_form` **độc lập** với các form về hũ (`create_jar`/`edit_jar`/`rebalance_jars`): không có field hũ
+nguồn, khách chọn nguồn tiền (tài khoản hay hũ) trên màn chuyển tiền của `pfm`. Nếu hũ nguồn không đủ tiền,
+việc gợi ý lấy tiền từ hũ khác là form `rebalance_jars` riêng, xem [`docs/jar-rebalance.md`](./jar-rebalance.md).
+
 ## Luồng UI gợi ý
 
 1. Nhận `ui.type === "transfer_form"` → hiện 1 form/card riêng dưới bong

@@ -21,7 +21,7 @@ from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
-from tools.customer_data_tools import list_existing_jars, query_beneficiaries
+from tools.customer_data_tools import get_jar_summary, query_beneficiaries
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
@@ -115,7 +115,7 @@ def build_agent(
         else [
             remember_preference,
             recall_preference,
-            list_existing_jars,
+            get_jar_summary,
             query_beneficiaries,
             project_investment_growth,
             calculate_deposit_interest,

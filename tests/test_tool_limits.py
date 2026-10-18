@@ -8,6 +8,7 @@ def test_every_lookup_tool_has_a_per_request_cap():
         "read_market_article",
         "project_investment_growth",
         "calculate_deposit_interest",
+        "get_jar_summary",
     }
     assert all(limit >= 1 for limit in TOOL_RUN_LIMITS.values())
 

@@ -11,7 +11,7 @@ _FENCED_BLOCK_RE = re.compile(r"```[a-zA-Z0-9_-]*\s*\n?(.*?)\n?```", re.DOTALL)
 _FENCE_MARKER_RE = re.compile(r"```[a-zA-Z0-9_-]*")
 _BLANK_RUN_RE = re.compile(r"\n{3,}")
 _VALID_CHART_TYPES = {"bar", "line", "pie"}
-_VALID_TRANSFER_CATEGORIES = {
+_VALID_EXPENSE_CATEGORIES = {
     "housing",
     "utilities",
     "subscriptions",
@@ -179,7 +179,7 @@ def _is_valid_transfer_form(raw: dict) -> bool:
       instead of looking it up.
     - Case B, transfer to a saved beneficiary: `beneficiary_id` (must be an
       `id` from `query_beneficiaries()`, never a name/account the model
-      invented) + `category` (one of _VALID_TRANSFER_CATEGORIES) -- `pfm`
+      invented) + `category` (one of _VALID_EXPENSE_CATEGORIES) -- `pfm`
       looks up the real name/account/bank itself from `beneficiary_id`, so
       this repo must never emit `recipient`/`account_number` for this case.
 
@@ -207,7 +207,7 @@ def _is_valid_transfer_form(raw: dict) -> bool:
         if "recipient" in raw or "account_number" in raw:
             return False
         category = raw.get("category")
-        if category not in _VALID_TRANSFER_CATEGORIES:
+        if category not in _VALID_EXPENSE_CATEGORIES:
             return False
         return True
 
@@ -223,14 +223,21 @@ def _is_valid_transfer_form(raw: dict) -> bool:
     return True
 
 
-def _is_valid_create_jar(raw: dict) -> bool:
-    """Validate a parsed create_jar payload (raw["type"] == "create_jar").
-    Pure validation only -- same "no auto-fixing" rule as _is_valid_chart
-    (see skills/project/spending-jar/SKILL.md for the model-facing rules
-    this mirrors). Display-only proposal -- creating the jar for real
-    happens in an external PFM system when the customer confirms, this
-    repo never executes anything (see todo.md's "Roadmap PFM" section).
+def _is_valid_category_ids(value: object) -> bool:
+    """`category_ids` of a jar: a list (may be empty) of distinct expense categories.
+
+    Distinct because pfm keeps one category in exactly one jar; a repeat inside one
+    payload can only be a model slip.
     """
+    return (
+        isinstance(value, list)
+        and all(isinstance(c, str) and c in _VALID_EXPENSE_CATEGORIES for c in value)
+        and len(set(value)) == len(value)
+    )
+
+
+def _has_jar_basics(raw: dict) -> bool:
+    """Fields create_jar and edit_jar share: a name, a positive monthly limit, a reason."""
     jar_name = raw.get("jar_name")
     if not isinstance(jar_name, str) or not jar_name:
         return False
@@ -240,20 +247,87 @@ def _is_valid_create_jar(raw: dict) -> bool:
         return False
 
     reason = raw.get("reason")
-    if not isinstance(reason, str) or not reason:
-        return False
+    return isinstance(reason, str) and bool(reason)
 
-    return True
+
+def _is_valid_create_jar(raw: dict) -> bool:
+    """Validate a parsed create_jar payload (raw["type"] == "create_jar").
+    Pure validation only -- same "no auto-fixing" rule as _is_valid_chart
+    (see skills/project/spending-jar/SKILL.md for the model-facing rules
+    this mirrors, docs/spending-jar.md for the contract). Display-only
+    proposal -- the jar is created by pfm when the customer confirms, this
+    repo never executes anything.
+
+    `category_ids` is required (an empty list is fine: a jar with no
+    category). There is no `jar_id`: pfm generates it, so a payload carrying
+    one is a model slip and is dropped.
+    """
+    if "jar_id" in raw:
+        return False
+    if not _has_jar_basics(raw):
+        return False
+    return _is_valid_category_ids(raw.get("category_ids"))
 
 
 def _is_valid_edit_jar(raw: dict) -> bool:
-    """Validate a parsed edit_jar payload (raw["type"] == "edit_jar"). Same
-    shape as create_jar plus a `jar_name` identifying which existing jar to
-    change -- see skills/project/spending-jar/SKILL.md for why "existing"
-    can currently only mean "mentioned earlier in this conversation" (no
-    tool/data source lists real jars yet, tracked in todo.md).
+    """Validate a parsed edit_jar payload (raw["type"] == "edit_jar").
+
+    The jar is identified by `jar_id` (the `id` from `get_jar_summary`), never
+    by name -- pfm ignores an id it does not know. `category_ids`, when
+    present, is the jar's FULL new category list; leaving it out means "do not
+    change categories".
     """
-    return _is_valid_create_jar(raw)
+    jar_id = raw.get("jar_id")
+    if not isinstance(jar_id, str) or not jar_id:
+        return False
+    if not _has_jar_basics(raw):
+        return False
+    return "category_ids" not in raw or _is_valid_category_ids(raw["category_ids"])
+
+
+# The unallocated money ("Chưa phân bổ") a rebalance may draw from; never a jar id.
+_POOL_SOURCE_ID = "pool"
+
+
+def _is_valid_rebalance_jars(raw: dict) -> bool:
+    """Validate a parsed rebalance_jars payload (raw["type"] == "rebalance_jars").
+
+    Only what can be checked without the customer's data: the shape, and that
+    the moves really add up to the shortfall (the model does that arithmetic in
+    text, so a wrong total is the likeliest failure). Whether each source has
+    that much to give, and that no `goal` jar is raided, is pfm's job -- it
+    re-checks every rebalance against the real numbers and drops what fails.
+    """
+    target = raw.get("target_jar_id")
+    if not isinstance(target, str) or not target or target == _POOL_SOURCE_ID:
+        return False
+
+    shortfall = raw.get("shortfall")
+    if not _is_finite_number(shortfall) or shortfall <= 0:
+        return False
+
+    moves = raw.get("moves")
+    if not isinstance(moves, list) or not moves:
+        return False
+
+    sources: set[str] = set()
+    total = 0.0
+    for move in moves:
+        if not isinstance(move, dict):
+            return False
+        source = move.get("from_jar_id")
+        if not isinstance(source, str) or not source or source == target or source in sources:
+            return False
+        sources.add(source)
+        amount = move.get("amount")
+        if not _is_finite_number(amount) or amount <= 0:
+            return False
+        total += amount
+    if not math.isclose(total, shortfall, abs_tol=1e-6):
+        return False
+
+    reason = raw.get("reason")
+    return isinstance(reason, str) and bool(reason)
 
 
 # Dispatch table: ui block "type" -> validator. Add an entry here (and a new
@@ -265,6 +339,7 @@ _UI_VALIDATORS = {
     "transfer_form": _is_valid_transfer_form,
     "create_jar": _is_valid_create_jar,
     "edit_jar": _is_valid_edit_jar,
+    "rebalance_jars": _is_valid_rebalance_jars,
 }
 
 

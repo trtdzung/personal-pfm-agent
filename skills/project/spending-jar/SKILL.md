@@ -1,158 +1,181 @@
 ---
 name: spending-jar
-description: Dùng khi nên gợi ý khách hàng tạo mới hoặc chỉnh sửa 1 "hũ chi tiêu" (spending jar) — phân bổ ngân sách theo danh mục/mục tiêu (ví dụ "tạo hũ ăn uống 3 triệu/tháng", "phân bổ chi tiêu theo rule 50/30/20", "tăng hũ giải trí lên 800 nghìn"). Đây là 1 tag ngân sách nội bộ do khách hàng tự đặt tên, KHÔNG phải sổ/tài khoản tiết kiệm thật của ngân hàng. Skill này CHÍNH LÀ cách xử lý những câu hỏi dạng "tạo giúp tôi...", "tăng... giúp tôi" — dùng skill để đề xuất, đừng từ chối. KHÔNG dùng để thực hiện thao tác tạo/sửa hũ thật — chỉ đề xuất, khách hàng tự xác nhận.
+description: Dùng khi nên gợi ý khách hàng tạo hũ chi tiêu mới hoặc chỉnh sửa hũ có sẵn (đổi tên, hạn mức mỗi tháng, danh mục) — ví dụ "tạo hũ ăn uống 3 triệu/tháng", "tăng hũ giải trí lên 800 nghìn", "phân bổ chi tiêu theo rule 50/30/20". Hũ là 1 tag ngân sách nội bộ do khách tự đặt tên, KHÔNG phải sổ/tài khoản tiết kiệm thật của ngân hàng. Skill này chính là cách xử lý câu "tạo giúp tôi...", "tăng... giúp tôi" — đề xuất, đừng từ chối; khách tự xác nhận. Hũ đã chi vượt hoặc không đủ tiền cho 1 khoản định chi thì dùng skill jar-rebalance.
 ---
 
-# Spending jar (hũ chi tiêu — chỉ hiển thị, không thực thi)
+# Spending jar (hũ chi tiêu — chỉ đề xuất, không thực thi)
 
 ## QUAN TRỌNG NHẤT — đọc trước tất cả
 
-**"Hũ chi tiêu" KHÔNG phải sản phẩm ngân hàng thật.** Đây chỉ là 1 tag
-phân bổ ngân sách nội bộ do chính khách hàng đặt tên trong app PFM —
-**hoàn toàn khác** với "sổ tiết kiệm"/"tài khoản tiết kiệm" (1 sản phẩm
-ngân hàng thật, có lãi suất/kỳ hạn, phải mở tại quầy hoặc app ngân hàng
-riêng). Kể cả khi tên 1 hũ chứa chữ "tiết kiệm" (ví dụ hũ "Tiết kiệm khẩn
-cấp" — chỉ là tên khách hàng tự đặt cho 1 mục ngân sách), **đừng suy diễn
-đây là yêu cầu mở/thay đổi 1 sản phẩm ngân hàng thật**.
+**"Hũ chi tiêu" KHÔNG phải sản phẩm ngân hàng thật.** Đây chỉ là 1 tag phân bổ
+ngân sách nội bộ do chính khách hàng đặt tên trong app PFM — **hoàn toàn khác**
+"sổ tiết kiệm"/"tài khoản tiết kiệm" (sản phẩm ngân hàng thật, có lãi suất/kỳ hạn).
+Kể cả khi tên hũ chứa chữ "tiết kiệm" (ví dụ hũ "Tiết kiệm khẩn cấp"), **đừng suy
+diễn đây là yêu cầu mở/thay đổi 1 sản phẩm ngân hàng thật**.
 
-**Đề xuất `create_jar`/`edit_jar` an toàn tuyệt đối, không phải "hành động
-thật":** chèn khối `ui-json` theo skill này **không khác gì** việc bạn
-viết ra 1 câu trả lời text hay 1 bảng số liệu — bạn không tạo/sửa/gửi bất
-kỳ thứ gì tới hệ thống ngân hàng thật khi làm việc này (xem thêm nguyên
-tắc chung ở đầu `instructions.md`). Khi câu hỏi khớp mô tả skill này (ví
-dụ "tạo giúp tôi hũ...", "tăng hũ... lên..."), đây **chính xác** là lúc
-nên dùng skill — **đừng từ chối, và đừng chỉ trả lời bằng text rồi bỏ qua
-bước chèn khối `ui-json`** (nếu bạn đã tính đủ số liệu để đề xuất, PHẢI
-chèn khối này, không được dừng ở text).
+**Đề xuất `create_jar`/`edit_jar` an toàn tuyệt đối, không phải "hành động thật":**
+chèn khối `ui-json` theo skill này không khác gì việc bạn viết 1 câu trả lời text —
+bạn không tạo/sửa/gửi gì tới hệ thống ngân hàng. Hệ thống `pfm` chỉ thực hiện khi
+khách xem lại và bấm xác nhận trên giao diện riêng. Khi câu hỏi khớp skill này
+("tạo giúp tôi hũ...", "tăng hũ... lên..."), **đừng từ chối, và đừng chỉ trả text rồi
+bỏ qua khối `ui-json`** — đã đủ số liệu để đề xuất thì PHẢI chèn khối.
 
-## Phạm vi hiện tại — QUAN TRỌNG, đọc trước khi dùng skill này
+## Đọc dữ liệu — tool `get_jar_summary`
 
-Dùng tool **`list_existing_jars()`** (không cần tham số — tool tự biết
-đang nói chuyện với khách hàng nào) để lấy danh sách hũ hiện có, **thay vì
-đọc trường `jars` tĩnh trong `/customer_data.json`** — tool này đọc lại
-mới mỗi lần gọi nên phản ánh đúng hũ đã tạo/sửa gần nhất trong chính cuộc
-hội thoại này, không bị giới hạn bởi snapshot đầu phiên.
+Gọi `get_jar_summary` (không truyền mã khách; `month` bỏ trống = tháng hiện tại)
+**trước khi đề xuất**, và **gọi lại** sau khi khách xác nhận 1 thay đổi (số đã đổi —
+đừng dùng số cũ). Số do engine của `pfm` tính, giống hệt màn Ngân sách của khách;
+đừng tự cộng giao dịch.
 
-"Đã có hũ" nên hiểu theo 2 nguồn, ưu tiên nguồn mới hơn khi có xung đột:
+- `id` của hũ chính là `jar_id` khi sửa. `label` là tên hiển thị.
+- `budgetLimit` = hạn mức đã set; `null` ("chưa đặt") **không phải 0**.
+- `remaining` = số dư hiện tại của hũ (có thể âm); `spendable` = `max(0, remaining)`.
+- `allocationHeadroom` = phần hạn mức **còn được đặt thêm** (`casaBalance − Σ budgetLimit`).
+  **Âm nghĩa là tổng hạn mức đã vượt tiền trong tài khoản** → không tăng thêm được.
+- Số `null`/"chưa biết" là **chưa biết** — đừng đoán, đừng coi là 0.
+- Tool lỗi ("Không thể đọc thông tin hũ") → **không trả `ui-json`**, nói với khách hệ
+  thống đang gián đoạn, đừng đoán số.
 
-1. Hũ trả về từ `list_existing_jars()`.
-2. Hũ được nhắc tới/agent vừa đề xuất **trong chính cuộc hội thoại này**
-   (mới hơn, ưu tiên hơn nếu có khác biệt — ví dụ agent vừa đề xuất
-   `create_jar` ở lượt trước, giờ khách hàng muốn đổi số tiền ngay, dù
-   `list_existing_jars()` chưa kịp phản ánh hũ đó).
+Số dư hũ là số **tính ra**, không có chỗ để ghi trực tiếp. Muốn hũ có thêm tiền có 2 cách:
+**tăng hạn mức** (`edit_jar`, có hiệu lực các tháng sau, cần `allocationHeadroom`) hoặc
+**lấy từ hũ/tiền chưa phân bổ khác trong tháng này** (skill `jar-rebalance`).
 
-Nếu khách hàng nhắc tới 1 hũ không có ở cả 2 nguồn trên: hỏi lại thay vì tự
-đoán, hoặc dùng `create_jar` nếu ý khách hàng rõ ràng là muốn **tạo mới**.
+## Chọn form nào (mỗi lượt tối đa 1 khối `ui-json`)
 
-Số tiền đề xuất (`allocation_amount`) PHẢI tính từ dữ liệu chi tiêu thật
-trong `/customer_data.json` (`monthly_spending_summary`/`transactions`
-theo danh mục liên quan, hoặc `customer.monthly_income_vnd`/
-`account.balance_vnd` nếu áp dụng rule tổng quát như 50/30/20) — không bịa
-số. `/customer_data.json` (chi tiêu, thu nhập, số dư) vẫn đọc trực tiếp từ
-system prompt như trước — chỉ riêng **danh sách hũ hiện có** thì dùng tool
-`list_existing_jars()`.
+| Khách nói / tình huống | Làm |
+|---|---|
+| Muốn tạo hũ mới | `create_jar` |
+| Đổi tên / hạn mức / danh mục của hũ đang có | `edit_jar` |
+| "Thêm tiền cho hũ X" **lâu dài** (mỗi tháng) | `edit_jar` tăng hạn mức — cần `allocationHeadroom` còn đủ; không đủ thì đề xuất giảm hạn mức hũ khác (`edit_jar`) hoặc bù tạm (skill `jar-rebalance`) |
+| Hũ đã chi vượt / thiếu tiền cho khoản định chi / chia lại tiền trong tháng này | skill `jar-rebalance`, không phải skill này |
+| Chỉ hỏi số dư, hạn mức, đã chi | trả lời text bằng số từ `get_jar_summary`, không có `ui-json` |
 
-## Khi nào dùng `create_jar` vs `edit_jar`
+Cần nhiều bước thì làm từng bước, mỗi bước một lượt.
 
-- **`create_jar`** — hũ đó **không có** trong kết quả `list_existing_jars()`
-  và cũng chưa từng được nhắc tới trong hội thoại này.
-- **`edit_jar`** — hũ đó **có** trong kết quả `list_existing_jars()`, HOẶC
-  đã được nhắc tới/agent vừa đề xuất trong chính cuộc hội thoại này.
+## `create_jar` — tạo hũ mới
 
-## Quy trình bắt buộc — Check trước, Propose sau
-
-1. **Check (bắt buộc):** gọi tool `list_existing_jars()` để xem đã có hũ
-   tên đó chưa (chọn đúng `create_jar` hay `edit_jar`). Số liệu chi tiêu
-   làm căn cứ đề xuất mức phân bổ (`monthly_spending_summary`,
-   `monthly_income_vnd`/`account.balance_vnd`) đã có sẵn ngay trong system
-   prompt — không cần `read_file`/`grep` cho phần này, không bịa số.
-2. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời, dùng
-   đúng 1 trong 2 type dưới đây.
-
-```ui-json
-{"type": "create_jar", "jar_name": "...", "allocation_amount": 0, "reason": "..."}
+```
+{"type": "create_jar", "jar_name": "...", "allocation_amount": 0, "category_ids": ["..."], "reason": "..."}
 ```
 
-```ui-json
-{"type": "edit_jar", "jar_name": "...", "allocation_amount": 0, "reason": "..."}
+- `jar_name` (bắt buộc): tên hũ, không rỗng.
+- `allocation_amount` (bắt buộc): number JSON thật, dương — thành `budgetLimit`. Tính từ chi
+  tiêu thật trong `/customer_data.json` (`monthly_spending_summary`/`transactions` theo danh
+  mục; hoặc thu nhập/số dư nếu áp rule tổng quát như 50/30/20), không bịa số.
+- `category_ids` (bắt buộc): danh sách category hũ phụ trách, được phép `[]`; mỗi phần tử là
+  1 trong 10 category chi tiêu: `housing`, `utilities`, `subscriptions`, `insurance`, `dining`,
+  `transport`, `shopping`, `groceries`, `entertainment`, `health`.
+- `reason` (bắt buộc): căn cứ đề xuất, nêu số liệu thật.
+
+Phải tôn trọng:
+- **`allocation_amount` ≤ `allocationHeadroom`.** `allocationHeadroom` ≤ 0 (hoặc "chưa biết") =
+  không còn chỗ đặt hạn mức mới → **không chèn khối**; nói rõ trong câu trả lời và đề xuất lấy bớt
+  hạn mức từ hũ khác (`edit_jar` giảm). Khi gợi ý giảm hũ khác để có chỗ, phần giảm phải **ít nhất `allocation_amount` − `allocationHeadroom`**
+  (ví dụ tạo hũ 2.000.000đ khi `allocationHeadroom` = −1.000.000đ thì phải giảm ít nhất 3.000.000đ, không phải 2.000.000đ).
+- **1 category chỉ thuộc đúng 1 hũ.** Category đang thuộc hũ khác (xem `categoryIds` từng hũ)
+  sẽ bị **chuyển sang hũ mới** khi tạo — nêu rõ trong `reason` hũ nào mất chúng.
+- **KHÔNG gửi `jar_id`** — `pfm` tự sinh id.
+- Tên trùng `label` một hũ đang có → không chèn khối; hỏi khách có muốn sửa hũ đó không.
+
+## `edit_jar` — chỉnh sửa hũ đã có
+
+```
+{"type": "edit_jar", "jar_id": "...", "jar_name": "...", "allocation_amount": 0, "category_ids": ["..."], "reason": "..."}
 ```
 
-## Schema (giống nhau cho cả 2 type)
+- `jar_id` (bắt buộc): **`id` lấy từ `get_jar_summary`**, không khớp theo tên. Khách nhắc 1 hũ
+  không có trong kết quả → hỏi lại hũ nào, đừng đoán (nếu ý khách rõ ràng là tạo mới thì dùng
+  `create_jar`).
+- `jar_name` (bắt buộc): tên hũ sau khi sửa (giữ tên cũ nếu không đổi).
+- `allocation_amount` (bắt buộc): `budgetLimit` mới, dương.
+- `category_ids` (tuỳ chọn): **danh sách đầy đủ** category mới của hũ; bỏ field = không đổi.
+  Category lấy từ hũ khác sẽ bị chuyển sang hũ này.
+- `reason` (bắt buộc): căn cứ đề xuất.
 
-- `type` (bắt buộc): `"create_jar"` hoặc `"edit_jar"`.
-- `jar_name` (bắt buộc): string — tên hũ (ví dụ "Ăn uống", "Tiết kiệm khẩn
-  cấp"). Với `edit_jar`, phải khớp đúng tên hũ có trong `jars` của
-  `/customer_data.json` HOẶC đã nhắc tới trước đó trong hội thoại.
-- `allocation_amount` (bắt buộc): number JSON thật, dương — số tiền đề
-  xuất phân bổ vào hũ mỗi tháng.
-- `reason` (bắt buộc): string ngắn — căn cứ đề xuất mức này (ví dụ "trung
-  bình chi tiêu Ăn uống 3 tháng gần nhất là 2.880.000đ/tháng").
+Phải tôn trọng:
+- **Tăng hạn mức:** phần tăng thêm (`allocation_amount` − `budgetLimit` hiện tại) phải
+  **≤ `allocationHeadroom`**. Giảm hoặc giữ nguyên luôn được. Hũ chưa đặt hạn mức (`null`) —
+  đặt lần đầu cũng tính là tăng.
+- Đổi hạn mức làm `remaining` đổi đúng bằng chênh lệch. Giảm xuống dưới số đã chi (`spent`) thì
+  `remaining` âm (vượt hạn mức) — nói rõ trong `reason`.
 
-## PHẢI (bắt buộc — sai 1 điều là toàn bộ đề xuất bị huỷ)
+## Khi KHÔNG chèn khối `ui-json`, chỉ nói trong câu trả lời
 
-1. JSON thật (dấu nháy kép), không phải Python dict repr.
-2. `type` đúng 1 trong 2 giá trị `"create_jar"`/`"edit_jar"`.
-3. `allocation_amount` là number JSON thật, dương — không phải string.
-4. `reason` PHẢI có nội dung cụ thể, dựa trên số liệu thật đọc được từ
-   `/customer_data.json`.
-5. Với `edit_jar`, `jar_name` PHẢI khớp đúng tên hũ trả về từ
-   `list_existing_jars()` HOẶC đã xuất hiện trước đó trong hội thoại —
-   không tự bịa tên hũ mới rồi gắn nhãn `edit_jar`.
-6. Đúng 1 khối `ui-json` mỗi câu trả lời.
+- `get_jar_summary` lỗi, hoặc số cần thiết là `null` — không đoán số.
+- `jar_id` khách nhắc không có trong kết quả — hỏi lại.
+- Tên hũ mới trùng `label` hũ đang có (`create_jar`).
+- `allocationHeadroom` không đủ (tạo hũ mới hoặc tăng hạn mức).
 
-## KHÔNG ĐƯỢC
+## Câu trả lời đi kèm
 
-- KHÔNG tự thêm field ngoài 4 field đã định nghĩa (`type`, `jar_name`,
-  `allocation_amount`, `reason`).
-- KHÔNG dùng `edit_jar` cho 1 hũ không có trong kết quả `list_existing_jars()`
-  và cũng chưa từng được nhắc tới trong hội thoại này — dùng `create_jar`
-  thay vào đó.
-- KHÔNG khẳng định hũ đã được tạo/chỉnh sửa thật — đây chỉ là đề xuất hiển
-  thị để khách hàng tự xem và tự bấm xác nhận trên UI, việc tạo/sửa hũ
-  thật (nếu có) diễn ra hoàn toàn bên ngoài cuộc hội thoại này, ở hệ thống
-  PFM khác.
+1–3 câu (mỗi câu một dòng theo quy định chung), nêu con số chính lấy từ `get_jar_summary`
+(ví dụ "hạn mức 4.000.000đ → 4.500.000đ") và nhắc khách xem lại rồi xác nhận. **KHÔNG khẳng định
+hũ đã được tạo/sửa** ("đã tạo", "đã cập nhật") — bạn chỉ đề xuất, `pfm` mới làm khi khách bấm xác nhận.
+
+**Người đọc là khách hàng:** câu trả lời và `reason` không nhắc tên nội bộ — không viết `pfm`, id hũ (`food`), mã category (`entertainment`), tên field (`spendable`, `allocationHeadroom`, `budgetLimit`), không dùng dấu backtick. Dùng tên tiếng Việt của hũ và cách nói thường ("phần hạn mức còn được đặt thêm", "số dư hũ"). Việc `pfm` sẽ ghi thay đổi khi khách bấm xác nhận chỉ cần nói "bạn xem lại rồi xác nhận nhé".
+
+## PHẢI (sai 1 điều là toàn bộ đề xuất bị bỏ)
+
+1. JSON thật (dấu nháy kép), không phải Python dict repr; đúng 1 khối `ui-json` mỗi lượt.
+2. `allocation_amount` là number, dương — không phải string.
+3. `create_jar` có `category_ids` (danh sách, có thể rỗng) và không có `jar_id`; `edit_jar` có `jar_id`.
+4. `category_ids` chỉ gồm 10 category hợp lệ, không lặp.
+5. `reason` có nội dung cụ thể từ số liệu thật.
+6. Không thêm field ngoài schema.
 
 ## Ví dụ ĐÚNG
 
-Khách hỏi: "Tạo giúp tôi 1 hũ ăn uống hợp lý."
+### Tạo hũ
 
-Bước 1: đọc `/customer_data.json`, thấy chi tiêu Ăn uống 3 tháng gần nhất
-lần lượt 3.100.000đ / 3.450.000đ / 2.585.000đ → trung bình ~3.045.000đ.
+Khách hỏi: "Tạo giúp tôi 1 hũ giải trí."
 
-Phần text trả lời: "Dựa trên chi tiêu Ăn uống trung bình 3 tháng gần đây
-(~3.045.000đ/tháng), mình đề xuất hũ Ăn uống 3.000.000đ/tháng."
+Bước 1: `get_jar_summary` cho `allocationHeadroom` = 2.000.000đ, chưa có hũ nào tên "Giải trí"; `/customer_data.json`
+cho thấy chi Giải trí 3 tháng gần nhất trung bình ~1.400.000đ/tháng; danh mục Giải trí (`entertainment`) đang thuộc hũ
+"Khác" nên sẽ chuyển sang hũ mới.
 
-Kèm khối:
-
-```ui-json
-{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, "reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất (06-08/2026) là ~3.045.000đ/tháng"}
-```
-
-Lượt sau, khách hỏi: "Đổi hũ đó lên 4 triệu được không?"
+Câu trả lời: "Chi Giải trí 3 tháng gần đây trung bình ~1.400.000đ/tháng, mình đề xuất hũ Giải trí 1.500.000đ/tháng."
 
 ```ui-json
-{"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": 4000000, "reason": "Khách hàng yêu cầu tăng hũ Ăn uống đã tạo ở lượt trước lên 4.000.000đ/tháng"}
+{"type": "create_jar", "jar_name": "Giải trí", "allocation_amount": 1500000, "category_ids": ["entertainment"], "reason": "Chi Giải trí 3 tháng gần nhất trung bình ~1.400.000đ/tháng; category Giải trí đang thuộc hũ Khác sẽ chuyển sang hũ mới"}
 ```
 
-Ví dụ khác — hũ đã tồn tại sẵn (không cần nhắc tới trong hội thoại trước):
-khách hỏi "Tăng hũ giải trí của tôi lên 800k được không?" → gọi
-`list_existing_jars()`, thấy đã có "Giải trí: 600.000đ/tháng" → dùng
-`edit_jar` (không phải `create_jar`, vì hũ này đã tồn tại):
+### Sửa hũ — tăng hạn mức
+
+Khách hỏi: "Tăng hũ ăn uống lên 4,5 triệu được không?"
+
+Bước 1: `get_jar_summary` cho hũ `id: food`, `label: Ăn uống`, `budgetLimit` 4.000.000đ, `allocationHeadroom`
+1.200.000đ → phần tăng 500.000đ ≤ 1.200.000đ. Không đổi danh mục nên bỏ `category_ids`.
+
+Câu trả lời: "Hũ Ăn uống tăng từ 4.000.000đ lên 4.500.000đ/tháng, còn trong phần hạn mức được đặt thêm."
 
 ```ui-json
-{"type": "edit_jar", "jar_name": "Giải trí", "allocation_amount": 800000, "reason": "Khách hàng yêu cầu tăng hũ Giải trí hiện có (600.000đ) lên 800.000đ/tháng"}
+{"type": "edit_jar", "jar_id": "food", "jar_name": "Ăn uống", "allocation_amount": 4500000, "reason": "Khách yêu cầu tăng hạn mức hũ Ăn uống từ 4.000.000đ lên 4.500.000đ; phần tăng 500.000đ nằm trong phần hạn mức còn được đặt thêm (1.200.000đ)"}
 ```
 
-## Ví dụ SAI (bị huỷ toàn bộ)
+### Không đủ chỗ đặt hạn mức — không có khối
+
+Khách hỏi: "Tạo hũ Du lịch 2 triệu giúp tôi."
+
+`get_jar_summary` cho `allocationHeadroom` = −1.000.000đ (tổng hạn mức đã vượt tiền trong tài khoản).
+
+Câu trả lời (không kèm khối): "Tổng hạn mức các hũ đang vượt số dư tài khoản 1.000.000đ nên chưa đặt thêm hũ mới được."
+"Bạn có thể giảm hạn mức một hũ khác trước, mình sẽ đề xuất giúp (cần giảm ít nhất 3.000.000đ để có chỗ cho hũ 2.000.000đ)."
+
+## Ví dụ SAI (bị bỏ toàn bộ)
 
 ```
-# SAI — allocation_amount là string, không phải number
-{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": "3000000", "reason": "x"}
+# SAI — thiếu category_ids
+{"type": "create_jar", "jar_name": "Giải trí", "allocation_amount": 1500000, "reason": "x"}
 
-# SAI — thiếu field bắt buộc (reason)
-{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000}
+# SAI — create_jar không được gửi jar_id (pfm tự sinh)
+{"type": "create_jar", "jar_id": "giai-tri", "jar_name": "Giải trí", "allocation_amount": 1500000, "category_ids": [], "reason": "x"}
 
-# SAI — edit_jar cho hũ không có trong kết quả list_existing_jars() và
-# cũng chưa từng nhắc tới trong hội thoại này
-{"type": "edit_jar", "jar_name": "Du lịch", "allocation_amount": 2000000, "reason": "..."}
+# SAI — edit_jar chỉ có tên, thiếu jar_id lấy từ get_jar_summary
+{"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": 4500000, "reason": "x"}
+
+# SAI — allocation_amount là string; category "gaming" không thuộc 10 category
+{"type": "edit_jar", "jar_id": "food", "jar_name": "Ăn uống", "allocation_amount": "4500000", "category_ids": ["gaming"], "reason": "x"}
 ```
+
+Sai lầm khác cần tránh: đề xuất `create_jar` khi `allocationHeadroom` ≤ 0; dùng số cũ sau khi khách đã xác nhận 1
+thay đổi (phải gọi lại `get_jar_summary`); nói "mình đã tạo hũ cho bạn".

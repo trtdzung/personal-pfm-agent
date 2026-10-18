@@ -1527,6 +1527,76 @@ thụt lề, bảng markdown). Áp dụng ở `/chat` (sau khi tách khối `ui-
 assistant, không sửa lời khách gõ). Không thêm độ trễ đáng kể (~0,02 ms/câu trả lời); mỗi lần cắt ghi log WARNING kèm mẫu ký tự để đo tần suất
 lỗi — nếu log cho thấy hay xảy ra mới cân nhắc bước gọi lại model. +12 test (350 pass).
 
+### 1.25. [Đã trả lời một phần bởi 1.26 — đã đọc repo `pfm`] Chuyển khoản từ hũ thiếu tiền: AI gợi ý lấy tiền từ hũ khác
+
+> **Cập nhật 2026-09-20:** người dùng viết lại `backend_docs/pfm-read-api.md` với contract `rebalance_jars` (agent tự đề xuất `moves`, `pfm` kiểm lại và ghi khi khách xác nhận)
+> và yêu cầu skill + tool gần như map 1-1 với endpoint → làm ở **mục 1.26**. Câu hỏi 1 dưới đây (AI quyết định gì) coi như chọn hướng (b): agent đề xuất `moves`. Phần diễn giải ngay trong popup
+> `JarTopupSuggestionSheet` của pfm (điểm 2, đặt ở đâu) **chưa làm**.
+
+**Yêu cầu (2026-09-19):** khi khách chuyển khoản mà chọn hũ không đủ tiền, AI gợi ý cách chia — lấy từ hũ khác sang. Câu hỏi thiết kế
+ban đầu: tách flow riêng, hay dùng subagent của deepagents?
+
+**Kết luận sau khi đọc `pfm` (`/media/daonguyen/Dual/MSB/MSBHackathon/pfm`): phần tính toán ĐÃ CÓ ở pfm, không viết lại ở repo này.**
+Đề xuất đầu tiên của tôi (viết bộ chia tiền bằng Python trong repo agent) là **sai**: trùng lặp và vi phạm nguyên tắc #1 của pfm
+("engine tất định là nguồn sự thật của mọi con số, LLM không tính"). Agent cũng không đủ dữ liệu: số dư khả dụng của hũ ở pfm được
+**suy ra** từ lịch sử giao dịch + giao dịch điều chỉnh hũ (`dieu-chinh-hu`), không phải số lưu sẵn.
+
+Đã có ở pfm:
+- `src/domain/engine/jar-funding.ts` — `evaluateFunding`: thứ tự lấy tiền quỹ "Chưa phân bổ" → hũ `buffer` → `spending` → `essential`;
+  hũ `goal` được bảo vệ (chỉ rút khi khách xác nhận riêng, `requiresManualGoal`). Trả về `tier` (`ok`/`topup`/`insufficient`), số thiếu,
+  và chuỗi hũ cho tiền kèm số tiền từng hũ.
+- `src/components/transfer/JarTopupSuggestionSheet.tsx` — popup "Hũ chưa đủ tiền → đề xuất rót từ…" (Đồng ý rót / Chọn nguồn khác), mở khi `tier === "topup"`.
+- `src/state/auto-fund-swap.ts` (`swapOptionsFor`) — "Đổi nguồn": các hũ có thể đứng ra bù đủ một mình.
+- Chỗ chừa sẵn cho AI: comment trong popup ghi *"Copy is static (deterministic) for the MVP — Phase 03 may swap in an AI-narrated line WITHOUT changing any figure"*.
+- pfm đã có đường gọi LLM riêng cho việc không phải chat: `src/app/api/agent/categorize/route.ts` (+ `src/ai/llm`, GreenNode, có
+  `mode` như `transfer_purpose`, kiểm tra quyền `ai`, dự phòng câu chữ tĩnh khi offline). Journal `260916-transfer-purpose-suggestion` ghi cố ý tránh dựng endpoint AI song song.
+
+**Trả lời câu hỏi ban đầu:** không dùng subagent, không dùng chat agent với nhiều skill. Phần "AI" chỉ còn là **diễn giải** phương án
+engine đã chọn (stateless, một lần gọi, con số truyền vào rồi trả ra nguyên vẹn) — không cần deep agent.
+
+**Cần chốt trước khi làm (câu hỏi đang chờ người dùng):**
+1. AI được quyết định gì? (a) chỉ diễn giải phương án của engine (khuyến nghị bắt đầu từ đây); (b) diễn giải + chọn 1 trong các phương án
+   hợp lệ do `swapOptionsFor` đưa ra theo thói quen chi tiêu (pfm vẫn phải kiểm tra lại bằng engine); (c) cho khách hỏi lại "sao không lấy từ hũ X?" (mới cần chat agent).
+2. Đặt ở đâu? (A) trong pfm — thêm `mode` mới cho route kiểu `/api/agent/categorize` (đã có consent + fallback tĩnh); (B) endpoint nhỏ trong repo này —
+   có thêm ngữ cảnh khách (nợ thẻ, thói quen chi) nhưng thêm 1 bước mạng đúng lúc khách đang chuyển khoản. Nếu chọn (B): customer id vẫn lấy từ request, không để LLM truyền;
+   con số nhận từ pfm chỉ dùng để viết lời, câu trả lời phải được pfm kiểm tra lại (số tiền/hũ không được khác engine).
+
+**Việc phụ phát hiện khi đọc pfm (cần đối chiếu, chưa sửa):**
+- `backend_docs/pfm-read-api.md` và `tools/customer_data_tools.py::list_existing_jars` (mock) còn mô tả `actualAmount`/`balance_vnd`, nhưng pfm đã **bỏ số dư lưu sẵn**
+  (`src/domain/jar-rules.ts`, journal `260917-jar-single-number`): `spendable = max(0, remaining)` suy ra từ giao dịch. Cần đối chiếu lại `GET /api/jars` thật
+  trước khi agent đọc hũ (kể cả cho tính năng này lẫn skill `spending-jar`).
+- pfm có thêm `Jar.role` (`buffer`/`spending`/`essential`/`goal`) — agent chưa biết khái niệm này.
+
+### 1.26. [Đã làm] Form hũ: `create_jar` / `edit_jar` theo contract mới + `rebalance_jars` mới + tool đọc `get_jar_summary`
+
+**Yêu cầu (2026-09-20):** triển khai gợi ý tạo hũ, sửa hũ, chuyển tiền, cân đối hũ theo contract người dùng vừa cập nhật trong `backend_docs/pfm-read-api.md`
+(phần A: `GET /api/jar-summary`; phần B: `ui` agent trả ra); có doc cho frontend trong `docs/`. "UI" = contract `ui` + doc (React ở repo `pfm`, không làm ở đây).
+Chọn: tool mỏng, ánh xạ ~1-1 với endpoint; logic chia tiền nằm ở **skill**, không viết tool tính (đã cân nhắc `propose_jar_rebalance`, người dùng không chọn).
+
+- **Tool `get_jar_summary(month="")`** (`tools/customer_data_tools.py`) ↔ `GET /api/jar-summary?cif=&month=`. `cif` từ `actor_id`; `month` (YYYY-MM) là tham số duy nhất của model, sai định dạng thì
+  trả lỗi mà không gọi pfm. Giữ nguyên tên field endpoint (`budgetLimit`, `spent`, `remaining`, `spendable`, `role`, `unallocated`, `allocationHeadroom`, `overLimit`); `null` hiển thị "chưa đặt/chưa biết",
+  **không bao giờ thành 0**; số âm giữ dấu âm; lỗi 404/500/mạng → "Không thể đọc thông tin hũ… đừng đoán số và đừng trả form hũ". **Xoá** `list_existing_jars` + `_MOCK_JARS` (mock, dùng `balance_vnd` không còn tồn tại ở pfm).
+  Trần 2 lần gọi/lượt (`middleware/tool_limits.py`); đăng ký ở `server.py`.
+- **Validator `text_utils`** (chỉ kiểm hình dạng, giống `transfer_form`): `create_jar` thêm `category_ids` bắt buộc (được `[]`, thuộc 10 category, không lặp) và **không được có `jar_id`**;
+  `edit_jar` tách khỏi `create_jar`, bắt buộc `jar_id`, `category_ids` tuỳ chọn; `rebalance_jars` mới (`target_jar_id` ≠ `"pool"`, `shortfall` > 0, `moves` ≥ 1, không lặp nguồn, nguồn ≠ đích,
+  **Σ `moves[].amount` = `shortfall`**, `reason`). Không đối chiếu dữ liệu thật (hạn mức từng hũ, hũ `goal`) — việc của pfm, đúng như doc.
+  **Thay đổi phá vỡ:** payload `create_jar`/`edit_jar` cũ (thiếu `category_ids`/`jar_id`) giờ bị bỏ (`ui = null`). Doc nói phía pfm chưa làm 3 form này nên chấp nhận.
+- **Skill:** `spending-jar` viết lại (đọc `get_jar_summary`, trần `allocationHeadroom`, 1 category chỉ thuộc 1 hũ, không gửi `jar_id` khi tạo); **`jar-rebalance` mới** (tính `shortfall` hai trường hợp (a)/(b), thứ tự `pool` → `buffer` → `spending` → `essential`,
+  mỗi nguồn `min(spendable, còn thiếu)`, 5 quy tắc cứng, 1 hũ mỗi lượt, khi nào không trả `ui`); `transfer-form` thêm ghi chú độc lập với hũ; `investment-guidance` bỏ dùng tool cũ (tiền trong hũ nằm **trong** số dư tài khoản nên
+  không cộng thêm — trước đây "số dư + tổng hũ" sẽ tính trùng); `instructions.md` thêm bảng "Khi nào trả form nào" + quy tắc "không nhắc tên nội bộ" trong câu trả lời/`reason`.
+- **Doc:** `docs/spending-jar.md` viết lại, `docs/jar-rebalance.md` mới, `docs/api.md` (5 loại `ui.type`), `docs/transfer-form.md` (mục độc lập với hũ).
+- **Test (379 pass; 413 khi có `requirements.txt`):** `tests/test_jar_skills.py` mới đọc ví dụ ĐÚNG trong 2 skill **và JSON trong doc** rồi chạy qua đúng validator (ví dụ không thể lệch khỏi code), kiểm `reason` trong ví dụ không chứa tên nội bộ;
+  `test_text_utils.py` (~50 ca cho 3 validator), `test_customer_data_tools.py` (tool mới, mock `httpx`), `test_server.py` (end-to-end `rebalance_jars`).
+- **Chạy model thật** (`jar-summary` giả, vì endpoint có thể chưa deploy; 7 tình huống): tạo hũ, sửa hũ, cân đối (a) `pool 1.000.000 + Hưởng thụ 500.000` đúng thứ tự, cân đối (b) từ hũ `buffer`, chỉ hũ `goal` đủ → không có `ui`,
+  hết chỗ đặt hạn mức → không có `ui`, hỏi số dư → không có `ui`. **Lỗi thật bắt được khi chạy và đã sửa:** (1) câu trả lời/`reason` lộ tên nội bộ ("`pfm`", `entertainment`, `allocationHeadroom`) — kể cả ví dụ mẫu của tôi;
+  (2) gợi ý "giảm hũ khác 2 triệu để tạo hũ 2 triệu" khi `allocationHeadroom` = −1 triệu (phải giảm ≥ 3 triệu) → thêm công thức vào skill; (3) hứa "cho mình biết để mình tạo đề xuất" lấy từ hũ `goal` → đưa vào quy tắc cứng số 5.
+- **Còn lại / cần biết:**
+  - `GET /api/jar-summary` là endpoint **mới**, bản pfm đang chạy có thể còn `404` — khi đó tool báo lỗi và agent không gợi ý form hũ. Chưa chạy được với pfm thật.
+  - Model làm phép cộng `moves` bằng lời; validator chặn Σ ≠ `shortfall` nhưng **không** chặn nguồn vượt `spendable`/`unallocated` hay đưa hũ `goal` vào (pfm phải kiểm lại). Quy tắc chỉ nằm ở skill nên model vẫn có thể lệch (đã thấy lệch 1 lần ở lỗi (3)).
+  - Ví dụ số trong `backend_docs/pfm-read-api.md` (B4) tự mâu thuẫn với thứ tự ưu tiên: "Chưa phân bổ" 9.514.000đ đủ bù 1.500.000đ nên `pool` phải cho hết, không phải 1.000.000đ + 500.000đ từ hũ Hưởng thụ. Skill/doc của repo này dùng ví dụ với `unallocated` = 1.000.000đ. Nên sửa lại ví dụ trong doc gốc.
+  - Nhà cung cấp model đôi khi chặn đầu ra bằng bộ lọc nội dung (`403 ModelArts.81011 "Output text May contain sensitive information"`), gặp ngẫu nhiên ở tình huống `goal_only` khi chạy thử; `/chat` khi đó trả 500. Chưa xử lý (không liên quan tới thay đổi này).
+  - `notebooks/try_agent.ipynb` còn nhắc `list_existing_jars` trong ghi chú (chưa sửa; notebook cũ).
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

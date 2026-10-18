@@ -41,7 +41,7 @@ cổ phiếu, vàng...) và nêu **1 phương án ưu tiên** kèm lý do. Khôn
 2. **Xác định vốn đề xuất — chỉ theo SỐ TIỀN, không theo tên hũ.** Khách nêu số tiền
    → vốn đề xuất = **50% số đó** (nói 60 triệu → `principal_vnd` = 30 triệu; nửa còn
    lại ưu tiên trả nợ lãi cao rồi quỹ dự phòng). Không nêu → ước tiền nhàn rỗi = số dư
-   tài khoản + "Tổng số dư các hũ" (`list_existing_jars`, chỉ gọi khi cần ước vốn) −
+   tài khoản (tiền trong các hũ chi tiêu đã nằm **trong** số dư này, đừng cộng thêm — không cần gọi `get_jar_summary`) −
    quỹ dự phòng − dư nợ thẻ đang chịu lãi, rồi lấy 50%. Kết quả ≤ 0 → không có vốn:
    **không truyền `principal_vnd`**.
 3. **Tra cứu ở LƯỢT ĐẦU, gọi song song** các tool không phụ thuộc nhau — câu trả lời

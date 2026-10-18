@@ -20,6 +20,8 @@ TOOL_RUN_LIMITS = {
     "read_market_article": 2,
     "project_investment_growth": 2,
     "calculate_deposit_interest": 2,
+    # once to read the jars, once more to compare another month; more means the model is looping
+    "get_jar_summary": 2,
 }
 
 

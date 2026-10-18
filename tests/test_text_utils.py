@@ -1,3 +1,4 @@
+import json
 import logging
 
 import pytest
@@ -299,55 +300,171 @@ def test_extract_ui_block_rejects_transfer_form_mixing_both_schema_shapes():
     assert ui is None
 
 
-def test_extract_ui_block_splits_out_valid_create_jar_block():
-    text = (
-        "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng.\n\n"
-        '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, '
-        '"reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng"}\n```'
-    )
-    cleaned, ui = extract_ui_block(text)
-    assert cleaned == "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng."
-    assert ui == {
+def _ui_text(payload: dict) -> str:
+    return "```ui-json\n" + json.dumps(payload, ensure_ascii=False) + "\n```"
+
+
+def _create_jar(**overrides) -> dict:
+    payload = {
         "type": "create_jar",
-        "jar_name": "Ăn uống",
-        "allocation_amount": 3000000,
-        "reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng",
+        "jar_name": "Cà phê & giải trí",
+        "allocation_amount": 1500000,
+        "category_ids": ["entertainment"],
+        "reason": "Chi Giải trí 3 tháng gần nhất trung bình ~1.400.000đ/tháng",
     }
+    payload.update(overrides)
+    return payload
+
+
+def _edit_jar(**overrides) -> dict:
+    payload = {
+        "type": "edit_jar",
+        "jar_id": "lifestyle",
+        "jar_name": "Hưởng thụ",
+        "allocation_amount": 2000000,
+        "category_ids": ["entertainment", "shopping"],
+        "reason": "Hũ Hưởng thụ mới chi 412.000đ trên hạn mức 2.500.000đ; giảm 500.000đ",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _rebalance_jars(**overrides) -> dict:
+    payload = {
+        "type": "rebalance_jars",
+        "target_jar_id": "food",
+        "shortfall": 1500000,
+        "moves": [
+            {"from_jar_id": "pool", "amount": 1000000},
+            {"from_jar_id": "lifestyle", "amount": 500000},
+        ],
+        "reason": "Hũ Ăn uống thiếu 1.500.000đ; lấy 1.000.000đ từ tiền chưa phân bổ và 500.000đ từ hũ Hưởng thụ",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _ui_of(payload: dict) -> dict | None:
+    return extract_ui_block(_ui_text(payload))[1]
+
+
+def test_extract_ui_block_splits_out_valid_create_jar_block():
+    text = "Mình đề xuất hũ Cà phê & giải trí 1.500.000đ/tháng.\n\n" + _ui_text(_create_jar())
+    cleaned, ui = extract_ui_block(text)
+    assert cleaned == "Mình đề xuất hũ Cà phê & giải trí 1.500.000đ/tháng."
+    assert ui == _create_jar()
+
+
+def test_create_jar_allows_empty_category_ids():
+    assert _ui_of(_create_jar(category_ids=[])) == _create_jar(category_ids=[])
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"reason": ""},  # reason is required and must say something
+        {"jar_name": ""},
+        {"allocation_amount": 0},
+        {"allocation_amount": "1500000"},  # a string is not a number
+        {"category_ids": "entertainment"},  # must be a list
+        {"category_ids": ["gaming"]},  # not one of the 10 expense categories
+        {"category_ids": ["entertainment", "entertainment"]},  # 1 category once
+        {"category_ids": [None]},
+        {"jar_id": "cafe"},  # pfm generates the id; the agent never sends one
+    ],
+)
+def test_create_jar_rejects_invalid_payloads(overrides):
+    assert _ui_of(_create_jar(**overrides)) is None
+
+
+def test_create_jar_requires_category_ids():
+    payload = _create_jar()
+    del payload["category_ids"]
+    assert _ui_of(payload) is None
 
 
 def test_extract_ui_block_splits_out_valid_edit_jar_block():
-    text = (
-        '```ui-json\n{"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": 4000000, '
-        '"reason": "Khách hàng yêu cầu tăng hũ Ăn uống lên 4.000.000đ/tháng"}\n```'
-    )
-    _, ui = extract_ui_block(text)
-    assert ui == {
-        "type": "edit_jar",
-        "jar_name": "Ăn uống",
-        "allocation_amount": 4000000,
-        "reason": "Khách hàng yêu cầu tăng hũ Ăn uống lên 4.000.000đ/tháng",
-    }
+    assert _ui_of(_edit_jar()) == _edit_jar()
 
 
-def test_extract_ui_block_rejects_jar_missing_reason():
-    text = '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000}\n```'
-    _, ui = extract_ui_block(text)
-    assert ui is None
+def test_edit_jar_category_ids_is_optional():
+    payload = _edit_jar()
+    del payload["category_ids"]
+    assert _ui_of(payload) == payload
 
 
-def test_extract_ui_block_rejects_jar_with_non_positive_allocation_amount():
-    text = '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 0, "reason": "x"}\n```'
-    _, ui = extract_ui_block(text)
-    assert ui is None
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"jar_id": ""},
+        {"jar_id": 7},
+        {"jar_name": ""},
+        {"allocation_amount": -1},
+        {"allocation_amount": "2000000"},
+        {"category_ids": ["gaming"]},
+        {"category_ids": "shopping"},
+        {"reason": ""},
+    ],
+)
+def test_edit_jar_rejects_invalid_payloads(overrides):
+    assert _ui_of(_edit_jar(**overrides)) is None
 
 
-def test_extract_ui_block_rejects_jar_with_stringified_allocation_amount():
-    text = (
-        '```ui-json\n{"type": "edit_jar", "jar_name": "Ăn uống", "allocation_amount": "4000000", '
-        '"reason": "x"}\n```'
-    )
-    _, ui = extract_ui_block(text)
-    assert ui is None
+def test_edit_jar_requires_jar_id_not_just_a_name():
+    payload = _edit_jar()
+    del payload["jar_id"]
+    assert _ui_of(payload) is None
+
+
+def test_extract_ui_block_splits_out_valid_rebalance_jars_block():
+    text = "Hũ Ăn uống thiếu 1.500.000đ.\n\n" + _ui_text(_rebalance_jars())
+    cleaned, ui = extract_ui_block(text)
+    assert cleaned == "Hũ Ăn uống thiếu 1.500.000đ."
+    assert ui == _rebalance_jars()
+
+
+def test_rebalance_jars_accepts_a_single_move():
+    payload = _rebalance_jars(shortfall=800000, moves=[{"from_jar_id": "pool", "amount": 800000}])
+    assert _ui_of(payload) == payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"shortfall": 1400000},  # moves add up to 1.500.000, not the shortfall
+        {"shortfall": 0},
+        {"shortfall": -5},
+        {"shortfall": "1500000"},
+        {"target_jar_id": ""},
+        {"target_jar_id": "pool"},  # the pool can be a source, never the jar that is short
+        {"moves": []},
+        {"moves": "pool"},
+        {"moves": [{"from_jar_id": "pool", "amount": 1500000}, {"from_jar_id": "pool", "amount": 0}]},
+        {"moves": [{"from_jar_id": "pool", "amount": 750000}, {"from_jar_id": "pool", "amount": 750000}]},  # repeated source
+        {"moves": [{"from_jar_id": "food", "amount": 1500000}]},  # a jar cannot fund itself
+        {"moves": [{"from_jar_id": "", "amount": 1500000}]},
+        {"moves": [{"from_jar_id": "pool", "amount": "1500000"}]},
+        {"moves": [{"amount": 1500000}]},
+        {"moves": ["pool"]},
+        {"reason": ""},
+    ],
+)
+def test_rebalance_jars_rejects_invalid_payloads(overrides):
+    assert _ui_of(_rebalance_jars(**overrides)) is None
+
+
+@pytest.mark.parametrize("field", ["target_jar_id", "shortfall", "moves", "reason"])
+def test_rebalance_jars_requires_every_field(field):
+    payload = _rebalance_jars()
+    del payload[field]
+    assert _ui_of(payload) is None
+
+
+def test_rebalance_jars_accepts_float_typed_whole_dong_amounts():
+    # JSON from the model may spell 1500000 as 1500000.0; that is still the same total.
+    payload = _rebalance_jars(shortfall=1500000.0, moves=[{"from_jar_id": "pool", "amount": 1000000.0}, {"from_jar_id": "lifestyle", "amount": 500000.0}])
+    assert _ui_of(payload) == payload
+
 
 
 # --- strip_foreign_script ---------------------------------------------------------------------

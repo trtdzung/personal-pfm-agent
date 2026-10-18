@@ -35,14 +35,14 @@ def test_instructions_use_preference_tools_for_budget():
 
 
 def test_instructions_mention_every_registered_tool():
-    from tools.customer_data_tools import list_existing_jars, query_beneficiaries
+    from tools.customer_data_tools import get_jar_summary, query_beneficiaries
     from tools.investment_tools import project_investment_growth
     from tools.market_news_tools import read_market_article, search_market_news
     from tools.msb_knowledge_tools import search_msb_knowledge
 
     text = _text()
     for tool in (
-        list_existing_jars,
+        get_jar_summary,
         query_beneficiaries,
         project_investment_growth,
         search_market_news,

@@ -38,9 +38,9 @@ def test_customer_data_has_required_top_level_keys(customer_id):
 
 @pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
 def test_customer_data_no_longer_has_tool_backed_fields(customer_id):
-    # jars/beneficiaries are hardcoded mock data inside
-    # tools/customer_data_tools.py now (see its own tests), reachable only
-    # via list_existing_jars()/query_beneficiaries() -- never passively
+    # jars/beneficiaries are read live from pfm by
+    # tools/customer_data_tools.py (see its own tests), reachable only
+    # via get_jar_summary()/query_beneficiaries() -- never passively
     # baked into /customer_data.json (see middleware/seed_customer_context.py).
     data = _load(customer_id)
     assert "jars" not in data
@@ -98,7 +98,6 @@ def test_account_balance_is_a_non_negative_number(customer_id):
     assert isinstance(account["balance_vnd"], (int, float)) and account["balance_vnd"] >= 0
 
 
-# jars/beneficiaries mock-data structure is now tested in
-# tests/test_customer_data_tools.py, next to the tool code that owns it
-# (tools/customer_data_tools.py's _MOCK_JARS/_MOCK_BENEFICIARIES) -- no
-# longer files under data/, so nothing to validate here.
+# jars/beneficiaries come from the pfm backend and are tested in
+# tests/test_customer_data_tools.py, next to the tool code that owns them
+# -- no longer files under data/, so nothing to validate here.
