@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "purpose": "Dữ liệu khách hàng mẫu (mock) dùng để agent trả lời các câu hỏi tư vấn tài chính. Số liệu là ví dụ minh hoạ nhưng nội bộ nhất quán (tổng chi tiêu = tổng các giao dịch liệt kê bên dưới) để có thể trả lời trực tiếp từ dữ liệu, không cần bịa thêm số.",
+    "purpose": "Dữ liệu khách hàng: account/transactions/monthly_spending_summary là số THẬT từ pfm (đồng bộ định kỳ); cards/statements/customer là dữ liệu minh hoạ. Dùng thẳng các số này khi trả lời, không tự bịa thêm.",
     "as_of_date": "2026-09-23",
     "currency": "VND"
   },
@@ -17,7 +17,7 @@
     }
   },
   "chat_memory_example": {
-    "_note": "KHÔNG phải dữ liệu hệ thống — đây là ví dụ về thông tin agent chỉ biết được nếu khách hàng từng nói ra trong hội thoại trước đó. Hệ thống hiện không có tính năng lưu ngân sách trong file này (xem remember_preference/recall_preference hoặc customer_budgets.json), nên trường này có thể rỗng/null nếu khách hàng chưa từng đề cập.",
+    "_note": "Ví dụ minh hoạ, KHÔNG phải dữ liệu thật -- chỉ dùng nếu khách tự nói điều này trong hội thoại hiện tại. Ngân sách thật nằm ở remember_preference/recall_preference, không phải ở đây.",
     "monthly_budget_vnd": null,
     "mentioned_on": null,
     "mentioned_in_message": null
