@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .contracts import GoalExtraction
+from .contracts import AdjustExtraction, GoalExtraction
 from .fast_path import find_flexibility
 from .parsing import parse_amount, parse_horizon
 
@@ -217,4 +217,53 @@ def extract(text: str) -> GoalExtraction:
                 ("human", f"Lần trước đầu ra không đúng khuôn ({last_error}). Hãy trả lại đúng khuôn."),
             ]
     logger.error("nlu failed (%s)", last_error[:80])
+    raise ModelUnavailableError(last_error)
+
+
+_ADJUST_PROMPT = Path(__file__).parent / "prompts" / "extract_adjust_v1.md"
+_ADJUST_KINDS = {"extend_months", "reduce_amount_to", "raise_saving_to", "use_savings_amount"}
+
+
+def coerce_adjustment(data: Any) -> AdjustExtraction:
+    """Repair the usual small-model slips (string numbers, "null" strings), then validate."""
+    if isinstance(data, AdjustExtraction):
+        return data
+    if not isinstance(data, dict):
+        raise ValueError("model output is not an object")
+    kind = data.get("kind")
+    kind = None if _null(kind) or kind not in _ADJUST_KINDS else kind
+    value = None if _null(data.get("value")) else _to_int(data.get("value"))
+    evidence = data.get("evidence")
+    return AdjustExtraction.model_validate({
+        "is_adjustment": _bool(data.get("is_adjustment")) and kind is not None and value is not None,
+        "kind": kind,
+        "value": value,
+        "is_delta": _bool(data.get("is_delta")),
+        "evidence": "" if _null(evidence) else str(evidence),
+    })
+
+
+def extract_adjust(text: str) -> AdjustExtraction:
+    """Read one edit sentence (only called when the code-first reader could not). Raises ModelUnavailableError."""
+    started = time.monotonic()
+    system = _ADJUST_PROMPT.read_text(encoding="utf-8")
+    messages: list[tuple[str, str]] = [("system", system), ("human", _wrap(text))]
+    last_error = "unknown"
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        remaining = BUDGET_SECONDS - (time.monotonic() - started)
+        if attempt > 1 and remaining < _MIN_RETRY_SECONDS:
+            break
+        try:
+            data, err = unwrap(structured_model(AdjustExtraction, max(1.0, remaining)).invoke(messages))
+            if err:
+                raise ValueError(err)
+            return coerce_adjustment(data)
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {str(exc)[:300]}"
+            logger.warning("adjust nlu attempt %d failed: %s", attempt, type(exc).__name__)
+            messages = [
+                ("system", system),
+                ("human", _wrap(text)),
+                ("human", f"Lần trước đầu ra không đúng khuôn ({last_error}). Hãy trả lại đúng khuôn."),
+            ]
     raise ModelUnavailableError(last_error)

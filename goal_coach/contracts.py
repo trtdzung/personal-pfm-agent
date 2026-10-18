@@ -11,7 +11,7 @@ VERSION = "goal-coach/v1"
 
 SlotName = Literal["name", "target_amount", "horizon", "flexibility", "opening_amount"]
 Flexibility = Literal["fixed", "flexible"]
-Status = Literal["draft", "need_info", "out_of_scope"]
+Status = Literal["draft", "need_info", "out_of_scope", "adjust"]
 MessageCode = Literal[
     "draft_ready",
     "need_name",
@@ -22,6 +22,8 @@ MessageCode = Literal[
     "not_a_goal",
     "amount_unclear",
     "horizon_unclear",
+    "adjust_ready",
+    "adjust_unclear",
 ]
 
 MAX_AMOUNT_VND = 10**14
@@ -42,10 +44,19 @@ class AnswerIn(_Strict):
     source: Literal["option", "text"]
 
 
+class CurrentDraft(_Strict):
+    """The draft the customer is looking at; its presence turns the request into an adjustment."""
+
+    target_amount: int = Field(gt=0, le=MAX_AMOUNT_VND)
+    opening_amount: int = Field(default=0, ge=0, le=MAX_AMOUNT_VND)
+    months: int | None = Field(default=None, ge=1, le=600)
+
+
 class CoachRequest(_Strict):
     user_id: str = Field(min_length=1, max_length=64)
     request: str = Field(min_length=1, max_length=500)
     answers: list[AnswerIn] = Field(default_factory=list, max_length=6)
+    current_draft: CurrentDraft | None = None
 
     @model_validator(mode="after")
     def _trim_request(self) -> "CoachRequest":
@@ -137,6 +148,21 @@ class Question(_Strict):
     allow_free_text: bool
 
 
+AdjustKind = Literal["extend_months", "reduce_amount_to", "raise_saving_to", "use_savings_amount"]
+
+
+class Adjustment(_Strict):
+    """A normalised edit of the current draft.
+
+    extend_months: months to ADD to the deadline; reduce_amount_to: the NEW target (VND);
+    raise_saving_to: the monthly saving (VND/month); use_savings_amount: VND taken from savings as opening money.
+    """
+
+    kind: AdjustKind
+    value: int = Field(gt=0, le=MAX_AMOUNT_VND)
+    evidence: str | None = Field(default=None, max_length=500)
+
+
 class Draft(_Strict):
     name: str = Field(min_length=1, max_length=MAX_NAME_LEN)
     target_amount: int = Field(gt=0, le=MAX_AMOUNT_VND)
@@ -156,6 +182,7 @@ class CoachResponse(_Strict):
     draft: Draft | None = None
     question: Question | None = None
     message_code: MessageCode
+    adjustment: Adjustment | None = None
 
     @model_validator(mode="after")
     def _status_shape(self) -> "CoachResponse":
@@ -165,6 +192,8 @@ class CoachResponse(_Strict):
             ok = self.draft is None and self.question is not None
         else:
             ok = self.draft is None and self.question is None
+        if (self.status == "adjust") != (self.adjustment is not None):
+            ok = False
         if not ok:
             raise ValueError(f"draft/question do not match status={self.status}")
         return self
@@ -269,3 +298,13 @@ class NarrateResponse(_Strict):
     source: NarrateSource
     fallback_reason: FallbackReason | None = None
     blocks: list[NarrateBlock]
+
+
+class AdjustExtraction(_Strict):
+    """What the LLM may return for an edit sentence: kind + the number as written + verbatim evidence."""
+
+    is_adjustment: bool
+    kind: AdjustKind | None = None
+    value: int | None = None
+    is_delta: bool = False  # "giảm 100 triệu" (by) vs "giảm xuống 500 triệu" (to)
+    evidence: str = ""

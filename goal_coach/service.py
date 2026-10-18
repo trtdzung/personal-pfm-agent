@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Callable
 
 from .contracts import (
+    AdjustExtraction,
     AmountSlot,
     CoachRequest,
     CoachResponse,
@@ -18,9 +19,11 @@ from .contracts import (
     NameSlot,
     Slots,
 )
+from .adjust import read_adjustment
 from .evidence import Verified, clean_name, verify
 from .fast_path import FastResult, fast_extract
 from .nlu import extract as default_extract
+from .nlu import extract_adjust as default_extract_adjust
 from .parsing import parse_amount, parse_horizon
 from .policy import decide
 from .questions import parse_option
@@ -115,15 +118,37 @@ def _overlay(v: Verified, fast: FastResult) -> None:
         v.is_goal = True
 
 
+def _adjust_turn(
+    req: CoachRequest, request_id: str, extract_adjust: Callable[[str], AdjustExtraction], started: float
+) -> CoachResponse:
+    """The customer is editing a draft by words: one normalised adjustment, or "not understood"."""
+    assert req.current_draft is not None
+    adj, llm_used = read_adjustment(req.request, req.current_draft, extract_adjust)
+    resp = (
+        CoachResponse(request_id=request_id, status="adjust", slots=Slots(), message_code="adjust_ready", adjustment=adj)
+        if adj
+        else CoachResponse(request_id=request_id, status="out_of_scope", slots=Slots(), message_code="adjust_unclear")
+    )
+    logger.info(
+        "goal_coach request_id=%s user_id=%s status=%s message_code=%s kind=%s llm=%s latency_ms=%d",
+        request_id, req.user_id, resp.status, resp.message_code, adj.kind if adj else None, llm_used,
+        int((time.monotonic() - started) * 1000),
+    )
+    return resp
+
+
 def run_turn(
     req: CoachRequest,
     *,
     request_id: str | None = None,
     extract: Extractor | None = None,
+    extract_adjust: Callable[[str], AdjustExtraction] | None = None,
 ) -> CoachResponse:
     """Run one turn. Raises nlu.ModelUnavailableError when the model fails."""
     started = time.monotonic()
     request_id = request_id or new_request_id()
+    if req.current_draft is not None:
+        return _adjust_turn(req, request_id, extract_adjust or default_extract_adjust, started)
     extract = extract or default_extract
     slots = Slots()
     answered: set[str] = set()
