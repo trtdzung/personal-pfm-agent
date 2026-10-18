@@ -1485,6 +1485,36 @@ chép lại nội dung PDF** thay vì parse/OCR.
    việc đưa nội dung cho khách qua agent.
 5. Khi có quyết định mới: chép file mới vào `curated/` (đổi `source_url`, `source_sha256`), đưa file cũ vào `reviewed.json`.
 
+### 1.24. [Đã làm — đảo ngược một phần 1.21] Viết lại skill `investment-guidance`: trả lời câu hỏi bằng dữ liệu tra cứu TRƯỚC, in đậm + link nguồn
+
+**Phản hồi của người dùng** (câu "60 triệu nhàn rỗi, muốn thêm 10 triệu đến cuối năm"): câu trả lời cũ mở đầu bằng nợ
+thẻ, không in đậm, nguồn viết tắt ("msb.com.vn/khach-hang-ca-nhan/dau-tu/") và lọt chữ Hán ("远远"). Yêu cầu: trả lời câu hỏi
+trước dựa trên dữ liệu tìm được, rồi thêm vài lựa chọn khác, rồi mới nói tình hình khách; in đậm ý chính; có link dẫn chứng.
+
+- `skills/project/investment-guidance/SKILL.md` viết lại: **thứ tự bắt buộc** (1) trả lời thẳng bằng số liệu tra được →
+  (2) 2–3 lựa chọn khác kèm số tiền → (3) tình hình khách + hành động ưu tiên + cảnh báo; 5–6 câu, ≤ ~150 từ, mỗi câu ≤ ~25 từ;
+  **in đậm** 3–5 cụm; mã nguồn `[n]` + dòng `Nguồn:` có **URL đầy đủ** + ngày (đăng/hiệu lực/lưu), tối đa 3 nguồn, chỉ gắn `[n]`
+  cho điều nguồn thật sự nói; cấm chữ Hán/ngoại ngữ.
+- **Đảo ngược 1.21 ("quyết định trước, tra cứu sau")**: giờ tra ở lượt đầu, gọi song song, mỗi nguồn 1 lần
+  (`search_msb_knowledge`, `search_market_news` + tối đa 1 `read_market_article`, `project_investment_growth`, rồi
+  `calculate_deposit_interest`) — vì câu trả lời mở đầu bằng dữ liệu tra được. Trần số lần gọi trong code giữ nguyên.
+  `instructions.md` (quy tắc 3, 6 và mục "Trả lời ngắn gọn") sửa tương ứng; quy tắc 3 thêm "luôn nạp skill trước khi tra cứu; vốn = 50%".
+- **Lỗi thật bắt được khi chạy:** (1) `description` của skill có ": " không bọc nháy → YAML sai → loader **âm thầm bỏ skill**
+  ("failed metadata parse"); đã sửa + test kiểm tra front matter mọi skill. (2) 1 lượt dùng vốn 60 triệu thay vì 30 triệu
+  (nửa số tiền khách nêu) khi skill nạp muộn → thêm luật vào `instructions.md`. (3) Lấy lãi hàng 12 tháng (6,80%) nhân với 3 tháng
+  → thêm luật "mức lãi và `months` cùng một hàng kỳ hạn". (4) Gắn `[1]` bài báo cho nhận định bài không nói → luật "chỉ gắn nguồn cho
+  điều nguồn nói".
+- Chạy model thật (5 câu, 2–3 khách): đúng thứ tự, có in đậm, link đầy đủ, vốn 30 triệu, tiền lãi đúng kỳ hạn; 29–36 s (4 lần gọi model).
+  **Còn lại:** model đôi khi dài hơn 150 từ hoặc trộn thứ tự khi khách không nêu mục tiêu số tiền; tin thị trường chỉ là bối
+  cảnh (bài báo không phải lúc nào cũng có con số liên quan); cụm từ cấm ("dư sức", "chắc chắn đạt") chưa có bộ lọc đầu ra (cố ý: sửa bằng regex dễ đổi nghĩa câu; chỉ dựa vào skill/instruction).
+
+**Bộ lọc chữ lạ (làm sau đó, theo yêu cầu):** `text_utils.strip_foreign_script` cắt các cụm ký tự thuộc CJK/Hàn/Kana/Cyrillic/Thái/Ả Rập/Do Thái
+lọt vào câu trả lời tiếng Việt (kiểm theo dải Unicode, không phải danh sách từ). Dấu câu full-width ("，", "。", "：") đổi sang ASCII thay vì mất;
+cụm bị cắt để lại tối đa 1 khoảng trắng ("trả全额nợ" → "trả nợ"). Văn bản hợp lệ trả về **nguyên xi** (test byte-for-byte: dấu tiếng Việt, ₫ → ± emoji,
+thụt lề, bảng markdown). Áp dụng ở `/chat` (sau khi tách khối `ui-json`, nên tên người nhận trong ui không bị đụng) và `/chat/history` (chỉ lượt
+assistant, không sửa lời khách gõ). Không thêm độ trễ đáng kể (~0,02 ms/câu trả lời); mỗi lần cắt ghi log WARNING kèm mẫu ký tự để đo tần suất
+lỗi — nếu log cho thấy hay xảy ra mới cân nhắc bước gọi lại model. +12 test (350 pass).
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

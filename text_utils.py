@@ -35,6 +35,65 @@ def _strip_think_tags(text: str) -> str:
     return text.strip()
 
 
+# The model (a multilingual LLM answering in Vietnamese) occasionally slips a word in another script
+# into a sentence -- seen in production-like runs: "远远 chưa đạt mục tiêu", "trả全额". Vietnamese uses
+# Latin letters only, so any character from these scripts is a glitch. Checked by script range rather
+# than a blocklist of words: it is not always Chinese, and a range check costs ~20 µs per answer.
+_FOREIGN_SCRIPT_CLASS = (
+    "\u0400-\u052f"  # Cyrillic (+ supplement)
+    "\u0590-\u06ff"  # Hebrew, Arabic
+    "\u0e00-\u0e7f"  # Thai
+    "\u1100-\u11ff"  # Hangul jamo
+    "\u3040-\u30ff"  # Hiragana, Katakana
+    "\u3100-\u312f"  # Bopomofo
+    "\u3130-\u318f\uac00-\ud7af"  # Hangul
+    "\u3200-\u32ff"  # enclosed CJK
+    "\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"  # CJK ideographs
+    "\U00020000-\U0002fa1f"  # CJK extensions
+    "\u3000-\u303f"  # CJK punctuation (fullwidth ASCII punctuation is converted first)
+)
+_FOREIGN_RUN_RE = re.compile(f"(?P<pre>[ \\t]*)(?P<run>[{_FOREIGN_SCRIPT_CLASS}]+)")
+_CJK_PUNCTUATION = {0x3001: ", ", 0x3002: ". ", 0x3000: " "}
+# "，" -> ", " (with a space: the model writes it glued to the next word); brackets stay unspaced.
+_FULLWIDTH_TO_ASCII = {
+    code: (chr(code - 0xFEE0) + " " if chr(code - 0xFEE0) in ",.;:!?" else chr(code - 0xFEE0))
+    for code in range(0xFF01, 0xFF5F)
+}
+_WORD_CHAR = re.compile(r"\w")
+
+
+def strip_foreign_script(text: str) -> str:
+    """Remove stray non-Latin-script characters (CJK, Hangul, Kana, Cyrillic, Thai, Arabic, Hebrew) that
+    the model sometimes drops into a Vietnamese answer, keeping the sentence readable.
+
+    Fullwidth punctuation (",", ":", ".") becomes its ASCII form instead of vanishing, and a removed run
+    leaves at most one space so words on either side do not fuse. Only apply it to the assistant's
+    answer text -- never to text the user typed, tool output, or the ui-json block. Text without such
+    characters is returned unchanged (identical string).
+    """
+    translated = text.translate({**_FULLWIDTH_TO_ASCII, **_CJK_PUNCTUATION})
+    if not _FOREIGN_RUN_RE.search(translated) and translated == text:
+        return text
+    text = translated
+    removed = "".join(m.group("run") for m in _FOREIGN_RUN_RE.finditer(text))
+
+    def _drop(match: re.Match) -> str:
+        pre = match.group("pre")
+        after = text[match.end()] if match.end() < len(text) else "\n"
+        if after in ",.;:!?)" or after.isspace():
+            return ""  # "tháng 全额." -> "tháng." / "đạt,远远 chưa" -> "đạt, chưa": what follows already separates
+        before = text[match.start() - 1] if match.start() > 0 else "\n"
+        if not pre and _WORD_CHAR.match(before):
+            return " "  # "trả全额nợ" -> "trả nợ": glued on both sides, keep the words apart
+        return pre  # "abc 全额def" -> "abc def"
+
+    cleaned = _FOREIGN_RUN_RE.sub(_drop, text)
+    cleaned = re.sub(r"(?<=\S)[ \t]{2,}(?=\S)", " ", cleaned)  # "đạt,  chưa" -> "đạt, chưa" (never touches indentation)
+    if removed:
+        logger.warning("stripped %d foreign-script character(s) from an answer: %r", len(removed), removed[:20])
+    return cleaned.strip()
+
+
 def extract_final_text(content: object) -> str:
     """Pull just the final answer text out of a message's content.
 

@@ -1,4 +1,8 @@
-from text_utils import extract_final_text, extract_ui_block
+import logging
+
+import pytest
+
+from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
 
 
 def test_extract_final_text_returns_plain_string_unchanged():
@@ -344,3 +348,55 @@ def test_extract_ui_block_rejects_jar_with_stringified_allocation_amount():
     )
     _, ui = extract_ui_block(text)
     assert ui is None
+
+
+# --- strip_foreign_script ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("chỉ lãi 2,1 triệu,远远 chưa đạt mục tiêu.", "chỉ lãi 2,1 triệu, chưa đạt mục tiêu."),
+        ("nên trả全额nợ trước", "nên trả nợ trước"),  # glued on both sides: leave one space, no fused words
+        ("kỳ hạn 3 tháng 全额.", "kỳ hạn 3 tháng."),
+        ("Привет, bạn cần gì?", ", bạn cần gì?".strip()),
+        ("Lãi suất 4,75%/năm，kỳ hạn 3 tháng。", "Lãi suất 4,75%/năm, kỳ hạn 3 tháng."),  # fullwidth punctuation is converted, not lost
+        ("（xem thêm）", "(xem thêm)"),
+        ("안녕하세요 và こんにちは", "và"),  # Hangul + Kana
+        ("ข้อความ ภาษาไทย còn lại", "còn lại"),
+    ],
+)
+def test_strip_foreign_script_removes_stray_non_latin_words_but_keeps_the_sentence(raw, expected):
+    assert strip_foreign_script(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Bạn đang nợ thẻ **21,4 triệu** lãi ~26%/năm, nên trả nợ trước.",
+        "Đường Nguyễn Trãi, phường Ô Chợ Dừa; đ/Đ ă â ê ô ơ ư ắ ằ ẳ ẵ ặ ọ ộ ữ ự ỹ ỵ",
+        "Giá trị ₫ 1.000.000đ → ±2% × 3 – 4 … “trích dẫn” 😀 ✓",
+        "- gạch đầu dòng\n    thụt lề giữ nguyên,  hai   khoảng trắng giữa câu vẫn còn\n\n| a | b |\n| --- | --- |",
+        "",
+    ],
+)
+def test_strip_foreign_script_returns_valid_vietnamese_text_byte_for_byte(text):
+    assert strip_foreign_script(text) == text
+
+
+def test_strip_foreign_script_logs_what_it_removed(caplog):
+    with caplog.at_level(logging.WARNING, logger="personal-card-agent"):
+        strip_foreign_script("chưa đạt,远远 mục tiêu")
+        strip_foreign_script("câu bình thường")
+    warnings = [r.getMessage() for r in caplog.records if "foreign-script" in r.getMessage()]
+    assert warnings == ["stripped 2 foreign-script character(s) from an answer: '远远'"]
+
+
+def test_strip_foreign_script_is_fast_enough_to_run_on_every_answer():
+    import time
+
+    text = ("Mục tiêu thêm 10 triệu trước 31/12 rất khó đạt, 远远 chưa đạt. " * 40)[:2000]
+    start = time.perf_counter()
+    for _ in range(200):
+        strip_foreign_script(text)
+    assert (time.perf_counter() - start) / 200 < 0.005  # < 5 ms each (measured ~0.03 ms)

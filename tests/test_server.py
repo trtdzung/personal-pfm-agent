@@ -105,6 +105,37 @@ def test_chat_endpoint_returns_answer_with_correct_api_key(monkeypatch):
     assert body["ui"] is None
 
 
+def test_chat_endpoint_strips_stray_foreign_script_from_the_answer_only(monkeypatch):
+    answer = (
+        "Chỉ lãi khoảng 2,1 triệu,远远 chưa đạt mục tiêu.\n\n"
+        '```ui-json\n{"type": "transfer_form", "amount": 500000, "beneficiary_name": "Trần 明", '
+        '"memo": "Trả nợ", "category": "housing", "beneficiary_id": null}\n```'
+    )
+    fake_model = _ToolCapableFakeChatModel(responses=[answer])
+    monkeypatch.setattr(server, "agent", server.build_agent(model=fake_model, checkpointer=InMemorySaver()))
+
+    response = TestClient(server.app).post(
+        "/chat",
+        json={"message": "hi", "user_id": "CIF_0001"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    body = response.json()
+    assert body["answer"] == "Chỉ lãi khoảng 2,1 triệu, chưa đạt mục tiêu."
+    if body["ui"] is not None:  # the ui block is validated elsewhere; whatever it carries is not rewritten
+        assert body["ui"].get("beneficiary_name") == "Trần 明"
+
+
+def test_chat_history_cleans_assistant_turns_but_never_rewrites_what_the_user_typed(monkeypatch):
+    fake_model = _ToolCapableFakeChatModel(responses=["Trả全额nợ trước nhé."])
+    monkeypatch.setattr(server, "agent", server.build_agent(model=fake_model, checkpointer=InMemorySaver()))
+    client = TestClient(server.app)
+    headers = {"X-API-Key": "test-key-for-pytest"}
+    client.post("/chat", json={"message": "Chuyển tiền cho 王明", "user_id": "CIF_0001", "thread_id": "t9"}, headers=headers)
+    body = client.get("/chat/history", params={"user_id": "CIF_0001", "thread_id": "t9"}, headers=headers).json()
+    assert body["messages"][0]["content"] == "Chuyển tiền cho 王明"
+    assert body["messages"][1]["content"] == "Trả nợ trước nhé."
+
+
 def test_chat_endpoint_splits_ui_json_chart_block_into_ui_field(monkeypatch):
     chart_answer = (
         "Tháng này bạn chi nhiều nhất cho Mua sắm.\n\n"

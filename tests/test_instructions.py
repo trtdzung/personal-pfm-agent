@@ -112,22 +112,41 @@ def test_investment_guidance_owns_the_market_news_tool_usage():
     assert "skill `market-news`" not in skill
 
 
-def test_investment_guidance_decides_first_and_looks_up_only_when_needed():
+def test_investment_guidance_looks_up_in_the_first_turn_with_one_call_per_source():
     skill = _skill()
-    assert "QUYẾT ĐỊNH TRƯỚC, TRA CỨU SAU" in skill
-    assert "Không tra tin, không tra sản phẩm MSB" in skill
-    assert "**1** `search_msb_knowledge`" in skill
-    assert "không lặp search bằng từ khoá khác" in skill
+    assert "Tra cứu ở LƯỢT ĐẦU, gọi song song" in skill
+    assert "`search_msb_knowledge` **1 lần**" in skill
+    assert "`search_market_news` **1 lần**" in skill
+    assert "`project_investment_growth` **1 lần**" in skill
+    assert "không lặp bằng từ khoá khác" in skill
+    assert "`calculate_deposit_interest`" in skill
+    assert "phải cùng một hàng kỳ hạn của bảng" in skill  # 6,80% (12 months) was applied to a 3-month deposit
 
 
-def test_investment_guidance_answers_in_four_to_five_sentences_without_scenario_tables():
+def test_investment_guidance_answers_the_question_first_then_options_then_the_customers_situation():
     skill = _skill()
-    assert "4–5 câu" in skill
+    assert "Thứ tự **bắt buộc**" in skill
+    first = skill.index("Trả lời thẳng câu hỏi (1–2 câu)")
+    second = skill.index("Vài lựa chọn khác (1–2 câu)")
+    third = skill.index("Tình hình hiện tại của khách (1–2 câu)")
+    assert first < second < third
+    assert "Mở đầu bằng tình hình nợ của khách rồi mới trả lời câu hỏi" in skill  # listed as a wrong example
+
+
+def test_investment_guidance_is_short_bold_and_cites_full_urls():
+    skill = _skill()
+    assert "5–6 câu, tối đa ~150 từ" in skill
+    assert "mỗi câu tối đa ~25 từ" in skill
     assert "Không bảng, không tiêu đề, không emoji, không danh sách" in skill
-    assert "tối đa ~120 từ" in skill
-    assert "không bảng kịch bản" in skill
-    assert "Ngoài ra bạn có thể cân nhắc" in skill  # alternative + required amount live in the conclusion
+    assert "**In đậm** 3–5 cụm quan trọng nhất" in skill
+    assert "dòng `Nguồn:`" in skill and "**URL đầy đủ**" in skill and "không viết tắt" in skill
+    assert "Tối đa 3 nguồn" in skill
+    assert "Chỉ gắn mã nguồn cho điều nguồn đó thật sự nói" in skill
     assert "**Biểu đồ:** mặc định KHÔNG" in skill
+
+
+def test_investment_guidance_forbids_foreign_script_glitches():
+    assert "Chèn chữ Hán/Nhật/Hàn" in _skill()
 
 
 def test_investment_guidance_requires_fresh_information():
@@ -149,8 +168,9 @@ def test_investment_guidance_skips_projection_and_chart_when_there_is_no_idle_mo
 def test_instructions_have_no_skill_exception_to_the_brevity_rule_and_require_fresh_lookups():
     text = _text()
     assert "Không có ngoại lệ cho skill nào" in text
-    assert "4–5 câu văn xuôi" in text
+    assert "5–6 câu văn xuôi" in text and "**in đậm**" in text and "`Nguồn:`" in text
     assert "Tra cứu ngoài phải cần thiết và mới nhất" in text
+    assert "tra **1 lần mỗi nguồn**" in text
     assert "bài tin đăng quá 4 ngày là lỗi thời" in text
 
 
@@ -190,3 +210,15 @@ def test_instructions_carry_the_msb_answer_rules_that_used_to_live_in_the_skill(
     assert "làm phẳng (mất ranh giới cột)" in text and "đừng tự ghép số với từng loại thẻ" in text
     assert "chỉ nêu nếu đoạn trả về nói đúng như vậy" in text
     assert "kết quả có dòng CẢNH BÁO".lower() in text.lower() or "dòng CẢNH BÁO" in text
+
+
+def test_every_skill_front_matter_is_valid_yaml_for_the_skill_loader():
+    # An unquoted ": " inside `description:` makes the YAML invalid; the loader then silently SKIPS the
+    # skill ("failed metadata parse") and the model never sees its description. Happened once.
+    for skill_md in sorted(SKILLS_DIR.glob("*/SKILL.md")):
+        lines = skill_md.read_text(encoding="utf-8").split("---", 2)[1].strip().splitlines()
+        assert len(lines) == 2 and lines[0].startswith("name: ") and lines[1].startswith("description: "), skill_md
+        value = lines[1][len("description: "):]
+        if not value.startswith(('"', "'")):
+            assert ": " not in value and " #" not in value, f"{skill_md.parent.name}: quote the description or drop ': '"
+        assert lines[0][len("name: "):] == skill_md.parent.name

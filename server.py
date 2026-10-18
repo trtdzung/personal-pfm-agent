@@ -20,7 +20,7 @@ from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from middleware.tool_limits import tool_call_limits
-from text_utils import extract_final_text, extract_ui_block
+from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
 from tools.customer_data_tools import list_existing_jars, query_beneficiaries
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
@@ -205,6 +205,7 @@ def chat(
 
     answer = extract_final_text(result["messages"][-1].content)
     answer, ui = extract_ui_block(answer)
+    answer = strip_foreign_script(answer)  # after the ui block is split off: its strings are left alone
     return ChatResponse(answer=answer, thread_id=thread_id, ui=ui)
 
 
@@ -236,6 +237,8 @@ def chat_history(
 
         text = extract_final_text(message.content)
         text, ui = extract_ui_block(text)
+        if role == "assistant":
+            text = strip_foreign_script(text)  # never rewrite what the user typed
         if not text:
             continue  # e.g. an AIMessage whose only content was a tool call
 
