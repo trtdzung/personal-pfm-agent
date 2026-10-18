@@ -7,3 +7,16 @@ __pycache__/
 .mda/
 .claude/
 .pytest_cache/
+
+# Hợp đồng API giữa agent và pfm giờ sống thật ở ../agent-docs/ (ngoài cả 2 repo,
+# xem agent-docs/README.md). docs/{api,chart-visualization,clarify-options,
+# transfer-form,proactive-insights-v2}.md, docs/jars/, và backend_docs/ ở đây giờ
+# là symlink trỏ sang agent-docs/ -- 2026-10-13: đã `git rm --cached` các path này
+# (xem todo.md), nên giờ thực sự NGỪNG TRACK, không chỉ chặn file mới. docs/
+# vẫn còn docs/incidents/, docs/superpowers/, docs/sample_questions_and_answers.md
+# là nội dung thật của repo này, KHÔNG bị ignore (được track từ trước, ignore
+# directory không ảnh hưởng file đã track). backend_docs không có trailing slash
+# vì giờ nó là 1 symlink (file), không phải directory -- pattern có "/" cuối chỉ
+# khớp directory.
+/docs/
+/backend_docs
