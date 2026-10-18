@@ -11,6 +11,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
 from llm import LLM_BASE_URL, LLM_MODEL, default_model  # noqa: F401 -- re-exported: tests/notebooks read them off `server`
@@ -20,6 +21,8 @@ from checkpointer_cache import invalidate as invalidate_checkpointer_cache
 from checkpointer_cache import patch_get_events_with_cache
 from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
 from jar_endpoint import router as jar_router
+from insight_endpoint import router as insight_router
+from proactive_endpoint import router as proactive_router
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
 from middleware.tool_limits import tool_call_limits
@@ -29,7 +32,7 @@ from tools.customer_data_tools import get_categories, get_jar_summary, query_ben
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
-from tools.memory_tools import recall_preference, remember_preference
+# from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
 
@@ -45,12 +48,7 @@ if not SERVER_API_KEY:
     )
 
 MEMORY_ID = os.environ.get("MEMORY_ID")
-if not MEMORY_ID:
-    raise RuntimeError(
-        "MEMORY_ID is not set. Refusing to start without a GreenNode AgentBase "
-        "Memory resource configured -- conversation history has nowhere durable "
-        "to be stored (create one with `gab memory create`)."
-    )
+
 
 AI_PLATFORM_API_KEY = os.environ.get("AI_PLATFORM_API_KEY")
 if not AI_PLATFORM_API_KEY:
@@ -69,7 +67,7 @@ def build_agent(
     tools: list[BaseTool] | None = None,
 ):
     instructions = (REPO_ROOT / "instructions.md").read_text(encoding="utf-8")
-    checkpointer = checkpointer or AgentBaseMemoryEvents(memory_id=MEMORY_ID)
+    checkpointer = checkpointer or MemorySaver()
     # Works around a real perf bug in AgentBaseMemoryEvents: LangGraph's
     # get_state()/invoke() call checkpointer.get_tuple() once per
     # accumulated checkpoint (the `messages` channel needs the whole chain
@@ -96,8 +94,8 @@ def build_agent(
         tools=tools
         if tools is not None
         else [
-            remember_preference,
-            recall_preference,
+            # remember_preference,
+            # recall_preference,
             get_jar_summary,
             get_categories,
             query_beneficiaries,
@@ -133,6 +131,8 @@ app = FastAPI(
 
 # Jar proposals for screens that need no chat: its own route and agent, same process (jar_endpoint.py).
 app.include_router(jar_router)
+app.include_router(insight_router)
+app.include_router(proactive_router)
 
 
 class ChatRequest(BaseModel):
