@@ -103,6 +103,23 @@ def fetch_account_summary(customer_id: str) -> dict:
     return data
 
 
+def fetch_user_preferences(customer_id: str) -> dict:
+    """`GET /api/agent-preferences` for an explicit customer -- the "Hướng dẫn cho M-You" sheet the
+    customer fills in themselves on `pfm` (`responseLength`/`tone`/`riskAppetite`/`addressAs`/`about`/
+    `notes`, backend_docs/pfm-read-api.md). Raises `httpx.HTTPError`/`ValueError` on any failure; the
+    caller (`middleware/seed_user_preferences.py`) falls back to an empty dict, never guesses a value."""
+    response = httpx.get(
+        f"{PFM_BASE_URL}/api/agent-preferences",
+        params={"cif": customer_id},
+        timeout=PFM_REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    preferences = response.json()
+    if not isinstance(preferences, dict):
+        raise ValueError("unexpected response shape")
+    return preferences
+
+
 def fetch_transactions_full(customer_id: str, from_date: str, to_date: str) -> list[dict]:
     """`GET /api/transactions-full` for an explicit customer -- every transaction (bank + self-reported),
     `categoryId` already merged with corrections. `from_date`/`to_date` are `YYYY-MM-DD`, an ISO closed

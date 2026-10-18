@@ -8,6 +8,7 @@ from tools.customer_data_tools import (
     fetch_jar_spending,
     fetch_jar_summary,
     fetch_live_account_snapshot,
+    fetch_user_preferences,
     jar_spending_by_month,
     render_jar_spending,
     fetch_transactions_full,
@@ -467,6 +468,64 @@ def test_fetch_categories_returns_the_raw_list(monkeypatch):
         _fake_url_response("/api/categories", _CATEGORIES),
     )
     assert fetch_categories("CIF_0001") == _CATEGORIES
+
+
+# --- fetch_user_preferences(): GET /api/agent-preferences?cif= -- "Hướng dẫn cho M-You" sheet, read by
+# middleware/seed_user_preferences.py (todo.md 1.45) ------------------------------------------------------
+
+
+_AGENT_PREFERENCES = {
+    "responseLength": "concise",
+    "tone": "friendly",
+    "riskAppetite": "cautious",
+    "addressAs": "chị Lan",
+    "about": "Tôi thích đầu tư cổ phiếu, tần suất theo dõi là 2 ngày 1 lần.",
+    "notes": "",
+}
+
+
+def test_fetch_user_preferences_returns_the_raw_dict(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/agent-preferences", _AGENT_PREFERENCES),
+    )
+    assert fetch_user_preferences("CIF_0001") == _AGENT_PREFERENCES
+
+
+def test_fetch_user_preferences_sends_cif_query_param(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/agent-preferences", _AGENT_PREFERENCES, captured=captured),
+    )
+    fetch_user_preferences("CIF_0003")
+    assert captured["params"] == {"cif": "CIF_0003"}
+
+
+def test_fetch_user_preferences_raises_on_http_error(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/agent-preferences", {"error": "x"}, status_code=500),
+    )
+    try:
+        fetch_user_preferences("CIF_0001")
+    except httpx.HTTPError:
+        pass
+    else:
+        raise AssertionError("expected httpx.HTTPError")
+
+
+def test_fetch_user_preferences_raises_on_non_dict_response(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/agent-preferences", []),
+    )
+    try:
+        fetch_user_preferences("CIF_0001")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError")
 
 
 # --- fetch_live_account_snapshot(): balance + transactions + monthly/category aggregate, all-or-nothing --

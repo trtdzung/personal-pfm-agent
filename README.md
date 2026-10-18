@@ -292,7 +292,8 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 │   └── memory_tools.py         # remember_preference/recall_preference — server.py's long-term memory tools (not used by agent.py)
 ├── middleware/
 │   ├── audit.py              # wrap_tool_call middleware that logs every tool call
-│   └── seed_customer_context.py  # before_agent hook that seeds /customer_data.json
+│   ├── seed_customer_context.py  # before_agent hook that seeds /customer_data.json
+│   └── seed_user_preferences.py  # before_agent hook that reads pfm's GET /api/agent-preferences ("Hướng dẫn cho M-You") into the system prompt
 ├── connectors/
 │   └── mcp.py                # example remote MCP server declaration (not wired in by default)
 ├── channels/

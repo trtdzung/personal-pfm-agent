@@ -27,6 +27,7 @@ from insight_endpoint import router as insight_router
 from proactive_endpoint import router as proactive_router
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
+from middleware.seed_user_preferences import SeedUserPreferences
 from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
 from ui_guard import read_turn_facts, ui_matches_facts
@@ -133,7 +134,13 @@ def build_agent(
             read_market_article,
             search_msb_knowledge,
         ],
-        middleware=[log_tool_calls, log_model_calls, SeedCustomerContext(), *tool_call_limits()],
+        middleware=[
+            log_tool_calls,
+            log_model_calls,
+            SeedCustomerContext(),
+            SeedUserPreferences(),
+            *tool_call_limits(),
+        ],
         system_prompt=instructions,
         checkpointer=checkpointer,
         # StateBackend stays the default for everything (per-thread, isolates

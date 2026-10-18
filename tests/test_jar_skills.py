@@ -480,7 +480,10 @@ def test_overview_says_when_ui_is_null_who_checks_what_and_that_the_agent_only_p
         assert layer in doc, layer
     assert "tối đa 1" in doc  # one ui per turn
     assert "KHÔNG bao giờ nói" in doc and "đã tạo" in doc
-    assert "Cần `pfm` xác nhận" in doc and "distribute_amount" in doc  # pfm has no distribute_amount card yet
+    # 2026-10-13: pfm confirmed agent-api.ts now renders all 6 jar `ui` types, including a
+    # dedicated distribute_amount card -- the doc records that confirmation instead of the
+    # earlier "pfm has no distribute_amount card yet" warning.
+    assert "Xác nhận phía `pfm`" in doc and "distribute_amount" in doc
 
 
 def test_overview_links_every_doc_in_the_folder_and_each_link_resolves():
