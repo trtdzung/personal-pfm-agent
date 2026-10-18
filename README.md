@@ -110,6 +110,16 @@ its own `Dockerfile`.
   Get it from the GreenNode console's API key / Model as a Service section.
 - `LLM_MODEL` -- optional, model path passed to the MaaS endpoint. Defaults
   to `z-ai/glm-5.2-hackathon` if unset.
+- `TINYFISH_API_KEY` -- optional. API key for TinyFish Search/Fetch (free tier,
+  get it at agent.tinyfish.ai/api-keys), used by `tools/market_news_tools.py`
+  (public Vietnamese market news from cafef.vn / vietstock.vn / tuoitre.vn, as
+  background for the `investment-guidance` skill -- customers can't ask for
+  plain market news) and `tools/msb_product_tools.py` (MSB's own website and
+  PDFs for the `msb-products` skill). Without it the agent still starts; those
+  questions just get a "not configured" answer. Note the key is shared by every
+  customer of a deployment (Search is limited to 30 requests/minute per key),
+  and the container needs outbound HTTPS to `api.search.tinyfish.ai` and
+  `api.fetch.tinyfish.ai`.
 - `SERVER_API_KEY` -- shared secret; every `POST /chat` request must send
   it back in the `X-API-Key` header, or the request is rejected with 401
 - `MEMORY_ID` -- id of a GreenNode AgentBase Memory resource used for both

@@ -78,3 +78,66 @@ def test_before_agent_raises_on_unknown_actor_id():
             middleware.before_agent(state={}, runtime=None)
     finally:
         var_child_runnable_config.reset(token)
+
+
+# --- system-prompt injection: current date + customer data ---
+
+
+class _FakeRequest:
+    def __init__(self, system_prompt, files):
+        self.system_prompt = system_prompt
+        self.state = {"files": files}
+        self.overridden = None
+
+    def override(self, system_message):
+        self.overridden = system_message.content
+        return self
+
+
+def _inject(monkeypatch, files, now):
+    import middleware.seed_customer_context as mod
+
+    monkeypatch.setattr(mod, "_today", lambda: now)
+    request = _FakeRequest("BASE PROMPT", files)
+    SeedCustomerContext()._inject_customer_data(request)
+    return request.overridden
+
+
+def test_inject_adds_vietnam_current_date_after_base_prompt(monkeypatch):
+    from datetime import datetime
+
+    from middleware.seed_customer_context import _VIETNAM_TZ
+
+    prompt = _inject(monkeypatch, {}, datetime(2026, 9, 19, 8, 30, tzinfo=_VIETNAM_TZ))
+    assert prompt.startswith("BASE PROMPT")
+    assert "Thứ Bảy, 19/09/2026 (2026-09-19)" in prompt
+    assert "KHÔNG tự đoán ngày" in prompt
+
+
+def test_inject_date_is_present_even_when_no_customer_file(monkeypatch):
+    from datetime import datetime
+
+    from middleware.seed_customer_context import _VIETNAM_TZ
+
+    prompt = _inject(monkeypatch, {}, datetime(2026, 1, 5, tzinfo=_VIETNAM_TZ))
+    assert "05/01/2026" in prompt
+    assert "Dữ liệu khách hàng hiện tại" not in prompt
+
+
+def test_inject_keeps_customer_data_alongside_date(monkeypatch):
+    from datetime import datetime
+
+    from middleware.seed_customer_context import _VIETNAM_TZ
+
+    files = {SESSION_FILE_PATH: {"content": '{"customer": {"customer_id": "CIF_0001"}}'}}
+    prompt = _inject(monkeypatch, files, datetime(2026, 9, 19, tzinfo=_VIETNAM_TZ))
+    assert "19/09/2026" in prompt
+    assert "Dữ liệu khách hàng hiện tại" in prompt
+    assert '"customer_id": "CIF_0001"' in prompt
+
+
+def test_today_uses_vietnam_offset():
+    from middleware.seed_customer_context import _VIETNAM_TZ, _today
+
+    assert _today().utcoffset() == _VIETNAM_TZ.utcoffset(None)
+    assert _today().utcoffset().total_seconds() == 7 * 3600

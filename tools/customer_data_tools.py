@@ -6,8 +6,12 @@ injected into every system prompt (see `middleware/seed_customer_context.py`).
 `list_existing_jars()` is still **mock**: the data is hardcoded right here
 in this module (keyed by customer_id), not read from any file -- this
 stands in for the real `GET /api/jars?cif=` endpoint documented in
-`backend_docs/pfm-read-api.md` (not wired up yet; out of scope until the
-jar flow itself needs it -- see todo.md).
+`backend_docs/pfm-read-api.md` (not wired up yet; real jar data is coming
+later, see todo.md). Field mapping for that swap: `allocation_amount_vnd` ~
+`budgetLimit` (monthly cap), `balance_vnd` ~ `actualAmount` (money currently
+in the jar; the real API returns null for it today). Jar names are whatever
+the customer chose -- callers (e.g. the investment-guidance skill) must not
+assume a jar called "tiết kiệm" exists, only use the amounts.
 
 `query_beneficiaries()` calls the REAL `pfm` backend
 (`GET /api/beneficiaries?cif=`, see `backend_docs/pfm-read-api.md`) --
@@ -40,25 +44,30 @@ _MOCK_JARS = {
             "jar_id": "jar_001",
             "jar_name": "Giải trí",
             "allocation_amount_vnd": 600000,
+            "balance_vnd": 350000,
             "created_on": "2026-07-05",
         },
         {
             "jar_id": "jar_002",
             "jar_name": "Tiết kiệm khẩn cấp",
             "allocation_amount_vnd": 5000000,
+            "balance_vnd": 15000000,
             "created_on": "2026-06-20",
         },
     ],
+    # Deliberately no jar named "tiết kiệm" for this customer.
     "CIF_0002": [
         {
             "jar_id": "jar_001",
             "jar_name": "Hoá đơn",
             "allocation_amount_vnd": 6200000,
+            "balance_vnd": 4000000,
             "created_on": "2026-06-10",
         },
     ],
     "CIF_0003": [],
 }
+
 
 @tool
 def list_existing_jars() -> str:
@@ -68,17 +77,25 @@ def list_existing_jars() -> str:
     already exists -- this reads fresh on every call instead of relying on
     the /customer_data.json snapshot already in your system prompt, so it
     reflects jars created/edited since the start of this conversation.
+
+    Each jar shows its monthly allocation and the money currently in it
+    ("số dư"). Jar names are chosen by the customer: for investment advice
+    use only the AMOUNTS (e.g. the total balance across jars), never assume a
+    jar named "tiết kiệm" exists.
     """
     customer_id = _resolve_customer_id()
     jars = _MOCK_JARS.get(customer_id, [])
     if not jars:
         return "Khách hàng hiện chưa có hũ chi tiêu nào."
+    def vnd(amount: int) -> str:
+        return f"{amount:,}".replace(",", ".") + "đ"
+
     lines = [
-        f"- {jar['jar_name']}: {jar['allocation_amount_vnd']:,}đ/tháng (tạo ngày {jar['created_on']})".replace(
-            ",", "."
-        )
+        f"- {jar['jar_name']}: hạn mức {vnd(jar['allocation_amount_vnd'])}/tháng, "
+        f"số dư hiện có {vnd(jar['balance_vnd'])} (tạo ngày {jar['created_on']})"
         for jar in jars
     ]
+    lines.append(f"Tổng số dư các hũ: {vnd(sum(jar['balance_vnd'] for jar in jars))}")
     return "\n".join(lines)
 
 

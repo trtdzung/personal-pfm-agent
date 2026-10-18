@@ -19,8 +19,17 @@ from checkpointer_cache import patch_get_events_with_cache
 from checkpointer_delta_snapshot import patch_preserve_delta_snapshots
 from middleware.audit import log_model_calls, log_tool_calls
 from middleware.seed_customer_context import SeedCustomerContext
+from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block
 from tools.customer_data_tools import list_existing_jars, query_beneficiaries
+from tools.investment_tools import project_investment_growth
+from tools.market_news_tools import read_market_article, search_market_news
+from tools.msb_product_tools import (
+    list_msb_documents,
+    read_msb_document,
+    read_msb_product_page,
+    search_msb_products,
+)
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
@@ -108,8 +117,20 @@ def build_agent(
         model=model or _default_model(),
         tools=tools
         if tools is not None
-        else [remember_preference, recall_preference, list_existing_jars, query_beneficiaries],
-        middleware=[log_tool_calls, log_model_calls, SeedCustomerContext()],
+        else [
+            remember_preference,
+            recall_preference,
+            list_existing_jars,
+            query_beneficiaries,
+            project_investment_growth,
+            search_market_news,
+            read_market_article,
+            search_msb_products,
+            read_msb_product_page,
+            list_msb_documents,
+            read_msb_document,
+        ],
+        middleware=[log_tool_calls, log_model_calls, SeedCustomerContext(), *tool_call_limits()],
         system_prompt=instructions,
         checkpointer=checkpointer,
         # StateBackend stays the default for everything (per-thread, isolates

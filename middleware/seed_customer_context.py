@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -12,6 +13,12 @@ CUSTOMERS_DIR = Path(__file__).resolve().parent.parent / "data" / "customers"
 DEFAULT_CUSTOMER_ID = "CIF_0001"
 SESSION_FILE_PATH = "/customer_data.json"
 
+# Vietnam has no DST, so a fixed UTC+7 offset is exact -- and unlike
+# zoneinfo("Asia/Ho_Chi_Minh") it doesn't depend on tzdata being installed in
+# the (python:3.12-slim) container image.
+_VIETNAM_TZ = timezone(timedelta(hours=7))
+_WEEKDAYS_VI = ("Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật")
+
 
 class UnknownCustomerError(ValueError):
     """Raised when actor_id doesn't match any known customer_id."""
@@ -22,6 +29,21 @@ def _customer_data_path(customer_id: str) -> Path:
     if not path.is_file():
         raise UnknownCustomerError(f"Unknown customer_id: {customer_id!r}")
     return path
+
+
+def _today() -> datetime:
+    return datetime.now(_VIETNAM_TZ)
+
+
+def _current_date_note() -> str:
+    now = _today()
+    return (
+        f"Ngày hiện tại (giờ Việt Nam): {_WEEKDAYS_VI[now.weekday()]}, "
+        f"{now.day:02d}/{now.month:02d}/{now.year} ({now.date().isoformat()}). "
+        "Dùng đúng ngày này khi tính \"còn bao lâu\", \"đã quá hạn chưa\", số "
+        "tháng/ngày còn lại tới cuối năm hay tới hạn thanh toán -- KHÔNG tự "
+        "đoán ngày. Chỉ có ngày, không có giờ trong ngày."
+    )
 
 
 def _resolve_customer_id() -> str:
@@ -68,6 +90,12 @@ class SeedCustomerContext(AgentMiddleware):
     ~4-6k token increase on every call (the file is small enough that this
     is worth it -- see todo.md for the measured before/after).
 
+    The same system-prompt injection also carries today's date (Vietnam
+    time, date only so the prompt stays cache-stable within a day): the model
+    has no clock, and without this it guessed "29/08" on 2026-09-19, which
+    skewed every "months left this year" / "is this statement overdue"
+    calculation (see todo.md 1.16).
+
     Note: `jars`/`beneficiaries` are intentionally NOT part of
     data/customers/<id>.json anymore -- they're hardcoded mock data inside
     tools/customer_data_tools.py, only reachable via that module's
@@ -84,16 +112,15 @@ class SeedCustomerContext(AgentMiddleware):
         return self.before_agent(state, runtime)
 
     def _inject_customer_data(self, request: ModelRequest) -> ModelRequest:
+        parts = [request.system_prompt or "", _current_date_note()]
         file_data = request.state.get("files", {}).get(SESSION_FILE_PATH)
-        if not file_data:
-            return request
-        content = file_data["content"]
-        base_prompt = request.system_prompt or ""
-        combined = (
-            f"{base_prompt}\n\n---\n\nDữ liệu khách hàng hiện tại "
-            f"(`{SESSION_FILE_PATH}`, đã đọc sẵn -- KHÔNG cần gọi "
-            f"`read_file`/`grep` để lấy lại):\n\n```json\n{content}\n```"
-        )
+        if file_data:
+            parts.append(
+                f"Dữ liệu khách hàng hiện tại "
+                f"(`{SESSION_FILE_PATH}`, đã đọc sẵn -- KHÔNG cần gọi "
+                f"`read_file`/`grep` để lấy lại):\n\n```json\n{file_data['content']}\n```"
+            )
+        combined = "\n\n---\n\n".join(part for part in parts if part)
         return request.override(system_message=SystemMessage(content=combined))
 
     def wrap_model_call(

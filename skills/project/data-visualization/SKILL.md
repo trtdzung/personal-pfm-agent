@@ -64,7 +64,9 @@ không đủ để vẽ, **đừng chèn khối này** — chỉ trả lời b�
 
 1. Toàn bộ số liệu trong `data` phải tính đúng từ `/customer_data.json` thật
    của khách hàng đang trò chuyện — không bịa số, giống mọi câu trả lời
-   khác.
+   khác. **Ngoại lệ:** biểu đồ mô phỏng đầu tư (skill `investment-guidance`)
+   lấy số từ tool `project_investment_growth` — khi đó **sao chép nguyên văn**
+   khối `ui-json` tool trả về, không tự tính lại hay sửa số/nhãn/tên đường.
 2. Sau khi đã có chart, KHÔNG lặp lại toàn bộ bảng số liệu trong phần text —
    chỉ nêu ngắn gọn kết luận chính (ví dụ danh mục nào cao nhất), chart đã
    thể hiện chi tiết.

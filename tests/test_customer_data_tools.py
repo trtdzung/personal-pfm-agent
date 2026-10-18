@@ -27,6 +27,20 @@ def test_list_existing_jars_returns_jars_for_correct_customer():
     assert "Tiết kiệm khẩn cấp" in result
 
 
+def test_list_existing_jars_shows_each_jar_balance_and_the_total():
+    result = _invoke_with_actor(list_existing_jars, "CIF_0001")
+    assert "số dư hiện có 350.000đ" in result
+    assert "số dư hiện có 15.000.000đ" in result
+    assert "Tổng số dư các hũ: 15.350.000đ" in result
+
+
+def test_mock_data_has_a_customer_without_any_jar_named_tiet_kiem():
+    # investment advice must work from amounts alone, not from a jar name
+    names = {jar["jar_name"].lower() for jar in _MOCK_JARS["CIF_0002"]}
+    assert not any(name == "tiết kiệm" for name in names)
+    assert _MOCK_JARS["CIF_0002"], "CIF_0002 should still have some jar balance to work with"
+
+
 def test_list_existing_jars_reports_empty_list_for_customer_with_no_jars():
     result = _invoke_with_actor(list_existing_jars, "CIF_0003")
     assert "chưa có hũ chi tiêu nào" in result
@@ -58,9 +72,10 @@ def test_mock_jars_have_required_fields_and_positive_allocation(customer_id):
     assert isinstance(jars, list)
     seen_names = set()
     for jar in jars:
-        for key in ("jar_id", "jar_name", "allocation_amount_vnd", "created_on"):
+        for key in ("jar_id", "jar_name", "allocation_amount_vnd", "balance_vnd", "created_on"):
             assert key in jar, f"jar missing field: {key}"
         assert isinstance(jar["allocation_amount_vnd"], (int, float)) and jar["allocation_amount_vnd"] > 0
+        assert isinstance(jar["balance_vnd"], (int, float)) and jar["balance_vnd"] >= 0
         assert jar["jar_name"] not in seen_names, f"duplicate jar_name: {jar['jar_name']}"
         seen_names.add(jar["jar_name"])
 
