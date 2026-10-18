@@ -1,7 +1,9 @@
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+import httpx
 from deepagents.backends.utils import create_file_data
 from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
@@ -12,6 +14,10 @@ from langgraph.runtime import Runtime
 CUSTOMERS_DIR = Path(__file__).resolve().parent.parent / "data" / "customers"
 DEFAULT_CUSTOMER_ID = "CIF_0001"
 SESSION_FILE_PATH = "/customer_data.json"
+# ~3 months of real transactions/spending aggregate to seed the system prompt with, per project
+# decision 2026-09-23 (todo.md) -- balances latency/token cost against having enough history for
+# skills like investment-guidance's "chi tiêu trung bình 3 tháng".
+LIVE_DATA_WINDOW_DAYS = 90
 
 # Vietnam has no DST, so a fixed UTC+7 offset is exact -- and unlike
 # zoneinfo("Asia/Ho_Chi_Minh") it doesn't depend on tzdata being installed in
@@ -101,11 +107,33 @@ class SeedCustomerContext(AgentMiddleware):
     backend by tools/customer_data_tools.py, only reachable via that
     module's get_jar_summary()/query_beneficiaries(), so this middleware
     has nothing to filter out here.
+
+    `account.balance_vnd`, `transactions`, and `monthly_spending_summary` WERE static mock fields but are
+    now overwritten with live pfm data (`fetch_live_account_snapshot`) before seeding, so the model no
+    longer reasons from stale numbers for these three -- `cards`/`statements`/`credit_profile` stay mock
+    (pfm has no credit-card endpoints). If any of the 3 underlying pfm calls fails, all three fields keep
+    their mock values together (never a mix of fresh + stale -- see fetch_live_account_snapshot's
+    docstring); this is silent by design (todo.md 2026-09-23), the model is never told which case it got.
     """
 
     def before_agent(self, state: AgentState, runtime: Runtime) -> dict:
+        # deferred import: tools.customer_data_tools imports _resolve_customer_id from this module, so a
+        # top-level import here would be circular.
+        from tools.customer_data_tools import fetch_live_account_snapshot
+
         customer_id = _resolve_customer_id()
-        content = _customer_data_path(customer_id).read_text(encoding="utf-8")
+        data = json.loads(_customer_data_path(customer_id).read_text(encoding="utf-8"))
+        today = _today().date()
+        from_date = (today - timedelta(days=LIVE_DATA_WINDOW_DAYS)).isoformat()
+        try:
+            live = fetch_live_account_snapshot(customer_id, from_date, today.isoformat())
+        except (httpx.HTTPError, ValueError):
+            pass  # keep account/transactions/monthly_spending_summary as a consistent mock whole
+        else:
+            data["account"]["balance_vnd"] = live["balance_vnd"]
+            data["transactions"] = live["transactions"]
+            data["monthly_spending_summary"] = live["monthly_spending_summary"]
+        content = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         return {"files": {SESSION_FILE_PATH: create_file_data(content)}}
 
     async def abefore_agent(self, state: AgentState, runtime: Runtime) -> dict:

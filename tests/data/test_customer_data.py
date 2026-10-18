@@ -54,6 +54,19 @@ def test_customer_has_customer_id_and_gender(customer_id):
     assert data["customer"]["gender"] in ("Nam", "Nữ")
 
 
+def _net_amount(txn: dict) -> int:
+    """Net contribution to a month's total: an expense debit counts, a refund credit subtracts, anything
+    else (e.g. a plain transfer) doesn't move the spending total -- matches the netting
+    tools/customer_data_tools.py's _aggregate_monthly_by_category uses when it builds
+    monthly_spending_summary from real pfm transactions (backend_docs/pfm-read-api.md: "chi tiêu ròng,
+    đã trừ hoàn tiền")."""
+    if txn.get("direction") == "credit" and txn.get("type") == "refund":
+        return -txn["amount_vnd"]
+    if txn.get("direction") == "debit" and txn.get("type") == "expense":
+        return txn["amount_vnd"]
+    return 0
+
+
 @pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
 def test_monthly_totals_match_summed_transactions(customer_id):
     data = _load(customer_id)
@@ -61,7 +74,7 @@ def test_monthly_totals_match_summed_transactions(customer_id):
     counts_by_month: dict[str, int] = {}
     for txn in data["transactions"]:
         month = txn["date"][:7]
-        totals_by_month[month] = totals_by_month.get(month, 0) + txn["amount_vnd"]
+        totals_by_month[month] = totals_by_month.get(month, 0) + _net_amount(txn)
         counts_by_month[month] = counts_by_month.get(month, 0) + 1
 
     for month, summary in data["monthly_spending_summary"].items():

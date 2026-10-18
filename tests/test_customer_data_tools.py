@@ -3,7 +3,11 @@ from langchain_core.runnables.config import var_child_runnable_config
 
 from tools.customer_data_tools import (
     PFM_BASE_URL,
+    fetch_account_summary,
+    fetch_categories,
     fetch_jar_summary,
+    fetch_live_account_snapshot,
+    fetch_transactions_full,
     get_categories,
     get_jar_summary,
     query_beneficiaries,
@@ -381,3 +385,180 @@ def test_query_beneficiaries_returns_friendly_message_on_network_error(monkeypat
 def test_the_tool_and_render_jar_summary_show_the_model_the_same_text(monkeypatch):
     monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY))
     assert _invoke_with_actor(get_jar_summary, "CIF_0001") == render_jar_summary(_JAR_SUMMARY)
+
+
+# --- fetch_account_summary()/fetch_transactions_full()/fetch_categories(): raw fetch helpers used by
+# middleware/seed_customer_context.py to seed live balance/transactions into the system prompt -----------
+
+
+def _fake_url_response(expected_url_suffix, payload, status_code=200, captured=None):
+    def _fake_get(url, params=None, timeout=None):
+        assert url == f"{PFM_BASE_URL}{expected_url_suffix}"
+        if captured is not None:
+            captured["params"] = params
+        return httpx.Response(status_code, json=payload, request=httpx.Request("GET", url))
+
+    return _fake_get
+
+
+def test_fetch_account_summary_returns_the_raw_dict(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/account-summary", {"casaBalance": 21600000}),
+    )
+    assert fetch_account_summary("CIF_0001") == {"casaBalance": 21600000}
+
+
+def test_fetch_account_summary_sends_cif_query_param(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/account-summary", {"casaBalance": None}, captured=captured),
+    )
+    fetch_account_summary("CIF_0003")
+    assert captured["params"] == {"cif": "CIF_0003"}
+
+
+def test_fetch_account_summary_raises_on_http_error(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/account-summary", {"error": "x"}, status_code=500),
+    )
+    try:
+        fetch_account_summary("CIF_0001")
+    except httpx.HTTPError:
+        pass
+    else:
+        raise AssertionError("expected httpx.HTTPError")
+
+
+def test_fetch_transactions_full_returns_the_raw_list_with_from_to_params(monkeypatch):
+    captured = {}
+    payload = [{"id": "tx1", "amount": 1000}]
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/transactions-full", payload, captured=captured),
+    )
+    assert fetch_transactions_full("CIF_0001", "2026-06-01", "2026-09-23") == payload
+    assert captured["params"] == {"cif": "CIF_0001", "from": "2026-06-01", "to": "2026-09-23"}
+
+
+def test_fetch_categories_returns_the_raw_list(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_url_response("/api/categories", _CATEGORIES),
+    )
+    assert fetch_categories("CIF_0001") == _CATEGORIES
+
+
+# --- fetch_live_account_snapshot(): balance + transactions + monthly/category aggregate, all-or-nothing --
+
+
+def _fake_snapshot_router(account_summary, transactions, categories, fail_url_substring=None):
+    def _get(url, params=None, timeout=None):
+        if fail_url_substring and fail_url_substring in url:
+            raise httpx.ConnectError(f"boom: {url}", request=httpx.Request("GET", url))
+        if url.endswith("/api/account-summary"):
+            payload = account_summary
+        elif url.endswith("/api/transactions-full"):
+            payload = transactions
+        elif url.endswith("/api/categories"):
+            payload = categories
+        else:
+            raise AssertionError(f"unexpected URL: {url}")
+        return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
+
+    return _get
+
+
+_LIVE_TRANSACTIONS = [
+    {
+        "id": "tx1",
+        "postedAt": "2026-09-15T10:00:00.000Z",
+        "amount": 215000,
+        "direction": "debit",
+        "type": "expense",
+        "merchantName": "Highlands Coffee",
+        "categoryId": "dining",
+        "status": "posted",
+        "hidden": False,
+    },
+    {
+        "id": "tx2",
+        "postedAt": "2026-09-10T10:00:00.000Z",
+        "amount": 500000,
+        "direction": "credit",
+        "type": "refund",
+        "merchantName": "Hoàn tiền Shopee",
+        "categoryId": "shopping",
+        "status": "posted",
+        "hidden": False,
+    },
+    {
+        "id": "tx3",
+        "postedAt": "2026-08-20T10:00:00.000Z",
+        "amount": 999000,
+        "direction": "debit",
+        "type": "expense",
+        "merchantName": "Hidden one",
+        "categoryId": "shopping",
+        "status": "posted",
+        "hidden": True,
+    },
+]
+_LIVE_CATEGORIES = [
+    {"id": "dining", "label": "Ăn uống", "kind": "expense"},
+    {"id": "shopping", "label": "Mua sắm", "kind": "expense"},
+]
+
+
+def test_fetch_live_account_snapshot_translates_category_ids_to_vietnamese_labels(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_snapshot_router({"casaBalance": 21600000}, _LIVE_TRANSACTIONS, _LIVE_CATEGORIES),
+    )
+    snapshot = fetch_live_account_snapshot("CIF_0001", "2026-06-01", "2026-09-23")
+    assert snapshot["balance_vnd"] == 21600000
+    by_id = {t["id"]: t for t in snapshot["transactions"]}
+    assert by_id["tx1"]["category"] == "Ăn uống"
+    assert by_id["tx2"]["category"] == "Mua sắm"
+
+
+def test_fetch_live_account_snapshot_excludes_hidden_transactions(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_snapshot_router({"casaBalance": 21600000}, _LIVE_TRANSACTIONS, _LIVE_CATEGORIES),
+    )
+    snapshot = fetch_live_account_snapshot("CIF_0001", "2026-06-01", "2026-09-23")
+    assert {t["id"] for t in snapshot["transactions"]} == {"tx1", "tx2"}
+    assert "2026-08" not in snapshot["monthly_spending_summary"]  # tx3 was the only August txn, hidden
+
+
+def test_fetch_live_account_snapshot_nets_refunds_against_expenses_per_category_per_month(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_snapshot_router({"casaBalance": 21600000}, _LIVE_TRANSACTIONS, _LIVE_CATEGORIES),
+    )
+    snapshot = fetch_live_account_snapshot("CIF_0001", "2026-06-01", "2026-09-23")
+    september = snapshot["monthly_spending_summary"]["2026-09"]
+    assert september["by_category_vnd"] == {"Ăn uống": 215000, "Mua sắm": -500000}
+    assert september["total_vnd"] == -285000
+    assert september["transaction_count"] == 2
+
+
+def test_fetch_live_account_snapshot_raises_when_any_of_the_3_calls_fails(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_snapshot_router(
+            {"casaBalance": 21600000},
+            _LIVE_TRANSACTIONS,
+            _LIVE_CATEGORIES,
+            fail_url_substring="/api/transactions-full",
+        ),
+    )
+    try:
+        fetch_live_account_snapshot("CIF_0001", "2026-06-01", "2026-09-23")
+    except httpx.HTTPError:
+        pass
+    else:
+        raise AssertionError("expected httpx.HTTPError")

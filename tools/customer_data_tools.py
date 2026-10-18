@@ -86,6 +86,121 @@ def fetch_jar_summary(customer_id: str, month: str = "") -> dict:
     return summary
 
 
+def fetch_account_summary(customer_id: str) -> dict:
+    """`GET /api/account-summary` for an explicit customer -- `{"casaBalance": number | null}`, split out
+    of `jar-summary` since 2026-09-23 (backend_docs/pfm-read-api.md). Raises `httpx.HTTPError`/`ValueError`
+    on any failure."""
+    response = httpx.get(
+        f"{PFM_BASE_URL}/api/account-summary",
+        params={"cif": customer_id},
+        timeout=PFM_REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict):
+        raise ValueError("unexpected response shape")
+    return data
+
+
+def fetch_transactions_full(customer_id: str, from_date: str, to_date: str) -> list[dict]:
+    """`GET /api/transactions-full` for an explicit customer -- every transaction (bank + self-reported),
+    `categoryId` already merged with corrections. `from_date`/`to_date` are `YYYY-MM-DD`, an ISO closed
+    range. Raises `httpx.HTTPError`/`ValueError` on any failure."""
+    response = httpx.get(
+        f"{PFM_BASE_URL}/api/transactions-full",
+        params={"cif": customer_id, "from": from_date, "to": to_date},
+        timeout=PFM_REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, list):
+        raise ValueError("unexpected response shape")
+    return data
+
+
+def fetch_categories(customer_id: str) -> list[dict]:
+    """`GET /api/categories` for an explicit customer. Raises `httpx.HTTPError`/`ValueError` on any
+    failure."""
+    response = httpx.get(
+        f"{PFM_BASE_URL}/api/categories",
+        params={"cif": customer_id},
+        timeout=PFM_REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    categories = response.json()
+    if not isinstance(categories, list):
+        raise ValueError("unexpected response shape")
+    return categories
+
+
+def _aggregate_monthly_by_category(visible_transactions: list[dict], label_by_id: dict[str, str]) -> dict:
+    """Per month (`YYYY-MM`), net spend per category = debit/expense minus credit/refund -- the same
+    netting `jar-summary`'s own `spent` uses (backend_docs/pfm-read-api.md: "chi tiêu ròng, đã trừ hoàn
+    tiền"). `visible_transactions` must already exclude `hidden: true` rows (jar-summary excludes them
+    from totals too). Returned as a precomputed aggregate, not raw transactions, so the model reads an
+    already-summed total instead of adding transactions up itself -- same principle as get_jar_summary."""
+    counts: dict[str, int] = {}
+    totals: dict[str, dict[str, float]] = {}
+    for txn in visible_transactions:
+        month = (txn.get("postedAt") or "")[:7]
+        if not month:
+            continue
+        counts[month] = counts.get(month, 0) + 1
+        direction, kind = txn.get("direction"), txn.get("type")
+        if direction == "debit" and kind == "expense":
+            delta = txn.get("amount", 0)
+        elif direction == "credit" and kind == "refund":
+            delta = -txn.get("amount", 0)
+        else:
+            continue  # income/transfer/etc. -- not spending, excluded from category totals
+        label = label_by_id.get(txn.get("categoryId"), txn.get("categoryId") or "Khác")
+        by_category = totals.setdefault(month, {})
+        by_category[label] = by_category.get(label, 0) + delta
+    return {
+        month: {
+            "total_vnd": sum(totals.get(month, {}).values()),
+            "transaction_count": counts[month],
+            "by_category_vnd": totals.get(month, {}),
+        }
+        for month in sorted(counts)
+    }
+
+
+def fetch_live_account_snapshot(customer_id: str, from_date: str, to_date: str) -> dict:
+    """Live balance + transactions + a per-month/per-category spending aggregate, for seeding the system
+    prompt (`middleware/seed_customer_context.py`) -- NOT a model-facing `@tool` (this data is baked into
+    the prompt once per turn, not fetched on demand like `get_jar_summary`/`get_categories`).
+
+    Raises `httpx.HTTPError`/`ValueError` if ANY of the 3 underlying calls fails, so the caller can fall
+    back to the mock snapshot as a whole instead of mixing fresh and stale data (todo.md 2026-09-23:
+    partial fallback would let live balance sit next to months-old mock transactions with no way for
+    the model to tell which parts are current)."""
+    account = fetch_account_summary(customer_id)
+    raw_transactions = fetch_transactions_full(customer_id, from_date, to_date)
+    categories = fetch_categories(customer_id)
+    label_by_id = {c["id"]: c.get("label") or c["id"] for c in categories}
+
+    visible = [t for t in raw_transactions if not t.get("hidden")]
+    transactions = [
+        {
+            "id": t.get("id"),
+            "date": (t.get("postedAt") or "")[:10],
+            "merchant": t.get("merchantName", "?"),
+            "category": label_by_id.get(t.get("categoryId"), t.get("categoryId") or "Khác"),
+            "amount_vnd": t.get("amount"),
+            "direction": t.get("direction"),
+            "type": t.get("type"),
+            "status": t.get("status"),
+        }
+        for t in visible
+    ]
+    return {
+        "balance_vnd": account.get("casaBalance"),
+        "transactions": transactions,
+        "monthly_spending_summary": _aggregate_monthly_by_category(visible, label_by_id),
+    }
+
+
 def render_jar_summary(summary: dict, month: str = "") -> str:
     """The text the model reads for a jar summary (field names kept as the endpoint sends them)."""
     lines = [
@@ -153,15 +268,7 @@ def get_categories() -> tuple[str, list | None]:
     """
     customer_id = _resolve_customer_id()
     try:
-        response = httpx.get(
-            f"{PFM_BASE_URL}/api/categories",
-            params={"cif": customer_id},
-            timeout=PFM_REQUEST_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        categories = response.json()
-        if not isinstance(categories, list):
-            raise ValueError("unexpected response shape")
+        categories = fetch_categories(customer_id)
     except (httpx.HTTPError, ValueError) as exc:
         return (
             "Không thể đọc danh mục của khách lúc này (lỗi từ hệ thống pfm: "

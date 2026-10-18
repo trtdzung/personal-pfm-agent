@@ -1819,6 +1819,96 @@ agent trả ra các option, hãy xem lại skill" — hỏi lại phạm vi mở
   investment-guidance/SKILL.md` (bước 0 mới), `docs/clarify-options.md` (2 trường hợp dùng + ví dụ), `tests/test_clarify_options_skill.py` (5 test mới). 634 pass.
 - **Chưa làm:** chưa đồng bộ lại `docs/clarify-options.md` sang `pfm/agent_backend_docs/` cho lần đổi này (chỉ thêm mô tả, không đổi schema — có thể đồng bộ sau cùng các thay đổi khác).
 
+### 1.37. [Đã làm] `clarify_options` không còn xoá `answer` về rỗng — giữ lại câu dẫn ngắn của model
+
+**Người dùng hỏi:** "nhưng tại sao lại xóa thành ""? Tôi muốn phần này vẫn thêm vào lịch sử được không?" — sau khi thấy `answer` bị xoá rỗng dù model có viết 1 câu dẫn không trùng với các câu hỏi (ví dụ "Để tôi hiểu đúng
+nhu cầu đầu tư của bạn, hãy trả lời 4 câu hỏi sau:"). Hỏi lại cách sửa, chọn "Không xóa answer nhưng answer siêu ngắn gọn: Bạn hãy trả lời các câu hỏi sau để ...".
+
+- **Trước đây:** `server.py` có `_clear_answer_for_clarify_options()` — xoá `answer` về `""` bất cứ khi nào `ui.type == "clarify_options"` hợp lệ, dùng chung cho cả `/chat` và `/chat/history`. Lý do ban đầu (mục
+  1.33/1.34): tránh model lặp lại y hệt nội dung câu hỏi 2 lần (1 lần ở `answer`, 1 lần ở `ui.questions[].question`).
+- **Bây giờ:** bỏ hẳn hàm và 2 lần gọi nó trong `server.py` — `answer` không còn bị xoá ở cả `/chat` lẫn `/chat/history`. Đổi lại, `skills/project/clarify-options/SKILL.md` yêu cầu `answer` PHẢI có nội dung nhưng chỉ
+  là **1 câu dẫn thật ngắn** ("Bạn hãy trả lời các câu hỏi sau để...") — KHÔNG lặp lại nội dung của bất kỳ `question`/`options` nào; frontend hiện **cả 2**: `answer` làm câu dẫn, `ui.questions` làm câu hỏi + nút bấm
+  ngay bên dưới, không phải chọn 1 trong 2 chỗ như trước.
+- **Đánh đổi đã biết trước (người dùng chấp nhận khi chọn phương án này):** model đôi khi vẫn lặp lại nội dung câu hỏi vào `answer` dù skill đã yêu cầu ngắn gọn — không có code chặn nội dung (chỉ chặn hình dạng),
+  đây là rủi ro chấp nhận được, không phải lỗi.
+- **Chạy thật xác nhận:** câu khảo sát đầu tư (mục 1.36) — 3/3 lần `answer` là câu dẫn ngắn, không trùng câu hỏi. Câu tăng hạn mức hũ (mục 1.35) — 3 lần chạy: 1 lần `ui: None` (fallback không tất định, không liên
+  quan thay đổi này), 1 lần sạch (answer ngắn không trùng), 1 lần answer lặp lại gần giống nội dung câu hỏi (đúng rủi ro đã lường trước).
+- **File sửa:** `server.py` (xoá hàm `_clear_answer_for_clarify_options` và 2 lần gọi), `skills/project/clarify-options/SKILL.md` (nhiều chỗ: "QUAN TRỌNG NHẤT", "Cách khách trả lời", PHẢI #6, KHÔNG ĐƯỢC, Ví dụ SAI),
+  `docs/clarify-options.md` (viết lại ví dụ + luồng UI + `/chat/history`), `docs/api.md`, `tests/test_server.py` (3 test viết lại theo hành vi mới). Đã đồng bộ `docs/clarify-options.md` + `docs/api.md` sang
+  `pfm/agent_backend_docs/`. 634 pass.
+- **Chưa làm:** chưa thêm ví dụ SAI cụ thể cho đúng lỗi "answer lặp lại nội dung question" vừa quan sát được — đã hỏi người dùng có muốn siết thêm không, đang chờ trả lời.
+
+### 1.38. [Đã làm] Inject balance + transaction thật (pfm) vào system prompt, thay cho mock
+
+**Người dùng:** "Hiện tại Balance đang là mock, tôi muốn bạn inject balance và danh sách các transaction vào
+system prompt bằng cách gọi api như trong backend_docs/pfm-read-api.md" — trước đó `data/customers/CIF_0001.json`
+có `account.balance_vnd`, `transactions` (65 dòng), `monthly_spending_summary` đều là số mock cố định (as_of_date
+29/08 dù hôm nay đã 23/09), dùng cho mọi câu hỏi tư vấn không đi qua `get_jar_summary` (ví dụ "số dư tài khoản
+của tôi", `investment-guidance`'s "số dư tài khoản", `spending-jar`'s đề xuất hạn mức hũ mới theo chi tiêu thật).
+
+- **3 quyết định đã hỏi & chốt trước khi code** (dùng skill `brainstorming`, phân loại "bounded"):
+  1. Khoảng thời gian lấy giao dịch: **3 tháng gần nhất tính từ hôm nay** (90 ngày) — đủ cho quy tắc "chi tiêu
+     trung bình 3 tháng" của `investment-guidance`.
+  2. Có tính sẵn tổng theo category/tháng không: **Có** — giữ đúng nguyên tắc "agent không tự cộng giao dịch"
+     đang dùng ở `get_jar_summary`; dùng **nhãn tiếng Việt** (không phải `categoryId` thô như "dining") vì đây
+     là dữ liệu hiển thị cho khách.
+  3. Xử lý khi 1 trong 3 API lỗi (account-summary/transactions-full/categories): ban đầu định "lặng lẽ giữ mock"
+     độc lập theo từng field — người dùng phát hiện lỗ hổng: **"nếu lặng lẽ lấy thì phần data sẽ lấy hết nhỉ, thế
+     thì sao agent hiểu được cái nào mới là đúng?"** — đúng, 3 lần gọi độc lập có thể ra kết quả **trộn thật+cũ**
+     (ví dụ balance mới nhưng transactions vẫn tháng 8) mà agent không biết để phân biệt. Chốt lại: lỗi bất kỳ
+     API nào → **cả 3 field đều fallback về mock cùng lúc** (all-or-nothing, không bao giờ trộn), vẫn không báo
+     gì cho model/khách (giữ đúng tinh thần "lặng lẽ" ban đầu, chỉ sửa phạm vi áp dụng).
+- **Code:**
+  - `tools/customer_data_tools.py`: thêm `fetch_account_summary`, `fetch_transactions_full`, tách
+    `fetch_categories` từ `get_categories()` (refactor, hành vi không đổi); thêm `fetch_live_account_snapshot`
+    (gọi cả 3, raise nếu bất kỳ cái nào lỗi) và `_aggregate_monthly_by_category` (tính `total_vnd`/
+    `transaction_count`/`by_category_vnd` mỗi tháng, chi ròng = debit/expense trừ credit/refund, loại
+    `hidden: true` — đúng công thức pfm dùng cho `spent` theo `backend_docs/pfm-read-api.md`).
+  - `middleware/seed_customer_context.py`: `before_agent` đọc mock trước, gọi `fetch_live_account_snapshot`
+    (khoảng 90 ngày), **cả 3 API OK** thì ghi đè `account.balance_vnd`/`transactions`/`monthly_spending_summary`;
+    lỗi bất kỳ cái nào thì giữ nguyên cả 3 theo mock. `cards`/`statements`/`credit_profile` không đổi (pfm không
+    có endpoint thẻ). Phải dùng **import trễ** (`from tools.customer_data_tools import ...` trong hàm, không ở
+    đầu file) vì `tools/customer_data_tools.py` đã import `_resolve_customer_id` từ chính module này — import ở
+    đầu file sẽ vòng lặp (circular import).
+- **Chạy thật xác nhận (CIF_0001):**
+  - `before_agent` thật: `balance_vnd: 21600000` (pfm thật, khác hẳn mock 12.500.000), 114 giao dịch thật (đã
+    lọc hidden), category đã dịch sang tiếng Việt ("Mua sắm", "Ăn uống"), `monthly_spending_summary` có đủ 4
+    tháng (06→09).
+  - Hỏi model thật "Số dư tài khoản thanh toán của tôi hiện tại là bao nhiêu?" → trả lời đúng **21.600.000đ**
+    (số thật, không phải mock).
+  - Giả lập `transactions-full` lỗi (mạng) trong khi `account-summary` vẫn OK → xác nhận **cả 3 field đều rơi
+    về mock** (`balance_vnd: 12500000`, 65 giao dịch mock) — không bị trộn nửa thật nửa cũ.
+- **Test:** 11 test mới (`tests/test_customer_data_tools.py`: fetch helpers + `fetch_live_account_snapshot`
+  gồm dịch nhãn, loại hidden, netting refund, all-or-nothing khi lỗi; `tests/middleware/test_seed_customer_context.py`:
+  override khi cả 3 OK, fallback khi 1 trong 3 lỗi — 4 test cũ phải thêm `monkeypatch` chặn network thật vì
+  `before_agent` giờ gọi API thật). 645 pass (trước đó 634).
+- **Đánh đổi đã biết:** dữ liệu khách hàng trong mỗi lượt gọi model tăng từ ~4-6k token lên gần gấp đôi (114
+  giao dịch thật ≈ 23KB JSON) khi pfm còn hoạt động — người dùng đã được báo trước khi chốt thiết kế.
+- **Chưa làm:** `LIVE_DATA_WINDOW_DAYS = 90` là hằng số cố định trong `middleware/seed_customer_context.py`,
+  chưa cấu hình theo persona/nhu cầu khác.
+
+### 1.38b. [Đã làm] Đồng bộ file mock (`data/customers/*.json`) theo đúng số thật hiện tại — dùng cho fallback
+
+**Người dùng hỏi:** "bạn đã sửa với mockdata để đồng bộ dữ liệu với hiện tại chưa" — chưa, mục 1.38 chỉ ghi đè
+số thật vào system prompt **lúc chạy** khi pfm còn sống; file mock trên đĩa vẫn giữ số cũ (`balance_vnd:
+12.500.000`, giao dịch dừng 27/08, `_meta.as_of_date: 2026-08-29`) dù hôm nay đã 23/09 — lệch gần 1 tháng so
+với hiện tại, và đây chính là số sẽ hiện ra nếu pfm sập đúng lúc khách hỏi (fallback im lặng theo mục 1.38).
+Hỏi lại có nên đồng bộ luôn file mock — chọn "Có".
+
+- Viết script dùng thẳng `fetch_live_account_snapshot` (cùng hàm `before_agent` dùng ở mục 1.38, đảm bảo
+  nhất quán) để lấy số thật của cả 3 persona (`CIF_0001`/`CIF_0002`/`CIF_0003`), ghi đè `account.balance_vnd`,
+  `transactions`, `monthly_spending_summary`, `_meta.as_of_date` vào từng file — `customer`/
+  `chat_memory_example`/`cards`/`statements`/`credit_profile` giữ nguyên (không đổi).
+- Kết quả: `CIF_0001` balance 21.600.000đ/114 giao dịch, `CIF_0002` 25.200.000đ/150 giao dịch, `CIF_0003`
+  72.000.000đ/157 giao dịch — cả 3 đủ 4 tháng (06→09), `as_of_date` → 2026-09-23.
+- **Phát hiện thêm 1 test cũ bị vỡ:** `tests/data/test_customer_data.py::test_monthly_totals_match_summed_transactions`
+  cộng thẳng `amount_vnd` mọi giao dịch trong tháng rồi so với `total_vnd` — không tính đến việc dữ liệu thật
+  giờ có cả giao dịch hoàn tiền (`direction: credit, type: refund`), vốn phải **trừ** chứ không cộng (đúng
+  công thức `_aggregate_monthly_by_category` đã dùng ở mục 1.38). Sửa lại test theo đúng công thức chi ròng
+  thay vì cộng dồn ngây thơ — test vẫn có giá trị chéo kiểm thật (tính lại độc lập từ field `date`/`amount_vnd`/
+  `direction`/`type` của mock, không import thẳng hàm production).
+- **Test:** 645 pass.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

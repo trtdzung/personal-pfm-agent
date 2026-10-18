@@ -1,7 +1,7 @@
 {
   "_meta": {
     "purpose": "Dữ liệu khách hàng mẫu (mock) dùng để agent trả lời các câu hỏi tư vấn tài chính. Số liệu là ví dụ minh hoạ nhưng nội bộ nhất quán (tổng chi tiêu = tổng các giao dịch liệt kê bên dưới) để có thể trả lời trực tiếp từ dữ liệu, không cần bịa thêm số.",
-    "as_of_date": "2026-08-29",
+    "as_of_date": "2026-09-23",
     "currency": "VND"
   },
   "customer": {
@@ -25,7 +25,7 @@
   "account": {
     "account_number": "0011000345678",
     "account_type": "Tài khoản thanh toán",
-    "balance_vnd": 4500000
+    "balance_vnd": 72000000
   },
   "cards": [
     {
@@ -91,555 +91,1631 @@
     }
   ],
   "monthly_spending_summary": {
-    "_note": "Tổng hợp từ mảng transactions bên dưới, theo tháng dương lịch (không theo kỳ sao kê).",
     "2026-06": {
-      "total_vnd": 4680000,
-      "transaction_count": 22,
+      "total_vnd": 900000,
+      "transaction_count": 5,
       "by_category_vnd": {
-        "Ăn uống": 2240000,
-        "Giải trí": 910000,
-        "Di chuyển": 180000,
-        "Hoá đơn": 200000,
-        "Siêu thị": 730000,
-        "Mua sắm": 420000
+        "Ăn uống": 483000,
+        "unclassified": 119000,
+        "Nhu yếu phẩm": 298000
       }
     },
     "2026-07": {
-      "total_vnd": 7215000,
-      "transaction_count": 21,
+      "total_vnd": 34098000,
+      "transaction_count": 50,
       "by_category_vnd": {
-        "Ăn uống": 2260000,
-        "Giải trí": 1350000,
-        "Di chuyển": 195000,
-        "Hoá đơn": 200000,
-        "Siêu thị": 760000,
-        "Mua sắm": 2450000
+        "Ăn uống": 2605000,
+        "Di chuyển": 478000,
+        "unclassified": 2853000,
+        "Mua sắm": 2539000,
+        "Nhu yếu phẩm": 1665000,
+        "Đăng ký dịch vụ": 1019000,
+        "Giải trí": 169000,
+        "Tiện ích": 1070000,
+        "Nhà ở": 21700000
       }
     },
     "2026-08": {
-      "total_vnd": 5915000,
-      "transaction_count": 20,
+      "total_vnd": 34289000,
+      "transaction_count": 46,
       "by_category_vnd": {
-        "Ăn uống": 2100000,
-        "Giải trí": 810000,
-        "Di chuyển": 195000,
-        "Hoá đơn": 200000,
-        "Siêu thị": 760000,
-        "Mua sắm": 1850000
-      },
-      "note": "Tính đến 2026-08-29, tháng chưa kết thúc"
+        "Nhu yếu phẩm": 1010000,
+        "Ăn uống": 2147000,
+        "Giải trí": 1187000,
+        "Mua sắm": 3762000,
+        "unclassified": 1936000,
+        "Di chuyển": 328000,
+        "Đăng ký dịch vụ": 1019000,
+        "Tiện ích": 700000,
+        "Nhà ở": 22200000
+      }
+    },
+    "2026-09": {
+      "total_vnd": 37676000,
+      "transaction_count": 56,
+      "by_category_vnd": {
+        "Mua sắm": 5004000,
+        "Ăn uống": 3325000,
+        "Giải trí": 1671000,
+        "Đăng ký dịch vụ": 1019000,
+        "unclassified": 1277000,
+        "Nhu yếu phẩm": 1569000,
+        "Tiện ích": 980000,
+        "Di chuyển": 531000,
+        "Nhà ở": 22300000
+      }
     }
   },
   "transactions": [
     {
-      "id": "txn-2026-06-001",
-      "date": "2026-06-01",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 45000,
-      "card_id": "card_001"
+      "id": "manual-372e8e2a-d5c1-4b33-a72a-3c96623fe694",
+      "date": "2026-09-17",
+      "merchant": "Vũ Đình Quân",
+      "category": "Chuyển khoản",
+      "amount_vnd": 4200000,
+      "direction": "debit",
+      "type": "transfer",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-002",
-      "date": "2026-06-01",
+      "id": "tx_wealthy_0307",
+      "date": "2026-09-15",
+      "merchant": "Tiki",
+      "category": "Mua sắm",
+      "amount_vnd": 694000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "pending"
+    },
+    {
+      "id": "tx_wealthy_0306",
+      "date": "2026-09-15",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 197000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "pending"
+    },
+    {
+      "id": "tx_wealthy_0301",
+      "date": "2026-09-15",
+      "merchant": "Karaoke Kingdom",
+      "category": "Giải trí",
+      "amount_vnd": 193000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0258",
+      "date": "2026-09-15",
+      "merchant": "Phòng gym California",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 700000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0257",
+      "date": "2026-09-15",
+      "merchant": "Spotify",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 59000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0256",
+      "date": "2026-09-15",
       "merchant": "Netflix",
-      "category": "Giải trí",
+      "category": "Đăng ký dịch vụ",
       "amount_vnd": 260000,
-      "card_id": "card_001",
-      "is_recurring": true
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-003",
-      "date": "2026-06-02",
+      "id": "tx_wealthy_0290",
+      "date": "2026-09-14",
+      "merchant": "Uniqlo",
+      "category": "Mua sắm",
+      "amount_vnd": 585000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0275",
+      "date": "2026-09-14",
+      "merchant": "Phở 24",
+      "category": "Ăn uống",
+      "amount_vnd": 229000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0264",
+      "date": "2026-09-14",
       "merchant": "GrabFood",
+      "category": "unclassified",
+      "amount_vnd": 132000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0262",
+      "date": "2026-09-14",
+      "merchant": "WinMart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 281000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0274",
+      "date": "2026-09-13",
+      "merchant": "The Coffee House",
       "category": "Ăn uống",
-      "amount_vnd": 130000,
-      "card_id": "card_001"
+      "amount_vnd": 174000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-004",
-      "date": "2026-06-03",
-      "merchant": "Grab",
-      "category": "Di chuyển",
-      "amount_vnd": 60000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-005",
-      "date": "2026-06-04",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 145000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-006",
-      "date": "2026-06-05",
-      "merchant": "FPT Telecom",
-      "category": "Hoá đơn",
-      "amount_vnd": 200000,
-      "card_id": "card_001",
-      "is_recurring": true
-    },
-    {
-      "id": "txn-2026-06-007",
-      "date": "2026-06-06",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 55000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-008",
-      "date": "2026-06-07",
-      "merchant": "Highlands Coffee",
-      "category": "Ăn uống",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-009",
-      "date": "2026-06-08",
-      "merchant": "Steam",
+      "id": "tx_wealthy_0300",
+      "date": "2026-09-11",
+      "merchant": "CGV Cinemas",
       "category": "Giải trí",
-      "amount_vnd": 450000,
-      "card_id": "card_001"
+      "amount_vnd": 247000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-010",
-      "date": "2026-06-09",
+      "id": "tx_wealthy_0276",
+      "date": "2026-09-11",
       "merchant": "GrabFood",
       "category": "Ăn uống",
       "amount_vnd": 160000,
-      "card_id": "card_001"
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-011",
-      "date": "2026-06-10",
-      "merchant": "Winmart+",
-      "category": "Siêu thị",
-      "amount_vnd": 380000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-012",
-      "date": "2026-06-11",
-      "merchant": "Grab",
-      "category": "Di chuyển",
-      "amount_vnd": 60000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-013",
-      "date": "2026-06-13",
-      "merchant": "Quán nhậu Sài Gòn Xưa",
+      "id": "tx_wealthy_0272",
+      "date": "2026-09-11",
+      "merchant": "The Coffee House",
       "category": "Ăn uống",
-      "amount_vnd": 680000,
-      "card_id": "card_001"
+      "amount_vnd": 206000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-014",
-      "date": "2026-06-14",
-      "merchant": "CGV Cinemas",
-      "category": "Giải trí",
-      "amount_vnd": 200000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-015",
-      "date": "2026-06-16",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 150000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-06-016",
-      "date": "2026-06-17",
+      "id": "tx_wealthy_0288",
+      "date": "2026-09-10",
       "merchant": "Shopee",
       "category": "Mua sắm",
-      "amount_vnd": 420000,
-      "card_id": "card_001"
+      "amount_vnd": 755000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-017",
-      "date": "2026-06-18",
-      "merchant": "Circle K",
+      "id": "tx_wealthy_0280",
+      "date": "2026-09-10",
+      "merchant": "Phở 24",
       "category": "Ăn uống",
-      "amount_vnd": 50000,
-      "card_id": "card_001"
+      "amount_vnd": 149000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-018",
-      "date": "2026-06-20",
-      "merchant": "Winmart+",
-      "category": "Siêu thị",
-      "amount_vnd": 350000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0271",
+      "date": "2026-09-10",
+      "merchant": "Phở 24",
+      "category": "Ăn uống",
+      "amount_vnd": 184000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-019",
-      "date": "2026-06-22",
-      "merchant": "Grab",
-      "category": "Di chuyển",
-      "amount_vnd": 60000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0255",
+      "date": "2026-09-10",
+      "merchant": "EVN / Nước / Internet",
+      "category": "Tiện ích",
+      "amount_vnd": 980000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-020",
-      "date": "2026-06-24",
+      "id": "tx_wealthy_0298",
+      "date": "2026-09-09",
+      "merchant": "Karaoke Kingdom",
+      "category": "Giải trí",
+      "amount_vnd": 207000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0296",
+      "date": "2026-09-09",
+      "merchant": "Lazada",
+      "category": "Mua sắm",
+      "amount_vnd": 535000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0266",
+      "date": "2026-09-09",
       "merchant": "Highlands Coffee",
       "category": "Ăn uống",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
+      "amount_vnd": 125000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-021",
-      "date": "2026-06-26",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 175000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0263",
+      "date": "2026-09-09",
+      "merchant": "Bách hóa Xanh",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 351000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-06-022",
-      "date": "2026-06-28",
-      "merchant": "Quán lẩu Ashima",
-      "category": "Ăn uống",
-      "amount_vnd": 520000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0289",
+      "date": "2026-09-08",
+      "merchant": "Shopee",
+      "category": "Mua sắm",
+      "amount_vnd": 401000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-001",
-      "date": "2026-07-01",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 45000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0284",
+      "date": "2026-09-08",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 62000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-002",
-      "date": "2026-07-01",
-      "merchant": "Netflix",
-      "category": "Giải trí",
-      "amount_vnd": 260000,
-      "card_id": "card_001",
-      "is_recurring": true
-    },
-    {
-      "id": "txn-2026-07-003",
-      "date": "2026-07-02",
-      "merchant": "GrabFood",
+      "id": "tx_wealthy_0278",
+      "date": "2026-09-08",
+      "merchant": "Highlands Coffee",
       "category": "Ăn uống",
       "amount_vnd": 135000,
-      "card_id": "card_001"
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-004",
-      "date": "2026-07-03",
-      "merchant": "Grab",
-      "category": "Di chuyển",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0279",
+      "date": "2026-09-07",
+      "merchant": "Phở 24",
+      "category": "Ăn uống",
+      "amount_vnd": 174000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-005",
-      "date": "2026-07-04",
+      "id": "tx_wealthy_0269",
+      "date": "2026-09-07",
       "merchant": "GrabFood",
       "category": "Ăn uống",
-      "amount_vnd": 150000,
-      "card_id": "card_001"
+      "amount_vnd": 212000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-006",
-      "date": "2026-07-05",
-      "merchant": "FPT Telecom",
-      "category": "Hoá đơn",
-      "amount_vnd": 200000,
-      "card_id": "card_001",
-      "is_recurring": true
+      "id": "tx_wealthy_0261",
+      "date": "2026-09-07",
+      "merchant": "Co.opmart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 292000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-007",
-      "date": "2026-07-06",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 55000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0305",
+      "date": "2026-09-06",
+      "merchant": "Nhận từ thanh toán",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "credit",
+      "type": "transfer",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-008",
-      "date": "2026-07-08",
-      "merchant": "PlayStation Store",
-      "category": "Giải trí",
-      "amount_vnd": 890000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0304",
+      "date": "2026-09-06",
+      "merchant": "Chuyển sang tiết kiệm",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "debit",
+      "type": "transfer",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-009",
-      "date": "2026-07-09",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 165000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-010",
-      "date": "2026-07-10",
-      "merchant": "Winmart+",
-      "category": "Siêu thị",
-      "amount_vnd": 400000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-011",
-      "date": "2026-07-12",
-      "merchant": "Nike Store",
-      "category": "Mua sắm",
-      "amount_vnd": 2450000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-012",
-      "date": "2026-07-13",
-      "merchant": "Grab",
-      "category": "Di chuyển",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-013",
-      "date": "2026-07-15",
-      "merchant": "Quán nhậu Sài Gòn Xưa",
-      "category": "Ăn uống",
-      "amount_vnd": 720000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-014",
-      "date": "2026-07-16",
+      "id": "tx_wealthy_0297",
+      "date": "2026-09-06",
       "merchant": "CGV Cinemas",
       "category": "Giải trí",
-      "amount_vnd": 200000,
-      "card_id": "card_001"
+      "amount_vnd": 333000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-015",
-      "date": "2026-07-18",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 155000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0292",
+      "date": "2026-09-06",
+      "merchant": "Uniqlo",
+      "category": "Mua sắm",
+      "amount_vnd": 697000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-016",
-      "date": "2026-07-20",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 50000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-017",
-      "date": "2026-07-21",
-      "merchant": "Winmart+",
-      "category": "Siêu thị",
-      "amount_vnd": 360000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-018",
-      "date": "2026-07-23",
-      "merchant": "Grab",
+      "id": "tx_wealthy_0282",
+      "date": "2026-09-06",
+      "merchant": "Xăng Petrolimex",
       "category": "Di chuyển",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
+      "amount_vnd": 117000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-07-019",
-      "date": "2026-07-25",
-      "merchant": "Highlands Coffee",
-      "category": "Ăn uống",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-020",
-      "date": "2026-07-27",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 180000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-07-021",
-      "date": "2026-07-29",
-      "merchant": "Quán lẩu Ashima",
-      "category": "Ăn uống",
-      "amount_vnd": 540000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-001",
-      "date": "2026-08-01",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 45000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-002",
-      "date": "2026-08-01",
-      "merchant": "Netflix",
-      "category": "Giải trí",
-      "amount_vnd": 260000,
-      "card_id": "card_001",
-      "is_recurring": true
-    },
-    {
-      "id": "txn-2026-08-003",
-      "date": "2026-08-02",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 140000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-004",
-      "date": "2026-08-03",
-      "merchant": "Grab",
-      "category": "Di chuyển",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-005",
-      "date": "2026-08-04",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 155000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-006",
-      "date": "2026-08-05",
-      "merchant": "FPT Telecom",
-      "category": "Hoá đơn",
-      "amount_vnd": 200000,
-      "card_id": "card_001",
-      "is_recurring": true
-    },
-    {
-      "id": "txn-2026-08-007",
-      "date": "2026-08-06",
-      "merchant": "Circle K",
-      "category": "Ăn uống",
-      "amount_vnd": 55000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-008",
-      "date": "2026-08-08",
-      "merchant": "Winmart+",
-      "category": "Siêu thị",
-      "amount_vnd": 390000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-009",
-      "date": "2026-08-09",
-      "merchant": "GrabFood",
-      "category": "Ăn uống",
-      "amount_vnd": 170000,
-      "card_id": "card_001"
-    },
-    {
-      "id": "txn-2026-08-010",
-      "date": "2026-08-10",
+      "id": "tx_wealthy_0303",
+      "date": "2026-09-05",
       "merchant": "Steam",
       "category": "Giải trí",
-      "amount_vnd": 350000,
-      "card_id": "card_001"
+      "amount_vnd": 294000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-011",
-      "date": "2026-08-12",
+      "id": "tx_wealthy_0302",
+      "date": "2026-09-05",
+      "merchant": "Steam",
+      "category": "Giải trí",
+      "amount_vnd": 167000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0295",
+      "date": "2026-09-05",
+      "merchant": "Tiki",
+      "category": "Mua sắm",
+      "amount_vnd": 678000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0294",
+      "date": "2026-09-05",
+      "merchant": "Tiki",
+      "category": "unclassified",
+      "amount_vnd": 456000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0285",
+      "date": "2026-09-05",
       "merchant": "Grab",
       "category": "Di chuyển",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
+      "amount_vnd": 68000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-012",
-      "date": "2026-08-13",
-      "merchant": "Quán nhậu Sài Gòn Xưa",
+      "id": "tx_wealthy_0268",
+      "date": "2026-09-05",
+      "merchant": "Highlands Coffee",
       "category": "Ăn uống",
-      "amount_vnd": 700000,
-      "card_id": "card_001"
+      "amount_vnd": 136000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-013",
-      "date": "2026-08-15",
-      "merchant": "CGV Cinemas",
-      "category": "Giải trí",
-      "amount_vnd": 200000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0253",
+      "date": "2026-09-05",
+      "merchant": "MSB Payroll",
+      "category": "income",
+      "amount_vnd": 100500000,
+      "direction": "credit",
+      "type": "income",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-014",
-      "date": "2026-08-16",
+      "id": "tx_wealthy_0293",
+      "date": "2026-09-04",
+      "merchant": "Shopee",
+      "category": "Mua sắm",
+      "amount_vnd": 659000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0281",
+      "date": "2026-09-04",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 231000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0277",
+      "date": "2026-09-04",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 176000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0267",
+      "date": "2026-09-04",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 187000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0260",
+      "date": "2026-09-04",
+      "merchant": "WinMart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 265000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0286",
+      "date": "2026-09-03",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 104000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0270",
+      "date": "2026-09-03",
       "merchant": "GrabFood",
       "category": "Ăn uống",
-      "amount_vnd": 160000,
-      "card_id": "card_001"
+      "amount_vnd": 203000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-015",
-      "date": "2026-08-18",
-      "merchant": "Circle K",
+      "id": "tx_wealthy_0265",
+      "date": "2026-09-03",
+      "merchant": "Phở 24",
       "category": "Ăn uống",
-      "amount_vnd": 50000,
-      "card_id": "card_001"
+      "amount_vnd": 210000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-016",
-      "date": "2026-08-19",
-      "merchant": "Winmart+",
-      "category": "Siêu thị",
-      "amount_vnd": 370000,
-      "card_id": "card_001"
+      "id": "tx_wealthy_0259",
+      "date": "2026-09-03",
+      "merchant": "Co.opmart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 380000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-017",
-      "date": "2026-08-21",
-      "merchant": "Adidas Store",
+      "id": "tx_wealthy_0254",
+      "date": "2026-09-03",
+      "merchant": "Chủ nhà / Vay nhà",
+      "category": "Nhà ở",
+      "amount_vnd": 22300000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0287",
+      "date": "2026-09-02",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 78000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0283",
+      "date": "2026-09-02",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 102000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0273",
+      "date": "2026-09-02",
+      "merchant": "Phở 24",
+      "category": "Ăn uống",
+      "amount_vnd": 237000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0299",
+      "date": "2026-09-01",
+      "merchant": "Steam",
+      "category": "Giải trí",
+      "amount_vnd": 230000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0291",
+      "date": "2026-09-01",
+      "merchant": "Lazada",
+      "category": "unclassified",
+      "amount_vnd": 689000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0216",
+      "date": "2026-08-31",
+      "merchant": "Bách hóa Xanh",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 381000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0218",
+      "date": "2026-08-30",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 201000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0227",
+      "date": "2026-08-29",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 184000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0248",
+      "date": "2026-08-28",
+      "merchant": "Karaoke Kingdom",
+      "category": "Giải trí",
+      "amount_vnd": 224000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0241",
+      "date": "2026-08-28",
+      "merchant": "Tiki",
       "category": "Mua sắm",
-      "amount_vnd": 1850000,
-      "card_id": "card_001"
+      "amount_vnd": 635000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-018",
+      "id": "tx_wealthy_0247",
+      "date": "2026-08-27",
+      "merchant": "Karaoke Kingdom",
+      "category": "Giải trí",
+      "amount_vnd": 180000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0222",
+      "date": "2026-08-27",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 161000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0245",
+      "date": "2026-08-26",
+      "merchant": "Karaoke Kingdom",
+      "category": "unclassified",
+      "amount_vnd": 229000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0244",
+      "date": "2026-08-26",
+      "merchant": "Steam",
+      "category": "unclassified",
+      "amount_vnd": 263000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0233",
+      "date": "2026-08-25",
+      "merchant": "Xăng Petrolimex",
+      "category": "unclassified",
+      "amount_vnd": 76000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0242",
+      "date": "2026-08-24",
+      "merchant": "Uniqlo",
+      "category": "Mua sắm",
+      "amount_vnd": 615000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0229",
+      "date": "2026-08-24",
+      "merchant": "Phở 24",
+      "category": "Ăn uống",
+      "amount_vnd": 160000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0235",
       "date": "2026-08-23",
       "merchant": "Grab",
       "category": "Di chuyển",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
+      "amount_vnd": 105000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-019",
-      "date": "2026-08-25",
+      "id": "tx_wealthy_0230",
+      "date": "2026-08-23",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 107000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0232",
+      "date": "2026-08-22",
+      "merchant": "Be",
+      "category": "unclassified",
+      "amount_vnd": 95000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0252",
+      "date": "2026-08-20",
+      "merchant": "Thanh toán thẻ tín dụng",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2400000,
+      "direction": "debit",
+      "type": "card_payment",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0217",
+      "date": "2026-08-20",
+      "merchant": "Highlands Coffee",
+      "category": "unclassified",
+      "amount_vnd": 179000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0215",
+      "date": "2026-08-19",
+      "merchant": "Bách hóa Xanh",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 329000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0246",
+      "date": "2026-08-18",
+      "merchant": "Steam",
+      "category": "Giải trí",
+      "amount_vnd": 189000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0238",
+      "date": "2026-08-18",
+      "merchant": "Tiki",
+      "category": "Mua sắm",
+      "amount_vnd": 566000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0213",
+      "date": "2026-08-18",
+      "merchant": "WinMart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 300000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0223",
+      "date": "2026-08-17",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 156000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0243",
+      "date": "2026-08-16",
+      "merchant": "Steam",
+      "category": "Giải trí",
+      "amount_vnd": 283000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0212",
+      "date": "2026-08-15",
+      "merchant": "Phòng gym California",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 700000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0211",
+      "date": "2026-08-15",
+      "merchant": "Spotify",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 59000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0210",
+      "date": "2026-08-15",
+      "merchant": "Netflix",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 260000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0249",
+      "date": "2026-08-14",
+      "merchant": "Karaoke Kingdom",
+      "category": "Giải trí",
+      "amount_vnd": 311000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0231",
+      "date": "2026-08-12",
+      "merchant": "Xăng Petrolimex",
+      "category": "unclassified",
+      "amount_vnd": 114000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0240",
+      "date": "2026-08-11",
+      "merchant": "Lazada",
+      "category": "Mua sắm",
+      "amount_vnd": 728000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0225",
+      "date": "2026-08-10",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 126000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0220",
+      "date": "2026-08-10",
       "merchant": "Highlands Coffee",
       "category": "Ăn uống",
-      "amount_vnd": 65000,
-      "card_id": "card_001"
+      "amount_vnd": 195000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     },
     {
-      "id": "txn-2026-08-020",
-      "date": "2026-08-27",
-      "merchant": "Quán lẩu Ashima",
+      "id": "tx_wealthy_0209",
+      "date": "2026-08-10",
+      "merchant": "EVN / Nước / Internet",
+      "category": "Tiện ích",
+      "amount_vnd": 700000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0219",
+      "date": "2026-08-09",
+      "merchant": "The Coffee House",
       "category": "Ăn uống",
-      "amount_vnd": 560000,
-      "card_id": "card_001"
+      "amount_vnd": 220000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0237",
+      "date": "2026-08-08",
+      "merchant": "Uniqlo",
+      "category": "Mua sắm",
+      "amount_vnd": 565000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0228",
+      "date": "2026-08-08",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 217000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0251",
+      "date": "2026-08-06",
+      "merchant": "Nhận từ thanh toán",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "credit",
+      "type": "transfer",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0250",
+      "date": "2026-08-06",
+      "merchant": "Chuyển sang tiết kiệm",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "debit",
+      "type": "transfer",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0234",
+      "date": "2026-08-06",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 116000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0207",
+      "date": "2026-08-05",
+      "merchant": "MSB Payroll",
+      "category": "income",
+      "amount_vnd": 93700000,
+      "direction": "credit",
+      "type": "income",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0236",
+      "date": "2026-08-03",
+      "merchant": "Uniqlo",
+      "category": "unclassified",
+      "amount_vnd": 770000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0224",
+      "date": "2026-08-03",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 224000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0221",
+      "date": "2026-08-03",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 157000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0208",
+      "date": "2026-08-03",
+      "merchant": "Chủ nhà / Vay nhà",
+      "category": "Nhà ở",
+      "amount_vnd": 22200000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0239",
+      "date": "2026-08-02",
+      "merchant": "Tiki",
+      "category": "Mua sắm",
+      "amount_vnd": 653000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0226",
+      "date": "2026-08-01",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 146000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0214",
+      "date": "2026-08-01",
+      "merchant": "WinMart",
+      "category": "unclassified",
+      "amount_vnd": 210000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0175",
+      "date": "2026-07-30",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 242000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0193",
+      "date": "2026-07-29",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 66000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0183",
+      "date": "2026-07-28",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 196000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0189",
+      "date": "2026-07-27",
+      "merchant": "Xăng Petrolimex",
+      "category": "unclassified",
+      "amount_vnd": 61000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0203",
+      "date": "2026-07-26",
+      "merchant": "CGV Cinemas",
+      "category": "unclassified",
+      "amount_vnd": 268000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0180",
+      "date": "2026-07-26",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 199000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0187",
+      "date": "2026-07-25",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 172000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0198",
+      "date": "2026-07-24",
+      "merchant": "Shopee",
+      "category": "Mua sắm",
+      "amount_vnd": 435000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0200",
+      "date": "2026-07-23",
+      "merchant": "Tiki",
+      "category": "Mua sắm",
+      "amount_vnd": 515000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0197",
+      "date": "2026-07-23",
+      "merchant": "Shopee",
+      "category": "unclassified",
+      "amount_vnd": 802000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0182",
+      "date": "2026-07-23",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 151000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0196",
+      "date": "2026-07-22",
+      "merchant": "Tiki",
+      "category": "Mua sắm",
+      "amount_vnd": 745000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0179",
+      "date": "2026-07-22",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 135000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0164",
+      "date": "2026-07-22",
+      "merchant": "WinMart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 227000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0174",
+      "date": "2026-07-21",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 204000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0206",
+      "date": "2026-07-20",
+      "merchant": "Thanh toán thẻ tín dụng",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "debit",
+      "type": "card_payment",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0163",
+      "date": "2026-07-19",
+      "merchant": "WinMart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 385000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0178",
+      "date": "2026-07-18",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 138000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0192",
+      "date": "2026-07-17",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 93000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0195",
+      "date": "2026-07-16",
+      "merchant": "Shopee",
+      "category": "unclassified",
+      "amount_vnd": 783000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0191",
+      "date": "2026-07-15",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 108000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0190",
+      "date": "2026-07-15",
+      "merchant": "Xăng Petrolimex",
+      "category": "Di chuyển",
+      "amount_vnd": 115000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0184",
+      "date": "2026-07-15",
+      "merchant": "The Coffee House",
+      "category": "unclassified",
+      "amount_vnd": 215000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0167",
+      "date": "2026-07-15",
+      "merchant": "Bách hóa Xanh",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 304000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0165",
+      "date": "2026-07-15",
+      "merchant": "Bách hóa Xanh",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 244000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0162",
+      "date": "2026-07-15",
+      "merchant": "Phòng gym California",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 700000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0161",
+      "date": "2026-07-15",
+      "merchant": "Spotify",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 59000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0160",
+      "date": "2026-07-15",
+      "merchant": "Netflix",
+      "category": "Đăng ký dịch vụ",
+      "amount_vnd": 260000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0202",
+      "date": "2026-07-14",
+      "merchant": "Steam",
+      "category": "Giải trí",
+      "amount_vnd": 169000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0173",
+      "date": "2026-07-14",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 199000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0169",
+      "date": "2026-07-14",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 133000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0166",
+      "date": "2026-07-13",
+      "merchant": "Bách hóa Xanh",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 299000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0172",
+      "date": "2026-07-11",
+      "merchant": "GrabFood",
+      "category": "unclassified",
+      "amount_vnd": 194000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0201",
+      "date": "2026-07-10",
+      "merchant": "Lazada",
+      "category": "Mua sắm",
+      "amount_vnd": 437000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0159",
+      "date": "2026-07-10",
+      "merchant": "EVN / Nước / Internet",
+      "category": "Tiện ích",
+      "amount_vnd": 1070000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0188",
+      "date": "2026-07-09",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 131000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0185",
+      "date": "2026-07-09",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 156000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0171",
+      "date": "2026-07-09",
+      "merchant": "Phở 24",
+      "category": "unclassified",
+      "amount_vnd": 176000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0170",
+      "date": "2026-07-08",
+      "merchant": "Highlands Coffee",
+      "category": "unclassified",
+      "amount_vnd": 231000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0194",
+      "date": "2026-07-07",
+      "merchant": "Grab",
+      "category": "Di chuyển",
+      "amount_vnd": 96000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0176",
+      "date": "2026-07-07",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 193000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0205",
+      "date": "2026-07-06",
+      "merchant": "Nhận từ thanh toán",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "credit",
+      "type": "transfer",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0204",
+      "date": "2026-07-06",
+      "merchant": "Chuyển sang tiết kiệm",
+      "category": "Chuyển khoản",
+      "amount_vnd": 2000000,
+      "direction": "debit",
+      "type": "transfer",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0181",
+      "date": "2026-07-05",
+      "merchant": "Highlands Coffee",
+      "category": "unclassified",
+      "amount_vnd": 123000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0157",
+      "date": "2026-07-05",
+      "merchant": "MSB Payroll",
+      "category": "income",
+      "amount_vnd": 98400000,
+      "direction": "credit",
+      "type": "income",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0186",
+      "date": "2026-07-04",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 225000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0199",
+      "date": "2026-07-03",
+      "merchant": "Lazada",
+      "category": "Mua sắm",
+      "amount_vnd": 407000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0158",
+      "date": "2026-07-03",
+      "merchant": "Chủ nhà / Vay nhà",
+      "category": "Nhà ở",
+      "amount_vnd": 21700000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0168",
+      "date": "2026-07-02",
+      "merchant": "WinMart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 206000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0177",
+      "date": "2026-07-01",
+      "merchant": "The Coffee House",
+      "category": "Ăn uống",
+      "amount_vnd": 131000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0125",
+      "date": "2026-06-29",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 132000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0111",
+      "date": "2026-06-27",
+      "merchant": "GrabFood",
+      "category": "unclassified",
+      "amount_vnd": 119000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0130",
+      "date": "2026-06-26",
+      "merchant": "Highlands Coffee",
+      "category": "Ăn uống",
+      "amount_vnd": 232000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0129",
+      "date": "2026-06-25",
+      "merchant": "GrabFood",
+      "category": "Ăn uống",
+      "amount_vnd": 119000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
+    },
+    {
+      "id": "tx_wealthy_0109",
+      "date": "2026-06-25",
+      "merchant": "Co.opmart",
+      "category": "Nhu yếu phẩm",
+      "amount_vnd": 298000,
+      "direction": "debit",
+      "type": "expense",
+      "status": "posted"
     }
   ]
 }
