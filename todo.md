@@ -868,6 +868,105 @@ PFM/core-banking thật) — khi có API thật, chỉ cần sửa nội dung b�
 bằng lời gọi API thật), không cần đổi gì ở `SKILL.md`/`server.py` vì
 interface tool đã đúng hình dạng. Chưa deploy lên GreenNode Runtime.
 
+**Cập nhật 2026-09-18 — `query_beneficiaries()` đã nối API thật, xem
+mục 1.14.** `list_existing_jars()` vẫn còn mock (chưa nối
+`GET /api/jars?cif=`), ngoài scope của 1.14.
+
+### 1.14. [Đã làm] `query_beneficiaries()` nối API thật của `pfm` + schema mới `beneficiary_id`/`category` cho transfer_form
+
+**Yêu cầu (2026-09-18, trực tiếp):** user thêm `backend_docs/pfm-read-api.md`
+— tài liệu 2 endpoint GET thật do repo `pfm` (Next.js) expose
+(`/api/jars?cif=`, `/api/beneficiaries?cif=`), và 1 schema `ui.type:
+"transfer_form"` MỚI cho trường hợp (B) (chuyển cho người trong danh bạ):
+thay vì agent tự trả `recipient`/`account_number`, giờ chỉ trả đúng
+`beneficiary_id` (khớp `id` trong `GET /api/beneficiaries`) + `category`
+(1 trong 10 giá trị cố định) — `pfm` tự tra tên/số tài khoản/ngân hàng thật
+từ `beneficiary_id`, tránh agent hallucinate số tài khoản. Yêu cầu: sửa
+`transfer-form` để lấy toàn bộ danh sách người nhận đã lưu trước (không
+phải tìm 1 người), và thêm option vào notebook để user tự test.
+
+**Đã làm:**
+- `tools/customer_data_tools.py`'s `query_beneficiaries()` — bỏ hẳn
+  `_MOCK_BENEFICIARIES`, gọi thật `GET {PFM_BASE_URL}/api/beneficiaries?cif=`
+  qua `httpx` (không dùng `requests` — `httpx` là thư viện đã chắc chắn có
+  mặt ở CẢ 2 môi trường cài đặt của repo, xem README's `.venv-server` note;
+  `requests` chỉ có mặt transitively trong env `uv` chính, không đảm bảo có
+  trong env server). Trả về text có kèm `id` mỗi người
+  (`- {name} (id: {id}): STK {accountNumber} ({bankName})`) để model có
+  thể dùng làm `beneficiary_id`. Lỗi mạng/HTTP → trả 1 câu tiếng Việt báo
+  hệ thống gián đoạn thay vì crash/tự bịa dữ liệu (`httpx.HTTPError` bắt
+  chung cho cả lỗi kết nối lẫn status lỗi qua `raise_for_status()`).
+  `list_existing_jars()`/`_MOCK_JARS` giữ nguyên (ngoài scope yêu cầu này).
+- `text_utils.py`'s `_is_valid_transfer_form()` — giờ chấp nhận **2 dạng
+  schema riêng biệt**: dạng cũ (`recipient`+`account_number`, cho trường
+  hợp A và trường hợp B khi khách tự cho đủ thông tin người không có trong
+  danh bạ) và dạng mới (`beneficiary_id`+`category`, validate `category`
+  khớp đúng 1 trong 10 giá trị cố định). Có field `beneficiary_id` mà vẫn
+  còn `recipient`/`account_number` trong cùng payload → reject (không cho
+  trộn 2 dạng).
+- `skills/project/transfer-form/SKILL.md` — viết lại phần Phạm vi/Quy
+  trình/Schema/PHẢI/KHÔNG ĐƯỢC/Ví dụ cho trường hợp (B): Check step giờ
+  nói rõ gọi `query_beneficiaries()` để lấy **toàn bộ** danh sách trước
+  (không phải chỉ tìm 1 người), Propose dùng đúng `beneficiary_id` (không
+  còn tự điền số tài khoản/ngân hàng cho người có trong danh bạ), thêm
+  bảng gợi ý suy luận `category` từ nội dung chuyển khoản (tiền ăn →
+  `dining`, tiền nhà → `housing`, v.v., mặc định `shopping` nếu không suy
+  luận được), thay ví dụ cũ ("Toàn"/Techcombank, đã lỗi thời) bằng ví dụ
+  dùng dữ liệu thật (Nguyễn Thị Lan/MSB cho CIF_0001) + thêm ví dụ SAI mới
+  (trộn schema, thiếu/sai `category`).
+- `docs/transfer-form.md` (+ sync sang
+  `PersonalCardAgentUI/agent_backend_docs/transfer-form.md`) — viết lại
+  toàn bộ để mô tả 2 dạng schema cho frontend, ví dụ response mới, và cập
+  nhật cảnh báo độ tin cậy (rủi ro hallucinate số tài khoản đã giảm ở dạng
+  `beneficiary_id`, nhưng `source` của beneficiary vẫn có thể là
+  `self_reported`/`estimated`, chưa xác thực ngân hàng thật).
+- `tests/test_customer_data_tools.py` — viết lại toàn bộ phần test
+  `query_beneficiaries()` để mock `httpx.get` (`monkeypatch`) thay vì đọc
+  dict mock trực tiếp: trả đúng dữ liệu API, danh sách rỗng, đúng
+  `cif=actor_id` trong query param, thông báo lỗi thân thiện khi mạng lỗi.
+- `tests/test_text_utils.py` — thêm 5 test cho dạng schema mới
+  (`beneficiary_id`/`category` hợp lệ, thiếu `category`, `category` sai,
+  `beneficiary_id` rỗng, trộn 2 dạng schema).
+- `notebooks/try_agent.ipynb` — thêm **Option F** (test case B qua API
+  thật), sửa lại mô tả lỗi thời của Option D (không còn "chỉ hỗ trợ trả nợ
+  thẻ") và Option E (`list_existing_jars()` giờ là tool thật, không còn
+  "chưa xây").
+- Thay các test đọc `_MOCK_BENEFICIARIES` trực tiếp bằng test mock
+  `httpx.get`, cộng thêm test schema mới ở `test_text_utils.py` — **93
+  test, `uv run --group dev pytest tests/ -q` pass toàn bộ** (giữ nguyên
+  tổng số so với trước, vì bỏ bớt test cấu trúc mock cũ và thêm test mới
+  với số lượng tương đương).
+- **Verify thật với model VNG (local, `server.build_agent()` +
+  `InMemorySaver`, gọi thật `GET /api/beneficiaries?cif=CIF_0001` trên
+  endpoint pfm thật):**
+  - "Chuyển tiền cho Lan 500 nghìn với nội dung Thanh toán tiền ăn." → gọi
+    đúng `query_beneficiaries()` (API thật trả 3 người: Nguyễn Thị Lan/
+    Trần Văn Bình/Chủ nhà Phạm Văn Đức), khớp đúng "Lan", đề xuất đúng
+    `{"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount":
+    500000, "note": "Thanh toan tien an", "category": "dining"}` — không
+    tự bịa số tài khoản.
+  - "Tôi nên trả nợ thẻ Visa Signature bao nhiêu?" (trường hợp A) → vẫn
+    đúng schema cũ `recipient`/`account_number`, không bị ảnh hưởng bởi
+    thay đổi.
+  - "Chuyển tiền cho Nam Anh 200 nghìn..." (tên không có trong danh bạ) →
+    đúng hành vi: liệt kê 3 người thật đang có, hỏi lại số tài khoản/ngân
+    hàng, KHÔNG chèn `ui-json` (không bịa).
+
+**Lưu ý còn treo:**
+- `list_existing_jars()` vẫn mock — `GET /api/jars?cif=` có sẵn nhưng
+  chưa nối (ngoài scope yêu cầu này, để làm sau nếu cần).
+- Chưa deploy lên GreenNode Runtime — cần deploy + test lại trên endpoint
+  thật (bao gồm việc container production có mở được kết nối HTTPS ra
+  ngoài tới domain `pfm` hay không — môi trường notebook/pytest local chạy
+  được nhưng chưa chắc chắn 100% network policy giống hệt runtime thật).
+- Chưa có cơ chế retry/backoff cho lời gọi `httpx.get` tới `pfm` — 1 lần
+  lỗi mạng là agent báo luôn "hệ thống gián đoạn", không tự thử lại.
+- `pfm-read-api.md` nói `GET /api/jars` cho 1 `cif` chưa từng có hũ nào sẽ
+  tự sinh 1 hũ "Khác" mặc định (không lỗi/rỗng) — hành vi tương tự cho
+  `/api/beneficiaries` khi cif chưa từng lưu ai chưa được xác nhận (đoán là
+  trả mảng rỗng, đã test qua `_fake_beneficiaries_response([])` nhưng chưa
+  verify với 1 cif thật sự chưa từng lưu beneficiary nào).
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

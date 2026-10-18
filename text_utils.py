@@ -11,6 +11,18 @@ _FENCED_BLOCK_RE = re.compile(r"```[a-zA-Z0-9_-]*\s*\n?(.*?)\n?```", re.DOTALL)
 _FENCE_MARKER_RE = re.compile(r"```[a-zA-Z0-9_-]*")
 _BLANK_RUN_RE = re.compile(r"\n{3,}")
 _VALID_CHART_TYPES = {"bar", "line", "pie"}
+_VALID_TRANSFER_CATEGORIES = {
+    "housing",
+    "utilities",
+    "subscriptions",
+    "insurance",
+    "dining",
+    "transport",
+    "shopping",
+    "groceries",
+    "entertainment",
+    "health",
+}
 
 
 def _strip_think_tags(text: str) -> str:
@@ -99,15 +111,21 @@ def _is_valid_transfer_form(raw: dict) -> bool:
     money, this repo never executes anything -- but the amount/recipient
     still have to be real enough that a customer isn't misled into
     confirming a bogus transfer.
+
+    Two distinct shapes share this one `type` (see
+    backend_docs/pfm-read-api.md for the beneficiary_id shape):
+
+    - Case A, card-debt payment: `recipient` + `account_number` -- the
+      recipient is always "MSB" itself here, so the model states it plainly
+      instead of looking it up.
+    - Case B, transfer to a saved beneficiary: `beneficiary_id` (must be an
+      `id` from `query_beneficiaries()`, never a name/account the model
+      invented) + `category` (one of _VALID_TRANSFER_CATEGORIES) -- `pfm`
+      looks up the real name/account/bank itself from `beneficiary_id`, so
+      this repo must never emit `recipient`/`account_number` for this case.
+
+    Both shapes require `amount` (positive, finite) and `note`.
     """
-    recipient = raw.get("recipient")
-    if not isinstance(recipient, str) or not recipient:
-        return False
-
-    account_number = raw.get("account_number")
-    if not isinstance(account_number, str) or not account_number:
-        return False
-
     amount = raw.get("amount")
     if not _is_finite_number(amount) or amount <= 0:
         return False
@@ -117,6 +135,30 @@ def _is_valid_transfer_form(raw: dict) -> bool:
     # customer's real transfer needs this filled in.
     note = raw.get("note")
     if not isinstance(note, str) or not note:
+        return False
+
+    beneficiary_id = raw.get("beneficiary_id")
+    if beneficiary_id is not None:
+        # Case B: beneficiary_id present means this must be the new
+        # pfm-lookup shape -- recipient/account_number must NOT also be
+        # present (the model must never emit both shapes at once, and must
+        # never supply a real account number itself in this case).
+        if not isinstance(beneficiary_id, str) or not beneficiary_id:
+            return False
+        if "recipient" in raw or "account_number" in raw:
+            return False
+        category = raw.get("category")
+        if category not in _VALID_TRANSFER_CATEGORIES:
+            return False
+        return True
+
+    # Case A: legacy recipient/account_number shape (card-debt payment).
+    recipient = raw.get("recipient")
+    if not isinstance(recipient, str) or not recipient:
+        return False
+
+    account_number = raw.get("account_number")
+    if not isinstance(account_number, str) or not account_number:
         return False
 
     return True

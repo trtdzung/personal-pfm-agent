@@ -237,6 +237,64 @@ def test_extract_ui_block_rejects_transfer_form_with_stringified_amount():
     assert ui is None
 
 
+def test_extract_ui_block_splits_out_valid_transfer_form_beneficiary_id_block():
+    # New pfm-lookup shape (backend_docs/pfm-read-api.md) -- no
+    # recipient/account_number, pfm looks those up from beneficiary_id.
+    text = (
+        "Mình đã điền sẵn form chuyển 500.000đ cho Nguyễn Thị Lan.\n\n"
+        '```ui-json\n{"type": "transfer_form", "beneficiary_id": "b_stable_lan", '
+        '"amount": 500000, "note": "Thanh toan tien an", "category": "dining"}\n```'
+    )
+    cleaned, ui = extract_ui_block(text)
+    assert cleaned == "Mình đã điền sẵn form chuyển 500.000đ cho Nguyễn Thị Lan."
+    assert ui == {
+        "type": "transfer_form",
+        "beneficiary_id": "b_stable_lan",
+        "amount": 500000,
+        "note": "Thanh toan tien an",
+        "category": "dining",
+    }
+
+
+def test_extract_ui_block_rejects_transfer_form_beneficiary_id_missing_category():
+    text = (
+        '```ui-json\n{"type": "transfer_form", "beneficiary_id": "b_stable_lan", '
+        '"amount": 500000, "note": "an trua"}\n```'
+    )
+    _, ui = extract_ui_block(text)
+    assert ui is None
+
+
+def test_extract_ui_block_rejects_transfer_form_beneficiary_id_invalid_category():
+    text = (
+        '```ui-json\n{"type": "transfer_form", "beneficiary_id": "b_stable_lan", '
+        '"amount": 500000, "note": "an trua", "category": "food"}\n```'
+    )
+    _, ui = extract_ui_block(text)
+    assert ui is None
+
+
+def test_extract_ui_block_rejects_transfer_form_with_empty_beneficiary_id():
+    text = (
+        '```ui-json\n{"type": "transfer_form", "beneficiary_id": "", '
+        '"amount": 500000, "note": "an trua", "category": "dining"}\n```'
+    )
+    _, ui = extract_ui_block(text)
+    assert ui is None
+
+
+def test_extract_ui_block_rejects_transfer_form_mixing_both_schema_shapes():
+    # beneficiary_id present alongside recipient/account_number -- must
+    # never mix the two shapes in one block (SKILL.md's explicit rule).
+    text = (
+        '```ui-json\n{"type": "transfer_form", "beneficiary_id": "b_stable_lan", '
+        '"recipient": "Nguyễn Thị Lan", "account_number": "19012345678901", '
+        '"amount": 500000, "note": "an trua", "category": "dining"}\n```'
+    )
+    _, ui = extract_ui_block(text)
+    assert ui is None
+
+
 def test_extract_ui_block_splits_out_valid_create_jar_block():
     text = (
         "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng.\n\n"

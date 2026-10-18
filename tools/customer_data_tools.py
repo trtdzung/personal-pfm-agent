@@ -3,30 +3,36 @@ explicit, callable tool result -- instead of the agent only ever seeing
 this data passively baked into the `/customer_data.json` snapshot already
 injected into every system prompt (see `middleware/seed_customer_context.py`).
 
-Both tools below are **mock**: the data is hardcoded right here in this
-module (keyed by customer_id), not read from any file. This stands in for
-the real PFM/core-banking calls noted in todo.md
-(`list_existing_jars()`/`query_beneficiaries()` under "Roadmap PFM"), so
-the *interface* (a tool the model calls, with the identity of the caller
-resolved server-side) is the same shape a real integration would have --
-only the implementation behind it is mocked. `data/customers/<id>.json`
-deliberately has no `jars`/`beneficiaries` fields anymore -- these two
-pieces of data are reachable *only* through these tools now, not also
-passively visible in the system prompt.
+`list_existing_jars()` is still **mock**: the data is hardcoded right here
+in this module (keyed by customer_id), not read from any file -- this
+stands in for the real `GET /api/jars?cif=` endpoint documented in
+`backend_docs/pfm-read-api.md` (not wired up yet; out of scope until the
+jar flow itself needs it -- see todo.md).
+
+`query_beneficiaries()` calls the REAL `pfm` backend
+(`GET /api/beneficiaries?cif=`, see `backend_docs/pfm-read-api.md`) --
+no mock data. `data/customers/<id>.json` deliberately has no
+`jars`/`beneficiaries` fields anymore -- these two pieces of data are
+reachable *only* through these tools now, not also passively visible in
+the system prompt.
 
 `customer_id` is deliberately **not** a tool parameter the model supplies --
 resolved from the current run's `actor_id` via `_resolve_customer_id()`
 (same helper `SeedCustomerContext` uses), exactly like
-`tools/memory_tools.py` does for `actor_id`. A real PFM/core-banking call
-must be scoped to whoever is actually asking, not to whatever customer_id
-string the model happens to type -- letting the model supply it would let a
-prompt-injected or simply mistaken value read another customer's jars/
+`tools/memory_tools.py` does for `actor_id`. The real PFM call must be
+scoped to whoever is actually asking, not to whatever customer_id string
+the model happens to type -- letting the model supply it would let a
+prompt-injected or simply mistaken value read another customer's
 beneficiaries.
 """
 
+import httpx
 from langchain_core.tools import tool
 
 from middleware.seed_customer_context import _resolve_customer_id
+
+PFM_BASE_URL = "https://endpoint-6529c773-a2b3-4a42-b28a-6bcdced3ceff.agentbase-runtime.aiplatform.vngcloud.vn"
+PFM_REQUEST_TIMEOUT_SECONDS = 10.0
 
 _MOCK_JARS = {
     "CIF_0001": [
@@ -54,15 +60,6 @@ _MOCK_JARS = {
     "CIF_0003": [],
 }
 
-_MOCK_BENEFICIARIES = {
-    "CIF_0001": [
-        {"name": "Toàn", "account_number": "00012000321", "bank_name": "Techcombank"},
-    ],
-    "CIF_0002": [],
-    "CIF_0003": [],
-}
-
-
 @tool
 def list_existing_jars() -> str:
     """List the current customer's existing spending jars (hũ chi tiêu).
@@ -88,16 +85,34 @@ def list_existing_jars() -> str:
 @tool
 def query_beneficiaries() -> str:
     """List the current customer's saved money-transfer beneficiaries (danh
-    bạ người nhận đã lưu).
+    bạ người nhận đã lưu), fetched live from the real pfm backend.
 
-    Call this before proposing a transfer_form to a named person, to find
-    their real account_number/bank_name -- this reads fresh on every call
-    instead of relying on the /customer_data.json snapshot already in your
-    system prompt.
+    Call this FIRST, before proposing any transfer_form to a named person --
+    it returns the full saved list (name, bank, and the `id` you MUST use
+    as `beneficiary_id` in the transfer_form ui-json; never invent an
+    account number or bank name yourself). This reads fresh on every call
+    instead of relying on any snapshot in your system prompt.
     """
     customer_id = _resolve_customer_id()
-    beneficiaries = _MOCK_BENEFICIARIES.get(customer_id, [])
+    url = f"{PFM_BASE_URL}/api/beneficiaries"
+    try:
+        response = httpx.get(
+            url,
+            params={"cif": customer_id},
+            timeout=PFM_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        beneficiaries = response.json()
+    except httpx.HTTPError as exc:
+        return (
+            "Không thể lấy danh sách người nhận đã lưu lúc này (lỗi kết nối "
+            f"tới hệ thống pfm: {exc}). Đừng tự bịa người nhận -- báo cho "
+            "khách hàng là hệ thống đang gián đoạn."
+        )
     if not beneficiaries:
         return "Khách hàng hiện chưa lưu người nhận nào trong danh bạ."
-    lines = [f"- {b['name']}: STK {b['account_number']} ({b['bank_name']})" for b in beneficiaries]
+    lines = [
+        f"- {b['name']} (id: {b['id']}): STK {b['accountNumber']} ({b['bankName']})"
+        for b in beneficiaries
+    ]
     return "\n".join(lines)

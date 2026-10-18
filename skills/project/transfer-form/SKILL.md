@@ -1,6 +1,6 @@
 ---
 name: transfer-form
-description: Dùng khi nên gợi ý khách hàng chuyển tiền — (a) trả nợ thẻ tín dụng của chính họ (ví dụ khách hỏi "tôi nên trả nợ thẻ bao nhiêu", "chuyển tiền trả nợ thẻ giúp tôi"), HOẶC (b) chuyển tiền cho 1 người trong danh bạ đã lưu (`beneficiaries`) của khách hàng (ví dụ "chuyển tiền cho Toàn 500 nghìn"). KHÔNG dùng để đề xuất chuyển cho 1 người/merchant KHÔNG có trong `beneficiaries` và khách hàng không tự cung cấp số tài khoản — xem phần Phạm vi bên dưới.
+description: Dùng khi nên gợi ý khách hàng chuyển tiền — (a) trả nợ thẻ tín dụng của chính họ (ví dụ khách hỏi "tôi nên trả nợ thẻ bao nhiêu", "chuyển tiền trả nợ thẻ giúp tôi"), HOẶC (b) chuyển tiền cho 1 người trong danh bạ đã lưu — lấy qua tool `query_beneficiaries()` (ví dụ "chuyển tiền cho Toàn 500 nghìn"). KHÔNG dùng để đề xuất chuyển cho 1 người/merchant KHÔNG có trong danh sách `query_beneficiaries()` trả về và khách hàng không tự cung cấp số tài khoản — xem phần Phạm vi bên dưới.
 ---
 
 # Transfer form (đề xuất chuyển tiền — chỉ hiển thị, không thực thi)
@@ -21,13 +21,13 @@ nghe giống 1 lệnh hành động trực tiếp), đây **chính xác** là l�
 skill — **đừng từ chối**, đó chính xác là lúc bạn PHẢI dùng skill, không
 phải lúc phải cẩn trọng từ chối.
 
-**Sai lầm cụ thể cần tránh (đã quan sát được thật):** tự tra đúng
-`beneficiaries`, tìm thấy đúng `account_number`/`bank_name` của người
-nhận, rồi **chỉ liệt kê thông tin đó ra bằng text** và nói "mình không hỗ
-trợ chuyển tiền cho người khác, bạn tự chuyển qua app ngân hàng" — điều
-này **sai**: nếu đã tìm thấy đúng người trong `beneficiaries` (hoặc khách
-hàng tự cung cấp đủ thông tin), bạn PHẢI chèn khối `ui-json`, không được
-chỉ dừng ở việc liệt kê thông tin bằng text rồi từ chối.
+**Sai lầm cụ thể cần tránh (đã quan sát được thật):** tự tra đúng danh sách
+`query_beneficiaries()` trả về, tìm thấy đúng người nhận, rồi **chỉ liệt kê
+thông tin đó ra bằng text** và nói "mình không hỗ trợ chuyển tiền cho người
+khác, bạn tự chuyển qua app ngân hàng" — điều này **sai**: nếu đã tìm thấy
+đúng người trong danh sách đó (hoặc khách hàng tự cung cấp đủ thông tin),
+bạn PHẢI chèn khối `ui-json`, không được chỉ dừng ở việc liệt kê thông tin
+bằng text rồi từ chối.
 
 ## Phạm vi hiện tại — QUAN TRỌNG, đọc trước khi dùng skill này
 
@@ -38,28 +38,35 @@ phát hành thẻ, `account_number` là 1 `card_id`/`card_number_last4` có th�
 trong `cards` của khách hàng. Luôn an toàn vì thẻ là dữ liệu có thật của
 chính khách hàng.
 
-**(B) Chuyển tiền cho 1 người trong danh bạ đã lưu (`beneficiaries`)** —
-dùng tool **`query_beneficiaries()`** (không cần tham số) để lấy danh sách
-người nhận đã lưu (mỗi người có `name`/`account_number`/`bank_name`).
-**Dữ liệu tool này trả về hiện vẫn là mock** (chưa nối vào hệ thống PFM
-thật/realtime — xem `todo.md`) nhưng trong phạm vi demo này, coi đây là
-nguồn dữ liệu đáng tin cậy duy nhất cho 1 người nhận không phải chính
-khách hàng.
+**(B) Chuyển tiền cho 1 người trong danh bạ đã lưu** — dùng tool
+**`query_beneficiaries()`** (không cần tham số) để lấy **TOÀN BỘ** danh
+sách người nhận đã lưu của khách hàng ngay từ đầu, TRƯỚC khi tìm người cụ
+thể. Đây là **dữ liệu thật, đọc trực tiếp từ hệ thống pfm** (không còn là
+mock) — mỗi người trả về có `name`, `id`, số tài khoản (`STK`), ngân hàng.
 
-- **CHỈ đề xuất chuyển cho 1 người nếu tên đó khớp đúng 1 entry trong
-  `beneficiaries`** của khách hàng đang trò chuyện — lấy nguyên
-  `account_number`/`bank_name` từ đó, không bịa, không đoán, không tự sửa
-  chính tả tên cho khớp gần đúng.
-- **Nếu khách hàng nêu tên người nhận KHÔNG có trong `beneficiaries`** (và
+**Quan trọng — `id` thay thế hoàn toàn cho số tài khoản:** khi đề xuất
+chuyển tiền cho 1 người trong danh sách này, bạn KHÔNG tự điền số tài
+khoản/ngân hàng vào khối `ui-json` nữa — chỉ cần trả đúng `id` của người đó
+(`beneficiary_id`), hệ thống `pfm` tự tra số tài khoản/ngân hàng thật từ
+`id` đó (tránh việc bạn gõ sai/bịa số tài khoản). Xem phần Schema bên dưới.
+
+- **CHỈ đề xuất chuyển cho 1 người nếu tên đó khớp đúng 1 entry trong danh
+  sách `query_beneficiaries()` trả về** — lấy nguyên `id` (`beneficiary_id`)
+  từ entry đó, không bịa, không đoán, không tự sửa chính tả tên cho khớp
+  gần đúng.
+- **Nếu khách hàng nêu tên người nhận KHÔNG có trong danh sách đó** (và
   khách hàng cũng không tự cung cấp số tài khoản/ngân hàng trong câu hỏi):
-  **KHÔNG chèn khối `ui-json`** — hỏi lại khách hàng số tài khoản + ngân
-  hàng thật của người đó trước. Tuyệt đối không tự bịa số tài khoản — đây
-  là nguy cơ cao hơn nhiều so với bịa số liệu chart (tiền có thể chuyển sai
-  người thật nếu khách hàng không để ý mà vẫn bấm xác nhận).
+  **KHÔNG chèn khối `ui-json`** — báo cho khách hàng là người này chưa có
+  trong danh bạ đã lưu, và hỏi lại số tài khoản + ngân hàng thật của người
+  đó nếu muốn chuyển. Tuyệt đối không tự bịa số tài khoản — đây là nguy cơ
+  cao hơn nhiều so với bịa số liệu chart (tiền có thể chuyển sai người thật
+  nếu khách hàng không để ý mà vẫn bấm xác nhận).
 - Nếu khách hàng **tự cung cấp đủ tên + số tài khoản + ngân hàng** ngay
-  trong câu hỏi (dù người đó không có trong `beneficiaries`): được phép
-  dùng đúng thông tin khách hàng tự cung cấp (không phải agent tự bịa — chỉ
-  là ghi lại đúng những gì khách hàng đã nói).
+  trong câu hỏi (dù người đó không có trong danh sách `query_beneficiaries()`
+  trả về): người này KHÔNG có `id` trong hệ thống pfm, nên dùng **schema
+  cũ** (`recipient`/`account_number`, giống trường hợp A) với đúng thông
+  tin khách hàng tự cung cấp — không phải agent tự bịa, chỉ là ghi lại đúng
+  những gì khách hàng đã nói. Trường hợp này KHÔNG có `category`.
 
 ## Quy trình bắt buộc — Check trước, Propose sau
 
@@ -90,15 +97,28 @@ khách hàng.
        và đề xuất luôn, kèm 1 câu ngắn nhắc còn thẻ khác cũng có dư nợ.
 
 3. **Trường hợp (B) — chuyển cho 1 người:**
-   - **Check (bắt buộc):** gọi tool `query_beneficiaries()`, tìm entry có
-     `name` khớp đúng người khách hàng vừa nêu.
-     - **Tìm thấy:** lấy nguyên `account_number`/`bank_name` từ entry đó.
+   - **Check (bắt buộc):** gọi tool `query_beneficiaries()` để lấy **toàn
+     bộ** danh sách người nhận đã lưu trước, rồi tìm entry có `name` khớp
+     đúng người khách hàng vừa nêu.
+     - **Tìm thấy:** lấy nguyên `id` (dùng làm `beneficiary_id`) từ entry
+       đó — KHÔNG lấy số tài khoản/ngân hàng nữa (xem Schema).
      - **Không tìm thấy, và khách hàng cũng không tự cho số tài khoản:**
-       không chèn `ui-json` — hỏi lại số tài khoản + ngân hàng thật.
+       không chèn `ui-json` — báo chưa có trong danh bạ, hỏi lại số tài
+       khoản + ngân hàng thật.
      - **Không tìm thấy, nhưng khách hàng tự cho đủ số tài khoản + ngân
-       hàng trong câu hỏi:** dùng đúng thông tin đó.
+       hàng trong câu hỏi:** dùng schema cũ (`recipient`/`account_number`,
+       không có `beneficiary_id`/`category`) với đúng thông tin đó.
+   - **Chọn `category`:** suy ra từ nội dung/mục đích chuyển tiền khách
+     hàng nêu (hoặc `note`), chọn đúng 1 trong 10 giá trị hợp lệ — xem bảng
+     gợi ý bên dưới. Nếu không rõ mục đích, chọn `shopping` (mặc định khi
+     không thể suy luận tốt hơn) thay vì bỏ trống `category`.
 
-4. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời:
+4. **Propose:** chèn **đúng 1 khối** `ui-json` ở cuối câu trả lời — đúng
+   1 trong 2 dạng dưới, KHÔNG trộn field của cả 2 dạng:
+
+```ui-json
+{"type": "transfer_form", "beneficiary_id": "...", "amount": 0, "note": "...", "category": "..."}
+```
 
 ```ui-json
 {"type": "transfer_form", "recipient": "...", "account_number": "...", "amount": 0, "note": "..."}
@@ -106,13 +126,38 @@ khách hàng.
 
 ## Schema
 
-- `type` (bắt buộc): luôn là `"transfer_form"`.
+`type` (bắt buộc, mọi trường hợp): luôn là `"transfer_form"`.
+
+**Dạng 1 — trường hợp (B), người nhận có trong `query_beneficiaries()`:**
+
+- `beneficiary_id` (bắt buộc): string — lấy nguyên `id` từ đúng entry
+  `query_beneficiaries()` khớp tên. KHÔNG tự bịa/gõ số tài khoản hay tên
+  ngân hàng — `pfm` tự tra từ `id` này.
+- `category` (bắt buộc): string — đúng 1 trong 10 giá trị:
+  `housing`, `utilities`, `subscriptions`, `insurance`, `dining`,
+  `transport`, `shopping`, `groceries`, `entertainment`, `health`. Gợi ý
+  suy luận từ nội dung chuyển: tiền ăn/nhà hàng/cà phê → `dining`; tiền
+  nhà/thuê nhà → `housing`; điện/nước/internet/điện thoại → `utilities`;
+  Netflix/Spotify/gói cước → `subscriptions`; bảo hiểm → `insurance`; xe
+  ôm/taxi/xăng/gửi xe → `transport`; mua sắm/quần áo/đồ dùng → `shopping`;
+  đi chợ/siêu thị/thực phẩm → `groceries`; xem phim/giải trí → `entertainment`;
+  khám bệnh/thuốc/viện phí → `health`.
+- `amount`, `note`: xem chung bên dưới.
+- **KHÔNG** kèm `recipient`/`account_number` ở dạng này.
+
+**Dạng 2 — trường hợp (A) trả nợ thẻ, HOẶC (B) khách tự cho đủ thông tin
+người nhận không có trong danh bạ:**
+
 - `recipient` (bắt buộc): string — trường hợp (A): tên ngân hàng/thẻ phát
   hành (ví dụ `card_name` trong `cards`); trường hợp (B): tên người nhận
-  (`name` trong `beneficiaries`, hoặc tên khách hàng tự cung cấp).
+  khách hàng tự cung cấp.
 - `account_number` (bắt buộc): string — trường hợp (A): `card_id`/
-  `card_number_last4` thật của khách hàng; trường hợp (B): `account_number`
-  lấy từ đúng entry `beneficiaries`, hoặc số khách hàng tự cung cấp.
+  `card_number_last4` thật của khách hàng; trường hợp (B): số tài khoản
+  khách hàng tự cung cấp.
+- **KHÔNG** kèm `beneficiary_id`/`category` ở dạng này.
+
+**Chung cho cả 2 dạng:**
+
 - `amount` (bắt buộc): number JSON thật, dương — số tiền đề xuất chuyển.
 - `note` (bắt buộc): string ngắn — **đúng nội dung chuyển khoản** sẽ điền
   vào form thật (ví dụ "Thanh toan du no the MSB Visa Signature ky 06-07",
@@ -126,24 +171,30 @@ khách hàng.
 1. JSON thật (dấu nháy kép), không phải Python dict repr.
 2. Trường hợp (A): đã tự đối chiếu `amount` với `available_credit_vnd` và
    `account_number` khớp đúng 1 `card_id`/`card_number_last4` thật.
-3. Trường hợp (B): `account_number`/`bank_name` PHẢI lấy nguyên từ đúng 1
-   entry `beneficiaries` khớp tên, HOẶC là thông tin khách hàng tự cung
-   cấp trong câu hỏi — không được tự bịa/đoán/sửa chính tả cho khớp gần
-   đúng.
+3. Trường hợp (B) có trong danh bạ: `beneficiary_id` PHẢI lấy nguyên `id`
+   từ đúng 1 entry `query_beneficiaries()` khớp tên — không được tự
+   bịa/đoán/sửa chính tả cho khớp gần đúng, và PHẢI kèm `category` hợp lệ.
+   Trường hợp (B) khách tự cho đủ thông tin: dùng schema `recipient`/
+   `account_number` (dạng 2), đúng thông tin khách hàng tự cung cấp.
 4. `amount` là number JSON thật, dương, khớp đúng số liệu đọc được (không
    tự làm tròn/bịa).
 5. `note` PHẢI có nội dung cụ thể (không được rỗng).
-6. Đúng 1 khối `ui-json` mỗi câu trả lời.
+6. Đúng 1 khối `ui-json` mỗi câu trả lời, đúng 1 trong 2 dạng schema —
+   không trộn field của cả 2 dạng vào cùng 1 khối.
 
 ## KHÔNG ĐƯỢC
 
-- KHÔNG đề xuất chuyển cho 1 người KHÔNG có trong `beneficiaries` trừ khi
-  khách hàng tự cung cấp đủ số tài khoản + ngân hàng trong câu hỏi.
-- KHÔNG tự thêm field ngoài 5 field đã định nghĩa (`type`, `recipient`,
-  `account_number`, `amount`, `note`).
+- KHÔNG đề xuất chuyển cho 1 người KHÔNG có trong danh sách
+  `query_beneficiaries()` trả về, trừ khi khách hàng tự cung cấp đủ số tài
+  khoản + ngân hàng trong câu hỏi.
+- KHÔNG tự điền `recipient`/`account_number` cho 1 người có trong
+  `query_beneficiaries()` — dùng `beneficiary_id`, để `pfm` tự tra.
+- KHÔNG trộn `beneficiary_id`/`category` với `recipient`/`account_number`
+  trong cùng 1 khối.
+- KHÔNG tự thêm field ngoài các field đã định nghĩa ở Schema.
 - KHÔNG chèn khối này nếu chưa xác nhận đủ điều kiện theo đúng bước Check
-  ở trên (hạn mức khả dụng cho trường hợp A, hoặc nguồn `account_number`
-  hợp lệ cho trường hợp B).
+  ở trên (hạn mức khả dụng cho trường hợp A, hoặc nguồn `beneficiary_id`/
+  thông tin hợp lệ cho trường hợp B).
 - KHÔNG khẳng định việc chuyển tiền đã xảy ra — đây chỉ là 1 form điền sẵn
   để khách hàng tự xem và tự bấm xác nhận trên UI, việc chuyển tiền thật
   (nếu có) diễn ra hoàn toàn bên ngoài cuộc hội thoại này.
@@ -186,29 +237,51 @@ Kèm khối:
 {"type": "transfer_form", "recipient": "MSB Visa Signature", "account_number": "card_001", "amount": 21400000, "note": "Thanh toan du no the MSB Visa Signature ky sao ke 21/06-20/07"}
 ```
 
-### Ví dụ 3 — chuyển cho 1 người có trong `beneficiaries`
+### Ví dụ 3 — chuyển cho 1 người có trong danh bạ đã lưu
 
-Khách hỏi: "Chuyển tiền cho Toàn 500 nghìn với nội dung Thanh toán tiền
+Khách hỏi: "Chuyển tiền cho Lan 500 nghìn với nội dung Thanh toán tiền
 ăn."
 
-Bước 1 (bắt buộc): gọi tool `query_beneficiaries()`, thấy đúng 1 entry
-`{"name": "Toàn", "account_number": "00012000321", "bank_name":
-"Techcombank"}` — dùng nguyên số tài khoản/ngân hàng này.
+Bước 1 (bắt buộc): gọi tool `query_beneficiaries()`, nhận về ví dụ:
 
-Phần text trả lời: "Mình đã điền sẵn form chuyển 500.000đ cho Toàn
-(Techcombank), bạn xem lại rồi bấm xác nhận nhé."
+```
+- Nguyễn Thị Lan (id: b_stable_lan): STK 19012345678901 (MSB)
+- Trần Văn Bình (id: b_stable_binh): STK 0071000123456 (Vietcombank)
+```
+
+Thấy đúng 1 entry tên khớp "Lan" → `Nguyễn Thị Lan`, `id: b_stable_lan` —
+dùng nguyên `id` này làm `beneficiary_id`, KHÔNG lấy số tài khoản/ngân
+hàng ra khối JSON. Nội dung "Thanh toán tiền ăn" → `category: "dining"`.
+
+Phần text trả lời: "Mình đã điền sẵn form chuyển 500.000đ cho Nguyễn Thị
+Lan, bạn xem lại rồi bấm xác nhận nhé."
 
 Kèm khối:
 
 ```ui-json
-{"type": "transfer_form", "recipient": "Toàn", "account_number": "00012000321", "amount": 500000, "note": "Thanh toan tien an"}
+{"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount": 500000, "note": "Thanh toan tien an", "category": "dining"}
+```
+
+### Ví dụ 4 — người nhận KHÔNG có trong danh bạ, khách tự cho đủ thông tin
+
+Khách hỏi: "Chuyển 200 nghìn cho Nam, số tài khoản 0123456789 ngân hàng
+ACB, nội dung trả tiền cà phê."
+
+Bước 1: gọi `query_beneficiaries()`, không thấy entry nào tên "Nam" →
+không có `id`. Khách hàng đã tự cho đủ tên + số tài khoản + ngân hàng
+ngay trong câu hỏi → dùng schema dạng 2 (không có `category`).
+
+Kèm khối:
+
+```ui-json
+{"type": "transfer_form", "recipient": "Nam", "account_number": "0123456789", "amount": 200000, "note": "Tra tien ca phe"}
 ```
 
 ## Ví dụ SAI (bị huỷ toàn bộ)
 
 ```
-# SAI — "Nam" không có trong beneficiaries, khách hàng cũng không cho số
-# tài khoản -> account_number này là agent tự bịa
+# SAI — "Nam" không có trong danh bạ, khách hàng cũng không cho số tài
+# khoản -> account_number này là agent tự bịa
 {"type": "transfer_form", "recipient": "Nam", "account_number": "0123456789", "amount": 500000, "note": "chuyển tiền hộ"}
 
 # SAI — account_number bịa, không khớp card_id/card_number_last4 nào của khách hàng
@@ -216,6 +289,17 @@ Kèm khối:
 
 # SAI — thiếu field bắt buộc (note)
 {"type": "transfer_form", "recipient": "MSB Visa Signature", "account_number": "card_001", "amount": 910000}
+
+# SAI — người này CÓ trong query_beneficiaries() nhưng agent vẫn tự điền
+# recipient/account_number thay vì dùng beneficiary_id -> trộn sai schema,
+# và bỏ qua cơ chế pfm tự tra số tài khoản thật
+{"type": "transfer_form", "recipient": "Nguyễn Thị Lan", "account_number": "19012345678901", "amount": 500000, "note": "an trua"}
+
+# SAI — thiếu category cho dạng beneficiary_id
+{"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount": 500000, "note": "an trua"}
+
+# SAI — category không thuộc 10 giá trị hợp lệ
+{"type": "transfer_form", "beneficiary_id": "b_stable_lan", "amount": 500000, "note": "an trua", "category": "food"}
 ```
 
 **Sai lầm cụ thể cần tránh (đã quan sát được thật):**
@@ -223,6 +307,6 @@ Kèm khối:
   thẻ) → agent chỉ hỏi lại "Bạn muốn trả nợ thẻ nào?" dù dữ liệu
   `statements` đã đủ để tự xác định chỉ có 1 thẻ đang có dư nợ chưa thanh
   toán. **Sai** — PHẢI tự đề xuất luôn.
-- Khách hàng nêu tên người nhận không có trong `beneficiaries` → agent tự
-  bịa 1 số tài khoản nghe hợp lý để vẫn tạo được form. **Sai và nguy
-  hiểm** — PHẢI hỏi lại số tài khoản thật thay vì bịa.
+- Khách hàng nêu tên người nhận không có trong danh bạ → agent tự bịa 1 số
+  tài khoản nghe hợp lý để vẫn tạo được form. **Sai và nguy hiểm** — PHẢI
+  hỏi lại số tài khoản thật thay vì bịa.

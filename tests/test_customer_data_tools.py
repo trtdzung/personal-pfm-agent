@@ -1,9 +1,10 @@
+import httpx
 import pytest
 from langchain_core.runnables.config import var_child_runnable_config
 
 from tools.customer_data_tools import (
-    _MOCK_BENEFICIARIES,
     _MOCK_JARS,
+    PFM_BASE_URL,
     list_existing_jars,
     query_beneficiaries,
 )
@@ -38,18 +39,6 @@ def test_list_existing_jars_does_not_leak_another_customers_jars():
     assert "Hoá đơn" not in result_0001
 
 
-def test_query_beneficiaries_returns_saved_beneficiary():
-    result = _invoke_with_actor(query_beneficiaries, "CIF_0001")
-    assert "Toàn" in result
-    assert "00012000321" in result
-    assert "Techcombank" in result
-
-
-def test_query_beneficiaries_reports_empty_list_for_customer_with_none_saved():
-    result = _invoke_with_actor(query_beneficiaries, "CIF_0002")
-    assert "chưa lưu người nhận nào" in result
-
-
 def test_list_existing_jars_falls_back_to_default_customer_with_no_context():
     # No LangGraph run config at all -- same fallback SeedCustomerContext
     # uses (DEFAULT_CUSTOMER_ID = "CIF_0001"), for callers like agent.py
@@ -76,19 +65,64 @@ def test_mock_jars_have_required_fields_and_positive_allocation(customer_id):
         seen_names.add(jar["jar_name"])
 
 
-@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
-def test_mock_beneficiaries_has_entry_for_every_customer(customer_id):
-    assert customer_id in _MOCK_BENEFICIARIES, f"_MOCK_BENEFICIARIES missing entry for {customer_id}"
+# --- query_beneficiaries(): real HTTP call to the pfm backend, mocked here ---
 
 
-@pytest.mark.parametrize("customer_id", CUSTOMER_IDS)
-def test_mock_beneficiaries_have_required_fields(customer_id):
-    beneficiaries = _MOCK_BENEFICIARIES[customer_id]
-    assert isinstance(beneficiaries, list)
-    seen_names = set()
-    for beneficiary in beneficiaries:
-        for key in ("name", "account_number", "bank_name"):
-            assert key in beneficiary, f"beneficiary missing field: {key}"
-            assert isinstance(beneficiary[key], str) and beneficiary[key]
-        assert beneficiary["name"] not in seen_names, f"duplicate beneficiary name: {beneficiary['name']}"
-        seen_names.add(beneficiary["name"])
+def _fake_beneficiaries_response(payload, status_code=200):
+    def _fake_get(url, params=None, timeout=None):
+        assert url == f"{PFM_BASE_URL}/api/beneficiaries"
+        return httpx.Response(status_code, json=payload, request=httpx.Request("GET", url))
+
+    return _fake_get
+
+
+def test_query_beneficiaries_returns_saved_beneficiaries(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_beneficiaries_response(
+            [
+                {
+                    "id": "b_stable_lan",
+                    "name": "Nguyễn Thị Lan",
+                    "accountNumber": "19012345678901",
+                    "bankName": "MSB",
+                    "source": "mock",
+                }
+            ]
+        ),
+    )
+    result = _invoke_with_actor(query_beneficiaries, "CIF_0001")
+    assert "Nguyễn Thị Lan" in result
+    assert "b_stable_lan" in result
+    assert "19012345678901" in result
+    assert "MSB" in result
+
+
+def test_query_beneficiaries_reports_empty_list_when_none_saved(monkeypatch):
+    monkeypatch.setattr(
+        "tools.customer_data_tools.httpx.get",
+        _fake_beneficiaries_response([]),
+    )
+    result = _invoke_with_actor(query_beneficiaries, "CIF_0002")
+    assert "chưa lưu người nhận nào" in result
+
+
+def test_query_beneficiaries_passes_actor_id_as_cif_query_param(monkeypatch):
+    captured = {}
+
+    def _fake_get(url, params=None, timeout=None):
+        captured["params"] = params
+        return httpx.Response(200, json=[], request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_get)
+    _invoke_with_actor(query_beneficiaries, "CIF_0003")
+    assert captured["params"] == {"cif": "CIF_0003"}
+
+
+def test_query_beneficiaries_returns_friendly_message_on_network_error(monkeypatch):
+    def _raise(url, params=None, timeout=None):
+        raise httpx.ConnectError("boom", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _raise)
+    result = _invoke_with_actor(query_beneficiaries, "CIF_0001")
+    assert "Không thể lấy danh sách người nhận" in result
