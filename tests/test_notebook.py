@@ -58,25 +58,28 @@ def test_no_cell_describes_a_tool_or_type_that_no_longer_exists():
 def test_the_intro_lists_option_j_and_k():
     intro = _source(_cells()[0])
     assert "Option J" in intro and "Option K" in intro
+    assert "/jar-distribute" in intro and "/jar-rebalance" in intro  # two endpoints now, no `mode`
 
 
 def test_the_intro_lists_option_l():
     assert "Option L" in _source(_cells()[0])
 
 
-def test_option_j_explains_both_modes_and_points_at_the_endpoint_doc():
+def test_option_j_explains_both_endpoints_and_points_at_the_endpoint_doc():
     description, _ = _option_j()
-    assert "POST /jar-rebalance" in description
-    assert "cover" in description and "distribute" in description
-    assert "docs/jar-rebalance-endpoint.md" in description
+    assert "POST /jar-distribute" in description and "POST /jar-rebalance" in description
+    assert "docs/jars/endpoints.md" in description
+    assert "mode" not in description.replace("model", "")  # the `mode` switch is gone
+    assert "3 months" in description  # what the agent is handed besides the jar-summary
 
 
-def test_option_j_calls_the_endpoint_in_both_modes_and_checks_the_result_with_the_real_checks():
+def test_option_j_calls_both_endpoints_and_checks_the_results_with_the_real_checks():
     _, code = _option_j()
-    assert "/jar-rebalance" in code
-    assert '"mode": "cover"' in code and '"mode": "distribute"' in code
+    assert '"/jar-distribute"' in code and '"/jar-rebalance"' in code
+    assert '"mode"' not in code and "target_jar_id" not in code and "check_cover" not in code
+    assert '"from_jar_id"' in code and '"amount"' in code
     assert "fetch_jar_summary" in code  # the real jar-summary decides which jar to use, so the cell survives data changes
-    assert "check_cover" in code and "check_distribute" in code and "hard == []" in code
+    assert "check_distribute" in code and "check_rebalance" in code and "hard == []" in code
     assert "SERVER_API_KEY" in code
 
 
@@ -91,9 +94,9 @@ def test_option_e_describes_the_current_jar_tools():
 def test_option_k_explains_the_chat_jar_flows_and_the_guard():
     description, _ = _option("K")
     assert "POST /chat" in description
-    for word in ("rebalance_jars", "edit_jar", "ui_guard", "jar-rebalance"):
+    for word in ("distribute_amount", "edit_jar", "ui_guard", "distribute-amount"):
         assert word in description, word
-    assert "docs/jar-rebalance.md" in description and "docs/spending-jar.md" in description
+    assert "docs/jars/" in description and "docs/spending-jar.md" not in description
 
 
 def test_option_k_goes_through_chat_so_the_validators_and_the_guard_run():
@@ -107,8 +110,8 @@ def test_option_k_covers_the_category_move_the_rebalance_and_the_jar_that_does_n
     _, code = _option("K")
     # category move: one edit_jar for the RECEIVING jar with its full category list
     assert "edit_jar" in code and "category_ids" in code and "jar_id" in code
-    # rebalance in chat: same contract as the endpoint, so the same hard checks apply
-    assert "rebalance_jars" in code and "check_cover" in code and "hard == []" in code
+    # putting unallocated money into a jar in chat: same contract as the endpoint's distribute mode, same hard checks
+    assert "distribute_amount" in code and "check_distribute" in code and "hard == []" in code
     # a jar proposed last turn is not confirmed, so it must not be editable: no ui
     assert "Liên thiên" in code and 'ui is None' in code
 
@@ -172,3 +175,116 @@ def test_option_l_is_honest_about_the_real_ambiguity_it_relies_on():
     description, _ = _option("L")
     assert "CIF_0001" in description
     assert "6" in description and "4" in description
+
+
+# --- Option M: put unallocated money into a jar in chat (distribute_amount), agent called directly -------------------
+
+
+def test_the_intro_lists_option_m():
+    assert "Option M" in _source(_cells()[0])
+
+
+def test_option_m_explains_the_skill_the_source_of_the_money_and_who_executes_it():
+    description, _ = _option("M")
+    assert "distribute_amount" in description and "distribute-amount" in description
+    assert "tiền chưa phân bổ" in description and "không lấy từ hũ khác" in description
+    assert "pfm" in description  # the agent only proposes; pfm writes when the customer confirms
+
+
+def test_option_m_asks_exactly_the_transfer_the_user_wants():
+    _, code = _option("M")
+    question = code.split("question = ")[1].split("\n")[0]
+    assert "300 nghìn" in question and "Tiết kiệm" in question
+
+
+def test_option_m_calls_the_agent_directly_not_through_an_endpoint_and_uses_real_data():
+    _, code = _option("M")
+    assert "InMemorySaver" in code and "build_agent" in code and ".invoke(" in code
+    for banned in ("TestClient", '"/chat"', '"/jar-rebalance"', "STUBBED_SUMMARY", "_fake_get", "monkeypatch"):
+        assert banned not in code, banned
+    assert "CIF_0001" in code and "fetch_jar_summary" in code
+
+
+def test_option_m_shows_the_unallocated_money_and_the_jar_and_checks_a_returned_proposal():
+    _, code = _option("M")
+    assert "unallocated" in code and "balance" in code  # printed BEFORE asking
+    assert "check_distribute" in code and "extract_ui_block" in code
+
+
+def test_option_m_does_not_hard_assert_the_model_returns_a_form():
+    _, code = _option("M")
+    assert "assert ui" not in code.replace(" ", "")
+
+
+# --- Option N: move money from one jar to others in chat (rebalance_jars), agent called directly -------------------
+
+
+def test_the_intro_lists_option_n():
+    assert "Option N" in _source(_cells()[0])
+
+
+def test_option_n_explains_the_skill_the_shape_and_that_the_money_comes_from_a_jar():
+    description, _ = _option("N")
+    assert "rebalance_jars" in description and "rebalance-jars" in description
+    assert "from_jar_id" in description and "allocations" in description
+    assert "docs/jars/rebalance-jars.md" in description
+    assert "pfm" in description  # the agent only proposes
+
+
+def test_option_n_asks_for_a_real_jar_to_jar_transfer_built_from_the_live_jars():
+    _, code = _option("N")
+    assert "fetch_jar_summary" in code and "CIF_0001" in code
+    question = code.split("question = ")[1].split("\n")[0]
+    assert "từ hũ" in question and "sang hũ" in question
+
+
+def test_option_n_calls_the_agent_directly_and_checks_a_returned_proposal():
+    _, code = _option("N")
+    assert "InMemorySaver" in code and "build_agent" in code and ".invoke(" in code
+    for banned in ("TestClient", '"/chat"', "STUBBED_SUMMARY", "_fake_get", "monkeypatch"):
+        assert banned not in code, banned
+    assert "check_rebalance" in code and "extract_ui_block" in code
+    assert "assert ui" not in code.replace(" ", "")  # the model is non-deterministic: print, do not fail
+
+
+# --- notebooks/try_jar_flows.ipynb: the six jar cases, side by side --------------------------------------------------
+
+JAR_NOTEBOOK = NOTEBOOK.with_name("try_jar_flows.ipynb")
+
+
+def _jar_cells() -> list[dict]:
+    return json.loads(JAR_NOTEBOOK.read_text(encoding="utf-8"))["cells"]
+
+
+def test_the_jar_notebook_is_valid_and_has_a_setup_cell_then_six_adjacent_case_cells():
+    nb = json.loads(JAR_NOTEBOOK.read_text(encoding="utf-8"))
+    assert nb["nbformat"] == 4 and nb["nbformat_minor"] >= 5
+    cells = nb["cells"]
+    assert len({c["id"] for c in cells}) == len(cells)
+    kinds = [c["cell_type"] for c in cells]
+    assert kinds[0] == "markdown" and kinds[1] == "code" and kinds[2:] == ["code"] * 6  # intro, setup, then 6 in a row
+    for cell in cells:
+        if cell["cell_type"] == "code":
+            assert "outputs" in cell and "execution_count" in cell
+            lines = [ln for ln in _source(cell).splitlines() if not ln.lstrip().startswith(("%", "!"))]
+            compile("\n".join(lines), "jar cell", "exec")
+
+
+def test_the_six_cases_cover_both_endpoints_and_the_chat_flows():
+    cases = [_source(c) for c in _jar_cells()[2:]]
+    assert '"/jar-distribute"' in cases[0] and "check_distribute" in cases[0]
+    assert '"/jar-rebalance"' in cases[1] and "check_rebalance" in cases[1]
+    assert "distribute_amount" in cases[2] and "Tiết kiệm" in cases[2] and "300 nghìn" in cases[2]
+    assert "distribute_amount" in cases[3] and "600" in cases[3] and "400" in cases[3]
+    assert "rebalance_jars" in cases[4] and "từ hũ" in cases[4] and "check_rebalance" in cases[4]
+    assert "unallocated" in cases[5] and "ui is None" in cases[5]  # more than the unallocated money: no form
+    for case in cases[2:]:
+        assert '"mode"' not in case and "check_cover" not in case
+
+
+def test_the_jar_notebook_uses_real_data_and_the_in_memory_chat_agent():
+    setup = _source(_jar_cells()[1])
+    assert "InMemorySaver" in setup and "TestClient" in setup and "fetch_jar_summary" in setup
+    assert "SERVER_API_KEY" in setup and "CIF_0001" in setup
+    for banned in ("STUBBED_SUMMARY", "_fake_get", "monkeypatch"):
+        assert banned not in setup, banned

@@ -1,51 +1,47 @@
-"""POST /jar-rebalance -- jar proposals for screens that need no chat.
+"""The two jar endpoints for screens that need no chat, both answering in the same format as the chat skills:
 
-One endpoint, two modes (the screen knows which one it is, so nothing routes by LLM):
+- `POST /jar-distribute`: share an amount of the customer's UNALLOCATED money ("Chưa phân bổ") into one or more jars.
+  Answers with a `distribute_amount` ui (skill `distribute-amount`).
+- `POST /jar-rebalance`: ONE jar gives an amount to one or more OTHER jars. Answers with a `rebalance_jars` ui (skill
+  `rebalance-jars`).
 
-- `cover`: cover a jar that is short -- take the money from the pool ("Chưa phân bổ") and other jars.
-  Answers with a `rebalance_jars` ui (docs/jar-rebalance.md).
-- `distribute`: share an amount the customer has into the balances of their jars (the amount is the customer's own:
-  it is not taken from the pool or from any jar). Answers with a `distribute_amount` ui.
+The screen sends the minimum (who, how much, optionally which jars); the agent decides the rest. Who does what: the
+server reads the jar-summary and each jar's spending of the last 3 months itself (so there is no tool round-trip and
+the model holds the numbers), works out everything that is a fact (what the pool holds, what the giving jar can give
+-- `jar_checks.py`), and answers by code whenever there is nothing to ask a model (no money to give, no jar to give
+to). Otherwise ONE specialised model call proposes the split and writes the sentence for the customer. Its proposal is
+checked against the same summary: a broken hard rule is never returned; an incomplete or badly worded one gets one
+retry that states what was wrong. The model never supplies the customer id (it comes from the request).
 
-Who does what. The server reads the jar-summary itself (so there is no tool round-trip and it holds the numbers),
-works out everything that is a fact (the shortfall, what the pool can give -- `jar_checks.py`), and answers by code
-whenever there is nothing to ask a model (nothing to cover, not enough money anywhere, no jar can receive).
-Otherwise ONE specialised model call proposes the split and writes the sentence for the customer. Its proposal is
-checked against the same summary: a broken hard rule is never returned; a wrong preferred order gets one retry
-that states the right plan. The model never supplies the customer id (it comes from the request).
-
-Separate route and agent from /chat: no thread, no memory, no shared state.
+Separate routes and agent from /chat: no thread, no memory, no shared state.
 """
 
 import hmac
-import json
 import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Callable
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import AIMessage, HumanMessage
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from jar_checks import (
     Verdict,
-    check_cover,
     check_distribute,
-    cover_plan,
-    cover_shortfall,
+    check_rebalance,
     pool_available,
     receivers,
+    source_available,
     wording_problems,
 )
 from llm import default_model
-from middleware.seed_customer_context import UnknownCustomerError, _customer_data_path
 from text_utils import strip_foreign_script
-from tools.customer_data_tools import fetch_jar_summary, render_jar_summary
+from tools.customer_data_tools import fetch_jar_spending, fetch_jar_summary, render_jar_spending, render_jar_summary
 
 logger = logging.getLogger("personal-card-agent")
 
@@ -57,55 +53,51 @@ MAX_ATTEMPTS = 2  # the first proposal, plus one retry that states what was wron
 MODEL_TIMEOUT_SECONDS = 45
 
 FAILED_ANSWER = "Chưa tạo được đề xuất phù hợp lúc này, bạn thử lại sau nhé."
+SPENDING_UNAVAILABLE = "Chưa đọc được chi tiêu của các hũ (hệ thống gián đoạn): hãy chia theo số dư hiện tại của từng hũ."
 
 
 # --- request / response ----------------------------------------------------------------------------------------
 
 
-class JarRebalanceRequest(BaseModel):
+def _unique(ids: list[str] | None) -> list[str] | None:
+    if ids is not None and len(set(ids)) != len(ids):
+        raise ValueError("ids must not repeat")
+    return ids
+
+
+class JarDistributeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # the old fields (`mode`, `target_jar_id`...) are refused, not ignored
+
     user_id: str
-    mode: Literal["cover", "distribute"]
-    # cover: the jar that is short, and (optionally) the amount the customer is about to spend from it
-    target_jar_id: str | None = None
-    spend_amount: int | None = Field(default=None, gt=0)
-    # distribute: the amount the customer has and wants to share into the jars' balances (their own money: it is not
-    # taken from the pool or from any jar)
-    amount: int | None = Field(default=None, gt=0)
+    amount: int = Field(gt=0)  # VND of the unallocated money to hand out
+    jar_ids: list[str] | None = Field(default=None, min_length=1)  # optional: only these jars; else the agent picks
+
+    _unique_jars = field_validator("jar_ids")(_unique)
+
+
+class JarRebalanceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    from_jar_id: str = Field(min_length=1)  # the jar that gives the money
+    amount: int = Field(gt=0)  # VND it gives
+    to_jar_ids: list[str] | None = Field(default=None, min_length=1)  # optional: only these jars; else the agent picks
+
+    _unique_jars = field_validator("to_jar_ids")(_unique)
 
     @model_validator(mode="after")
-    def _fields_match_the_mode(self):
-        if self.mode == "cover":
-            if not self.target_jar_id:
-                raise ValueError("target_jar_id is required for mode 'cover'")
-            if self.amount is not None:
-                raise ValueError("amount is only for mode 'distribute'")
-        else:
-            if self.target_jar_id is not None or self.spend_amount is not None:
-                raise ValueError("target_jar_id and spend_amount are only for mode 'cover'")
-            if self.amount is None:
-                raise ValueError("amount is required for mode 'distribute'")
+    def _the_giver_is_not_a_destination(self):
+        if self.to_jar_ids and self.from_jar_id in self.to_jar_ids:
+            raise ValueError("from_jar_id cannot also be one of to_jar_ids")
         return self
 
 
-class JarRebalanceResponse(BaseModel):
+class JarResponse(BaseModel):
     answer: str
     ui: dict | None = None
 
 
 # --- what the model returns ------------------------------------------------------------------------------------
-
-
-class Move(BaseModel):
-    from_jar_id: str = Field(description='Jar id copied from the jar-summary, or "pool".')
-    amount: int = Field(description="VND taken from that source; a positive whole number.")
-
-
-class CoverDraft(BaseModel):
-    """The proposal to cover one jar: where the money comes from."""
-
-    answer: str = Field(description="1-3 short sentences for the customer, one per line.")
-    moves: list[Move]
-    reason: str = Field(description="Why these sources, with the real numbers.")
 
 
 class Allocation(BaseModel):
@@ -115,6 +107,14 @@ class Allocation(BaseModel):
 
 class DistributeDraft(BaseModel):
     """The proposal to share the unallocated money into jars."""
+
+    answer: str = Field(description="1-3 short sentences for the customer, one per line.")
+    allocations: list[Allocation]
+    reason: str = Field(description="Why this split, with the real numbers.")
+
+
+class RebalanceDraft(BaseModel):
+    """The proposal to move money from one jar to other jars."""
 
     answer: str = Field(description="1-3 short sentences for the customer, one per line.")
     allocations: list[Allocation]
@@ -145,6 +145,7 @@ def _propose(system_prompt: str, schema: type[BaseModel], messages: list) -> Bas
 
 @dataclass
 class _Task:
+    name: str
     prompt: str
     schema: type[BaseModel]
     to_ui: Callable[[BaseModel], dict]
@@ -169,7 +170,7 @@ def _run(task: _Task, first_message: str) -> tuple[BaseModel | None, dict | None
         try:
             draft = _propose(task.prompt, task.schema, messages)
         except Exception:  # noqa: BLE001 -- a model that would not fill the schema is a failed attempt, not a 500
-            logger.exception("jar-rebalance: model call failed (attempt %d)", attempt)
+            logger.exception("%s: model call failed (attempt %d)", task.name, attempt)
             continue
         answered = True
         ui = task.to_ui(draft)
@@ -177,9 +178,9 @@ def _run(task: _Task, first_message: str) -> tuple[BaseModel | None, dict | None
         verdict.soft += wording_problems(draft.answer, draft.reason)  # what the customer reads; never a reason to drop a right proposal
         if not verdict.hard and not verdict.soft:
             return draft, ui
-        logger.warning("jar-rebalance: attempt %d not clean: hard=%s soft=%s", attempt, verdict.hard, verdict.soft)
+        logger.warning("%s: attempt %d not clean: hard=%s soft=%s", task.name, attempt, verdict.hard, verdict.soft)
         if not verdict.hard:
-            best = (draft, ui)  # only the preferred order / wording is off; pfm accepts any order
+            best = (draft, ui)  # only wording or a leftover is off; pfm accepts it
         if attempt < MAX_ATTEMPTS:
             messages += [AIMessage(draft.model_dump_json()), HumanMessage(_feedback(verdict))]
     if not answered:
@@ -196,82 +197,135 @@ def _vnd(amount: float) -> str:
     return f"{round(amount):,}".replace(",", ".") + "đ"
 
 
-# --- the two modes -----------------------------------------------------------------------------------------------
+def _paragraphs(text: str) -> str:
+    """One sentence per paragraph, a blank line between (the general answer format in instructions.md)."""
+    return "\n\n".join(line.strip() for line in text.splitlines() if line.strip())
 
 
-def _cover(request: JarRebalanceRequest, summary: dict) -> tuple[str, dict | None]:
-    jars = {j["id"]: j for j in summary.get("jars") or [] if isinstance(j, dict) and "id" in j}
-    target = jars.get(request.target_jar_id)
-    if target is None:
-        raise HTTPException(status_code=404, detail=f"Jar {request.target_jar_id!r} not found for this customer")
-    label = target.get("label", request.target_jar_id)
-    shortfall = cover_shortfall(summary, request.target_jar_id, request.spend_amount)
-    if shortfall is None:
-        return f"Hũ {label} chưa đặt hạn mức nên chưa cân đối được, bạn đặt hạn mức cho hũ trước nhé.", None
-    if shortfall == 0:
-        return f"Hũ {label} đã đủ tiền cho khoản này, không cần bù thêm.", None
-    if cover_plan(summary, request.target_jar_id, shortfall) is None:
-        others = sum(j.get("spendable") or 0 for j in jars.values() if j["id"] != request.target_jar_id)
-        return (
-            f"Hũ {label} còn thiếu {_vnd(shortfall)} nhưng tiền chưa phân bổ và các hũ khác cộng lại chỉ còn "
-            f"{_vnd(pool_available(summary) + others)}, chưa đủ để bù."
-        ), None
+def _vnd(amount: float) -> str:
+    return f"{round(amount):,}".replace(",", ".") + "đ"
 
-    spend = f"Khoản khách định chi từ hũ này: {_vnd(request.spend_amount)}\n" if request.spend_amount else ""
-    message = (
-        f"Hũ đích: {label} (id: {request.target_jar_id})\n{spend}"
-        f"Số còn thiếu (shortfall) — hệ thống đã tính sẵn, dùng đúng số này: {shortfall} ({_vnd(shortfall)})\n"
-        f"Thông tin các hũ (jar-summary):\n{render_jar_summary(summary)}"
+
+# --- the two flows -----------------------------------------------------------------------------------------------
+
+
+def _jars_by_id(summary: dict) -> dict[str, dict]:
+    return {j["id"]: j for j in summary.get("jars") or [] if isinstance(j, dict) and "id" in j}
+
+
+def _require_jars(jars: dict[str, dict], ids: list[str] | None) -> None:
+    missing = [i for i in ids or [] if i not in jars]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Jar(s) {missing!r} not found for this customer")
+
+
+def _spending_text(customer_id: str, summary: dict, jars: list[dict]) -> str:
+    """Each jar's spending of the last 3 months. Only context for the split: if pfm cannot give it, go on without and
+    tell the model so, instead of failing a proposal every rule of which is still checked against the summary."""
+    try:
+        spending = fetch_jar_spending(customer_id, summary)
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("jar endpoint: cannot read the jar spending for %s: %s", customer_id, exc)
+        return SPENDING_UNAVAILABLE
+    return "Chi tiêu 3 tháng gần nhất của từng hũ (chi ròng, đã trừ hoàn tiền):\n" + render_jar_spending({**summary, "jars": jars}, spending)
+
+
+def _distribute(request: JarDistributeRequest, summary: dict) -> tuple[str, dict | None]:
+    jars = _jars_by_id(summary)
+    _require_jars(jars, request.jar_ids)
+    can_receive = [j for j in receivers(summary) if not request.jar_ids or j["id"] in request.jar_ids]
+    if not can_receive:
+        return "Bạn chưa có hũ nào để chia tiền, hãy tạo hũ trước nhé.", None
+    pool = pool_available(summary)
+    if pool <= 0:
+        return "Hiện chưa có tiền chưa phân bổ để chia, bạn thử lại khi có thêm tiền trong tài khoản nhé.", None
+    if request.amount > pool:
+        return f"Tiền chưa phân bổ hiện chỉ còn {_vnd(pool)} nên chưa chia được {_vnd(request.amount)}.", None
+
+    named = (
+        f"Khách chỉ định chia vào các hũ: {', '.join(request.jar_ids)} (chỉ dùng các hũ này)."
+        if request.jar_ids
+        else "Khách chưa nêu hũ nào: hãy tự chọn hũ nhận và cách chia."
     )
+    message = (
+        f"Số tiền cần chia: {request.amount} ({_vnd(request.amount)}), lấy từ tiền chưa phân bổ (hiện còn {_vnd(pool)}).\n{named}\n"
+        f"Các hũ nhận được (mọi hũ, kể cả hũ chưa có số dư):\n{render_jar_summary({**summary, 'jars': can_receive})}\n"
+        f"{_spending_text(request.user_id, summary, can_receive)}"
+    )
+
+    def check(ui: dict) -> Verdict:
+        verdict = check_distribute(summary, request.amount, ui)
+        if request.jar_ids and not verdict.hard:
+            outside = [a["to_jar_id"] for a in ui["allocations"] if a["to_jar_id"] not in request.jar_ids]
+            if outside:
+                verdict.hard.append(f"Chỉ được chia vào các hũ khách chỉ định ({', '.join(request.jar_ids)}), không phải {', '.join(outside)}.")
+        return verdict
+
     task = _Task(
-        prompt=(PROMPTS_DIR / "jar_cover.md").read_text(encoding="utf-8"),
-        schema=CoverDraft,
-        to_ui=lambda d: {
-            "type": "rebalance_jars",
-            "target_jar_id": request.target_jar_id,
-            "shortfall": shortfall,  # from code: the model is never asked for it
-            "moves": [m.model_dump() for m in d.moves],
-            "reason": d.reason,
-        },
-        check=lambda ui: check_cover(summary, request.target_jar_id, shortfall, ui),
+        name="jar-distribute",
+        prompt=(PROMPTS_DIR / "jar_distribute.md").read_text(encoding="utf-8"),
+        schema=DistributeDraft,
+        to_ui=lambda d: {"type": "distribute_amount", "allocations": [a.model_dump() for a in d.allocations], "reason": d.reason},
+        check=check,
     )
     draft, ui = _run(task, message)
     return (draft.answer, ui) if ui is not None else (FAILED_ANSWER, None)
 
 
-def _customer_data(customer_id: str) -> str | None:
-    try:
-        return _customer_data_path(customer_id).read_text(encoding="utf-8")
-    except UnknownCustomerError:
-        return None
+def _rebalance(request: JarRebalanceRequest, summary: dict) -> tuple[str, dict | None]:
+    jars = _jars_by_id(summary)
+    _require_jars(jars, [request.from_jar_id, *(request.to_jar_ids or [])])
+    source = jars[request.from_jar_id]
+    label = source.get("label", request.from_jar_id)
+    if source.get("balance") is None:
+        return f"Hũ {label} chưa có số dư nên chưa chuyển được tiền đi, bạn nạp tiền vào hũ trước nhé.", None
+    available = source_available(summary, request.from_jar_id)
+    if available <= 0:
+        return f"Hũ {label} đã hết số dư nên chưa chuyển được tiền đi.", None
+    if request.amount > available:
+        return f"Hũ {label} hiện chỉ còn {_vnd(available)} nên chưa chuyển được {_vnd(request.amount)}.", None
+    candidates = [j for j in receivers(summary) if j["id"] != request.from_jar_id and (not request.to_jar_ids or j["id"] in request.to_jar_ids)]
+    if not candidates:
+        return "Bạn chưa có hũ khác để nhận tiền, hãy tạo thêm hũ trước nhé.", None
 
-
-def _distribute(request: JarRebalanceRequest, summary: dict) -> tuple[str, dict | None]:
-    can_receive = receivers(summary)
-    if not can_receive:
-        return "Chưa có hũ nào đặt hạn mức để nhận tiền, bạn đặt hạn mức cho hũ trước nhé.", None
-
-    customer_data = _customer_data(request.user_id)
-    message = (
-        f"Số tiền khách muốn chia vào các hũ: {request.amount} ({_vnd(request.amount)})\n"
-        f"Các hũ nhận được (đã đặt hạn mức):\n{render_jar_summary({**summary, 'jars': can_receive})}\n"
-        + (f"Dữ liệu chi tiêu của khách (JSON):\n{customer_data}" if customer_data else "")
+    named = (
+        f"Khách chỉ định chuyển sang các hũ: {', '.join(request.to_jar_ids)} (chỉ dùng các hũ này)."
+        if request.to_jar_ids
+        else "Khách không chỉ định hũ nhận: hãy tự chọn 1 hoặc nhiều hũ nhận và cách chia."
     )
+    message = (
+        f"Hũ cho tiền: {label} (id: {request.from_jar_id}), có thể chuyển tối đa {_vnd(available)}.\n"
+        f"Số tiền cần chuyển: {request.amount} ({_vnd(request.amount)}).\n{named}\n"
+        f"Thông tin hũ cho tiền:\n{render_jar_summary({**summary, 'jars': [source]})}\n"
+        f"Các hũ nhận được (mọi hũ khác, kể cả hũ chưa có số dư):\n{render_jar_summary({**summary, 'jars': candidates})}\n"
+        f"{_spending_text(request.user_id, summary, [source, *candidates])}"
+    )
+
+    def check(ui: dict) -> Verdict:
+        verdict = check_rebalance(summary, request.from_jar_id, request.amount, ui)
+        if request.to_jar_ids and not verdict.hard:
+            outside = [a["to_jar_id"] for a in ui["allocations"] if a["to_jar_id"] not in request.to_jar_ids]
+            if outside:
+                verdict.hard.append(f"Chỉ được chuyển sang các hũ khách chỉ định ({', '.join(request.to_jar_ids)}), không phải {', '.join(outside)}.")
+        return verdict
+
     task = _Task(
-        prompt=(PROMPTS_DIR / "jar_distribute.md").read_text(encoding="utf-8"),
-        schema=DistributeDraft,
-        to_ui=lambda d: {
-            "type": "distribute_amount",
+        name="jar-rebalance",
+        prompt=(PROMPTS_DIR / "jar_rebalance.md").read_text(encoding="utf-8"),
+        schema=RebalanceDraft,
+        to_ui=lambda d: {  # the giver comes from the request: the model is never asked which jar gives
+            "type": "rebalance_jars",
+            "from_jar_id": request.from_jar_id,
             "allocations": [a.model_dump() for a in d.allocations],
             "reason": d.reason,
         },
-        check=lambda ui: check_distribute(summary, request.amount, ui),
+        check=check,
     )
     draft, ui = _run(task, message)
     return (draft.answer, ui) if ui is not None else (FAILED_ANSWER, None)
 
 
-# --- the route ---------------------------------------------------------------------------------------------------
+# --- the routes ---------------------------------------------------------------------------------------------------
 
 
 def _require_api_key(x_api_key: str | None) -> None:
@@ -280,16 +334,31 @@ def _require_api_key(x_api_key: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
 
-@router.post("/jar-rebalance", response_model=JarRebalanceResponse)
-def jar_rebalance(request: JarRebalanceRequest, x_api_key: str | None = Header(default=None)) -> JarRebalanceResponse:
-    _require_api_key(x_api_key)
+def _read_summary(user_id: str) -> dict:
     try:
-        summary = fetch_jar_summary(request.user_id)
+        return fetch_jar_summary(user_id)
     except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("jar-rebalance: cannot read the jar summary for %s: %s", request.user_id, exc)
+        logger.warning("jar endpoint: cannot read the jar summary for %s: %s", user_id, exc)
         raise HTTPException(status_code=502, detail="Cannot read the jar summary from pfm") from exc
+
+
+def _respond(flow: Callable[[], tuple[str, dict | None]]) -> JarResponse:
     try:
-        answer, ui = _cover(request, summary) if request.mode == "cover" else _distribute(request, summary)
+        answer, ui = flow()
     except ModelUnavailable as exc:
         raise HTTPException(status_code=503, detail="The model is unavailable, try again shortly") from exc
-    return JarRebalanceResponse(answer=_paragraphs(strip_foreign_script(answer)), ui=ui)
+    return JarResponse(answer=_paragraphs(strip_foreign_script(answer)), ui=ui)
+
+
+@router.post("/jar-distribute", response_model=JarResponse)
+def jar_distribute(request: JarDistributeRequest, x_api_key: str | None = Header(default=None)) -> JarResponse:
+    _require_api_key(x_api_key)
+    summary = _read_summary(request.user_id)
+    return _respond(lambda: _distribute(request, summary))
+
+
+@router.post("/jar-rebalance", response_model=JarResponse)
+def jar_rebalance(request: JarRebalanceRequest, x_api_key: str | None = Header(default=None)) -> JarResponse:
+    _require_api_key(x_api_key)
+    summary = _read_summary(request.user_id)
+    return _respond(lambda: _rebalance(request, summary))

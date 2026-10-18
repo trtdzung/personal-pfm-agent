@@ -9,9 +9,12 @@ def test_readme_describes_personal_card_agent():
     assert "research-assistant" not in text
 
 
-def test_readme_lists_the_jar_rebalance_endpoint():
+def test_readme_lists_the_two_jar_endpoints_and_points_at_the_jars_docs():
     text = README.read_text(encoding="utf-8")
-    assert "POST /jar-rebalance" in text and "docs/jar-rebalance-endpoint.md" in text
+    assert "POST /jar-distribute" in text and "POST /jar-rebalance" in text and "docs/jars/endpoints.md" in text
+    assert '"mode"' not in text  # the single two-mode endpoint is gone
+    for old in ("docs/jar-rebalance-endpoint.md", "docs/jar-rebalance.md", "docs/spending-jar.md", "docs/jar.md"):
+        assert old not in text, old
 
 
 def test_readme_says_the_api_key_guards_every_endpoint_not_only_chat():
@@ -23,8 +26,8 @@ def test_readme_says_the_api_key_guards_every_endpoint_not_only_chat():
 
 def test_readme_project_tree_lists_the_files_of_the_jar_endpoint_and_its_checks():
     text = README.read_text(encoding="utf-8")
-    for entry in ("jar_endpoint.py", "jar_checks.py", "ui_guard.py", "llm.py", "prompts/", "jar_cover.md", "jar_distribute.md",
-                  "customer_data_tools.py", "jar-rebalance/", "spending-jar/"):
+    for entry in ("jar_endpoint.py", "jar_checks.py", "ui_guard.py", "llm.py", "prompts/", "jar_rebalance.md", "jar_distribute.md",
+                  "customer_data_tools.py", "distribute-amount/", "spending-jar/"):
         assert entry in text, entry
 
 

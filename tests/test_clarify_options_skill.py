@@ -105,7 +105,7 @@ def test_instructions_mention_clarify_options():
 
 
 def test_spending_jar_and_jar_rebalance_point_at_clarify_options_for_their_ask_again_cases():
-    for name in ("spending-jar", "jar-rebalance"):
+    for name in ("spending-jar", "distribute-amount"):
         skill = _skill(name)
         assert "clarify-options" in skill or "clarify_options" in skill, name
 

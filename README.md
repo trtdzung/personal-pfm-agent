@@ -194,14 +194,16 @@ docker run -p 8080:8080 \
   fields, `500` internal error, `503` the model provider's own content filter
   rejected the model's output even after the server retried once internally
   (transient -- see `docs/api.md`), worth the frontend retrying too.
-- `POST /jar-rebalance` -- requires `X-API-Key` header. Jar proposals for
-  screens that need no chat, one endpoint with two modes:
-  `{"user_id": str, "mode": "cover", "target_jar_id": str, "spend_amount": int | null}`
-  (cover a short jar) or `{"user_id": str, "mode": "distribute", "amount": int}`
-  (share an amount the customer has into the balances of their jars). Returns `{"answer": str, "ui": {...} | null}`
-  (`rebalance_jars` / `distribute_amount`). No thread, no memory; its own
-  agent, separate from `/chat`. Contract and error codes:
-  [`docs/jar-rebalance-endpoint.md`](docs/jar-rebalance-endpoint.md).
+- `POST /jar-distribute` and `POST /jar-rebalance` -- require `X-API-Key` header. Jar
+  proposals for screens that need no chat. `/jar-distribute`:
+  `{"user_id": str, "amount": int, "jar_ids": [str] | null}` (share unallocated money
+  into jars). `/jar-rebalance`:
+  `{"user_id": str, "from_jar_id": str, "amount": int, "to_jar_ids": [str] | null}`
+  (move balance from one jar to others). Both return `{"answer": str, "ui": {...} | null}`
+  (`distribute_amount` / `rebalance_jars`); the agent is handed the jar summary and the
+  last 3 months of per-jar spending, and its proposal is checked by code. No thread, no
+  memory; its own agent, separate from `/chat`. Contract and error codes:
+  [`docs/jars/endpoints.md`](docs/jars/endpoints.md).
 - `GET /chat/history?user_id=...&thread_id=...` -- requires `X-API-Key`
   header, `thread_id` optional, returns `{"thread_id": str, "messages": [{"role": "user" | "assistant", "content": str}]}`.
   Reads straight from the same GreenNode Memory checkpointer `/chat` writes
@@ -268,8 +270,8 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── jar_checks.py             # deterministic side of that endpoint: shortfall, preferred plan, hard/soft checks
 ├── llm.py                    # the chat model factory shared by /chat and /jar-rebalance
 ├── prompts/                  # read per request by jar_endpoint.py (never .dockerignore these)
-│   ├── jar_cover.md          #   mode "cover": cover a short jar from other jars' balances
-│   └── jar_distribute.md     #   mode "distribute": share an amount into the jars' balances
+│   ├── jar_rebalance.md      #   POST /jar-rebalance: one jar gives money to other jars
+│   └── jar_distribute.md     #   POST /jar-distribute: unallocated money into jars
 ├── pyproject.toml           # dependencies + packaging (includes data/customer_data.json)
 ├── .env                     # OPENAI_API_KEY / LANGSMITH_API_KEY (never committed)
 │
@@ -278,8 +280,9 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 ├── skills/
 │   └── project/
 │       ├── data-visualization/SKILL.md  # server.py's chart-on-demand skill (see docs/chart-visualization.md)
-│       ├── spending-jar/SKILL.md        # create_jar / edit_jar / moving a category (docs/spending-jar.md)
-│       ├── jar-rebalance/SKILL.md       # rebalance_jars in chat (docs/jar-rebalance.md)
+│       ├── spending-jar/SKILL.md        # create_jar / edit_jar / moving a category (docs/jars/create-edit-jar.md)
+│       ├── distribute-amount/SKILL.md       # distribute_amount in chat: unallocated money into jars (docs/jars/distribute-amount.md)
+│       ├── rebalance-jars/SKILL.md          # rebalance_jars in chat: balance from one jar to another (docs/jars/rebalance-jars.md)
 │       └── transfer-form/SKILL.md       # transfer_form (docs/transfer-form.md)
 ├── tools/
 │   ├── customer_data_tools.py  # get_jar_summary / get_categories / query_beneficiaries: live reads from the pfm backend

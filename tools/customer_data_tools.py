@@ -34,6 +34,7 @@ jars or beneficiaries.
 """
 
 import re
+from datetime import date
 
 import httpx
 from langchain_core.tools import tool
@@ -60,9 +61,9 @@ def _yes_no(flag: object) -> str:
 def _jar_line(jar: dict) -> str:
     parts = [str(jar.get("label", "?")), f"id: {jar.get('id', '?')}"]
     parts.append(f"categoryIds: {', '.join(jar.get('categoryIds') or []) or 'không có'}")
-    parts.append(f"budgetLimit: {_vnd(jar.get('budgetLimit'), 'chưa đặt')}")
+    parts.append(f"limit: {_vnd(jar.get('limit'), 'chưa đặt')}")
     parts.append(f"spent: {_vnd(jar.get('spent'), 'chưa biết')}")
-    parts.append(f"remaining: {_vnd(jar.get('remaining'), 'chưa biết')}")
+    parts.append(f"balance: {_vnd(jar.get('balance'), 'chưa có số dư')}")
     parts.append(f"spendable: {_vnd(jar.get('spendable'), 'chưa biết')}")
     parts.append(f"overLimit: {_yes_no(jar.get('overLimit'))}")
     return "- " + " | ".join(parts)
@@ -133,6 +134,17 @@ def fetch_categories(customer_id: str) -> list[dict]:
     return categories
 
 
+def _spend_delta(txn: dict) -> float | None:
+    """What a transaction adds to the spending total: an expense debit counts, a refund credit subtracts, anything
+    else (income, transfer...) is not spending (`None`). The netting `jar-summary`'s own `spent` uses."""
+    direction, kind = txn.get("direction"), txn.get("type")
+    if direction == "debit" and kind == "expense":
+        return txn.get("amount", 0)
+    if direction == "credit" and kind == "refund":
+        return -txn.get("amount", 0)
+    return None
+
+
 def _aggregate_monthly_by_category(visible_transactions: list[dict], label_by_id: dict[str, str]) -> dict:
     """Per month (`YYYY-MM`), net spend per category = debit/expense minus credit/refund -- the same
     netting `jar-summary`'s own `spent` uses (backend_docs/pfm-read-api.md: "chi tiêu ròng, đã trừ hoàn
@@ -146,12 +158,8 @@ def _aggregate_monthly_by_category(visible_transactions: list[dict], label_by_id
         if not month:
             continue
         counts[month] = counts.get(month, 0) + 1
-        direction, kind = txn.get("direction"), txn.get("type")
-        if direction == "debit" and kind == "expense":
-            delta = txn.get("amount", 0)
-        elif direction == "credit" and kind == "refund":
-            delta = -txn.get("amount", 0)
-        else:
+        delta = _spend_delta(txn)
+        if delta is None:
             continue  # income/transfer/etc. -- not spending, excluded from category totals
         label = label_by_id.get(txn.get("categoryId"), txn.get("categoryId") or "Khác")
         by_category = totals.setdefault(month, {})
@@ -164,6 +172,62 @@ def _aggregate_monthly_by_category(visible_transactions: list[dict], label_by_id
         }
         for month in sorted(counts)
     }
+
+
+def jar_spending_by_month(summary: dict, transactions: list[dict], categories: list[dict]) -> dict:
+    """Per jar id -> month (`YYYY-MM`) -> `{"total_vnd", "by_category_vnd": {label: net}}`: what the categories a jar holds
+    (`categoryIds`) cost, net of refunds, hidden rows excluded (like jar-summary). Categories no jar holds are ignored;
+    a jar with no category has `{}`. Precomputed so the model never adds transactions up itself."""
+    label_by_id = {c["id"]: c.get("label") or c["id"] for c in categories}
+    jar_of_category = {cid: jar["id"] for jar in summary.get("jars") or [] for cid in jar.get("categoryIds") or []}
+    net: dict[str, dict[str, dict[str, float]]] = {jar["id"]: {} for jar in summary.get("jars") or []}
+    for txn in transactions:
+        jar_id = jar_of_category.get(txn.get("categoryId"))
+        delta = _spend_delta(txn)
+        month = (txn.get("postedAt") or "")[:7]
+        if txn.get("hidden") or jar_id is None or delta is None or not month:
+            continue
+        by_category = net[jar_id].setdefault(month, {})
+        label = label_by_id.get(txn["categoryId"], txn["categoryId"])
+        by_category[label] = by_category.get(label, 0) + delta
+    return {
+        jar_id: {
+            month: {"total_vnd": sum(by_category.values()), "by_category_vnd": by_category}
+            for month, by_category in sorted(months.items())
+        }
+        for jar_id, months in net.items()
+    }
+
+
+def render_jar_spending(summary: dict, spending: dict) -> str:
+    """The text the model reads: each jar with its net spend per month and the categories behind it."""
+    lines = []
+    for jar in summary.get("jars") or []:
+        months = spending.get(jar["id"]) or {}
+        head = f"- {jar.get('label', '?')} (id: {jar['id']}): "
+        if not months:
+            lines.append(head + "chưa có chi tiêu")
+            continue
+        per_month = " | ".join(f"{m}: {_vnd(v['total_vnd'], 'chưa biết')}" for m, v in months.items())
+        totals: dict[str, float] = {}
+        for v in months.values():
+            for label, amount in v["by_category_vnd"].items():
+                totals[label] = totals.get(label, 0) + amount
+        top = ", ".join(f"{label} {_vnd(amount, 'chưa biết')}" for label, amount in sorted(totals.items(), key=lambda kv: -kv[1]))
+        lines.append(f"{head}{per_month} (theo danh mục: {top})")
+    return "\n".join(lines)
+
+
+def fetch_jar_spending(customer_id: str, summary: dict, today: date | None = None) -> dict:
+    """The last 3 calendar months (this one and the 2 before) of the customer's transactions, grouped per jar
+    (`jar_spending_by_month`). Raises `httpx.HTTPError`/`ValueError` when pfm fails: the caller decides whether to
+    go on without this context (it only informs the split, every proposal is still checked against the summary)."""
+    today = today or date.today()
+    year, month = today.year, today.month - 2
+    if month < 1:
+        year, month = year - 1, month + 12
+    transactions = fetch_transactions_full(customer_id, date(year, month, 1).isoformat(), today.isoformat())
+    return jar_spending_by_month(summary, transactions, fetch_categories(customer_id))
 
 
 def fetch_live_account_snapshot(customer_id: str, from_date: str, to_date: str) -> dict:
@@ -230,16 +294,20 @@ def get_jar_summary(month: str = "") -> tuple[str, dict | None]:
 
     `month` is optional, `YYYY-MM`; leave it empty for the current month.
 
-    Per jar: `budgetLimit` (monthly limit, "chưa đặt" = not set, NOT 0), `spent`,
-    `remaining` (the jar's balance, can be negative), `spendable` (= max(0,
-    remaining), the most the jar can give away), `categoryIds` (one category
-    belongs to exactly one jar). A jar with `remaining` < 0 "needs covering" (the
-    customer spent more than its balance); `overLimit` is a different axis
-    (spent > budgetLimit) that does NOT change when a jar is covered. Globals: `casaBalance` (real money in
-    the payment account), `unallocated` (the "pool" source for rebalancing),
-    `allocationHeadroom` (how much MORE limit can still be set; negative = the
-    limits already exceed the account). "chưa biết"/"chưa đặt" means unknown:
-    never treat it as 0, never guess it.
+    Per jar (limit and balance are two INDEPENDENT things since 2026-09-23):
+    `limit` (the monthly spending PLAN, "chưa đặt" = not set, NOT 0 -- it is not
+    money in the jar), `balance` (the money in the jar, carried over months, can
+    be negative; "chưa có số dư" = no balance yet, NOT 0), `spent`, `spendable`
+    (= max(0, balance), the most the jar can give away), `categoryIds` (one
+    category belongs to exactly one jar). A jar with `balance` < 0 "needs
+    covering" (the customer spent more than its balance); `overLimit` is a
+    different axis (spent > limit) that does NOT change when a jar is covered.
+    Globals: `casaBalance` (real money in the payment account), `unallocated`
+    (the "pool" source for rebalancing), `allocationHeadroom` (= unallocated: the
+    money still free to put INTO a jar -- the ceiling for `initial_balance` of
+    create_jar; it does NOT limit monthly limits, raising a limit needs no
+    headroom). "chưa biết"/"chưa đặt"/"chưa có số dư" means unknown: never treat
+    it as 0, never guess it.
     """
     if month and not _MONTH_RE.match(month):
         return f"Tháng phải có dạng YYYY-MM (ví dụ 2026-09), nhận được: {month!r}. Bỏ trống để lấy tháng hiện tại.", None

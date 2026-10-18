@@ -81,7 +81,7 @@ def _edit(**overrides):
 
 
 def _rebalance(**overrides):
-    return {"type": "rebalance_jars", "target_jar_id": "food", "shortfall": 500000, "moves": [{"from_jar_id": "pool", "amount": 500000}], "reason": "x", **overrides}
+    return {"type": "rebalance_jars", "from_jar_id": "food", "allocations": [{"to_jar_id": "lifestyle", "amount": 500000}], "reason": "x", **overrides}
 
 
 def test_edit_jar_with_a_jar_id_from_the_summary_is_kept():
@@ -96,14 +96,13 @@ def test_edit_jar_is_dropped_when_the_summary_was_not_read_this_turn():
     assert not ui_matches_facts(_edit(), _facts(summary=None))
 
 
-def test_rebalance_with_known_ids_and_the_pool_is_kept():
-    ui = _rebalance(moves=[{"from_jar_id": "pool", "amount": 300000}, {"from_jar_id": "lifestyle", "amount": 200000}])
-    assert ui_matches_facts(ui, _facts())
+def test_rebalance_between_jars_in_the_summary_is_kept():
+    assert ui_matches_facts(_rebalance(allocations=[{"to_jar_id": "lifestyle", "amount": 300000}]), _facts())
 
 
-def test_rebalance_with_an_invented_target_or_source_is_dropped():
-    assert not ui_matches_facts(_rebalance(target_jar_id="an-uong"), _facts())
-    assert not ui_matches_facts(_rebalance(moves=[{"from_jar_id": "du-phong", "amount": 500000}]), _facts())
+def test_rebalance_with_an_invented_source_or_destination_is_dropped():
+    assert not ui_matches_facts(_rebalance(from_jar_id="an-uong"), _facts())
+    assert not ui_matches_facts(_rebalance(allocations=[{"to_jar_id": "du-phong", "amount": 500000}]), _facts())
 
 
 def test_rebalance_is_dropped_when_the_summary_was_not_read_this_turn():

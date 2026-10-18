@@ -201,7 +201,7 @@ def test_chat_endpoint_splits_ui_json_transfer_form_block_into_ui_field(monkeypa
 def test_chat_endpoint_splits_ui_json_create_jar_block_into_ui_field(monkeypatch):
     jar_answer = (
         "Mình đề xuất hũ Ăn uống 3.000.000đ/tháng.\n\n"
-        '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, '
+        '```ui-json\n{"type": "create_jar", "jar_name": "Ăn uống", "allocation_amount": 3000000, "initial_balance": 1000000, '
         '"category_ids": ["dining", "groceries"], '
         '"reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng"}\n```'
     )
@@ -223,6 +223,7 @@ def test_chat_endpoint_splits_ui_json_create_jar_block_into_ui_field(monkeypatch
         "type": "create_jar",
         "jar_name": "Ăn uống",
         "allocation_amount": 3000000,
+        "initial_balance": 1000000,
         "category_ids": ["dining", "groceries"],
         "reason": "Trung bình chi tiêu Ăn uống 3 tháng gần nhất là ~3.045.000đ/tháng",
     }
@@ -230,25 +231,23 @@ def test_chat_endpoint_splits_ui_json_create_jar_block_into_ui_field(monkeypatch
 
 def test_chat_endpoint_splits_ui_json_rebalance_jars_block_into_ui_field(monkeypatch):
     rebalance_answer = (
-        "Hũ Ăn uống thiếu 1.500.000đ, mình đề xuất lấy từ tiền chưa phân bổ và hũ Hưởng thụ; bạn xem lại rồi xác nhận nhé.\n\n"
-        '```ui-json\n{"type": "rebalance_jars", "target_jar_id": "food", "shortfall": 1500000, '
-        '"moves": [{"from_jar_id": "pool", "amount": 1000000}, {"from_jar_id": "lifestyle", "amount": 500000}], '
-        '"reason": "Lấy 1.000.000đ từ tiền chưa phân bổ và 500.000đ từ hũ Hưởng thụ"}\n```'
+        "Mình đề xuất chuyển 500.000đ từ hũ Ăn uống sang hũ Hưởng thụ; bạn xem lại rồi xác nhận nhé.\n\n"
+        '```ui-json\n{"type": "rebalance_jars", "from_jar_id": "food", '
+        '"allocations": [{"to_jar_id": "lifestyle", "amount": 500000}], '
+        '"reason": "Khách muốn chuyển 500.000đ từ hũ Ăn uống sang hũ Hưởng thụ"}\n```'
     )
     body = _chat_with_summary_read_then(monkeypatch, rebalance_answer)  # the model read the jars this turn
     assert "```ui-json" not in body["answer"]
     assert body["ui"]["type"] == "rebalance_jars"
-    assert body["ui"]["moves"] == [
-        {"from_jar_id": "pool", "amount": 1000000},
-        {"from_jar_id": "lifestyle", "amount": 500000},
-    ]
+    assert body["ui"]["from_jar_id"] == "food"
+    assert body["ui"]["allocations"] == [{"to_jar_id": "lifestyle", "amount": 500000}]
 
 
 def test_chat_drops_a_rebalance_from_a_jar_that_was_never_in_the_summary(monkeypatch):
     invented = (
         "Mình đề xuất lấy từ hũ Dự phòng.\n\n"
-        '```ui-json\n{"type": "rebalance_jars", "target_jar_id": "food", "shortfall": 500000, '
-        '"moves": [{"from_jar_id": "du-phong", "amount": 500000}], "reason": "x"}\n```'
+        '```ui-json\n{"type": "rebalance_jars", "from_jar_id": "du-phong", '
+        '"allocations": [{"to_jar_id": "food", "amount": 500000}], "reason": "x"}\n```'
     )
     body = _chat_with_summary_read_then(monkeypatch, invented)
     assert body["ui"] is None and "Dự phòng" in body["answer"]

@@ -69,7 +69,7 @@ khoản/ngân hàng vào khối `ui-json` nữa — chỉ cần trả đúng `id
   những gì khách hàng đã nói. Trường hợp này KHÔNG có `category`.
 
 **Độc lập với hũ chi tiêu:** `transfer_form` không có field hũ nguồn — khách chọn nguồn tiền trên màn
-chuyển tiền của `pfm`. Việc lấy tiền từ hũ khác để bù hũ thiếu là form `rebalance_jars` (skill `jar-rebalance`),
+chuyển tiền của `pfm`. Việc lấy tiền từ hũ khác để bù hũ thiếu là form `rebalance_jars` (skill `rebalance-jars`),
 **độc lập** với form này; mỗi lượt chỉ 1 khối `ui-json`.
 
 ## Quy trình bắt buộc — Check trước, Propose sau

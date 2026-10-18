@@ -264,17 +264,26 @@ def _is_valid_create_jar(raw: dict) -> bool:
     """Validate a parsed create_jar payload (raw["type"] == "create_jar").
     Pure validation only -- same "no auto-fixing" rule as _is_valid_chart
     (see skills/project/spending-jar/SKILL.md for the model-facing rules
-    this mirrors, docs/spending-jar.md for the contract). Display-only
+    this mirrors, docs/jars/create-edit-jar.md for the contract). Display-only
     proposal -- the jar is created by pfm when the customer confirms, this
     repo never executes anything.
 
     `category_ids` is required (an empty list is fine: a jar with no
     category). There is no `jar_id`: pfm generates it, so a payload carrying
     one is a model slip and is dropped.
+
+    `initial_balance` is required too (backend_docs B2, since 2026-09-23): the
+    money moved into the new jar, a whole number of VND >= 0 (0 is valid). pfm
+    drops a create_jar without it and never reads the gap as 0, so an agent that
+    leaves it out only produces a form the customer never sees. Whether it fits
+    the "Chờ phân bổ" (`allocationHeadroom`) is pfm's check, like the other numbers.
     """
     if "jar_id" in raw:
         return False
     if not _has_jar_basics(raw):
+        return False
+    balance = raw.get("initial_balance")
+    if not _is_finite_number(balance) or balance < 0 or balance != int(balance):
         return False
     return _is_valid_category_ids(raw.get("category_ids"))
 
@@ -299,43 +308,40 @@ def _is_valid_edit_jar(raw: dict) -> bool:
 _POOL_SOURCE_ID = "pool"
 
 
-def _is_valid_rebalance_jars(raw: dict) -> bool:
-    """Validate a parsed rebalance_jars payload (raw["type"] == "rebalance_jars").
-
-    Only what can be checked without the customer's data: the shape, and that
-    the moves really add up to the shortfall (the model does that arithmetic in
-    text, so a wrong total is the likeliest failure). Whether each source has
-    that much to give, is pfm's job -- it re-checks every rebalance against the
-    real numbers and drops what fails. (That the ids are real ones is checked by ui_guard.py.)
-    """
-    target = raw.get("target_jar_id")
-    if not isinstance(target, str) or not target or target == _POOL_SOURCE_ID:
+def _valid_allocations(allocations: object, forbidden: set[str]) -> bool:
+    """`[{"to_jar_id": str, "amount": number > 0}]`, non-empty: each receiving jar once, never one of `forbidden`
+    (the pool, and for a jar-to-jar move the giving jar itself)."""
+    if not isinstance(allocations, list) or not allocations:
         return False
-
-    shortfall = raw.get("shortfall")
-    if not _is_finite_number(shortfall) or shortfall <= 0:
-        return False
-
-    moves = raw.get("moves")
-    if not isinstance(moves, list) or not moves:
-        return False
-
-    sources: set[str] = set()
-    total = 0.0
-    for move in moves:
-        if not isinstance(move, dict):
+    receivers: set[str] = set()
+    for allocation in allocations:
+        if not isinstance(allocation, dict):
             return False
-        source = move.get("from_jar_id")
-        if not isinstance(source, str) or not source or source == target or source in sources:
+        receiver = allocation.get("to_jar_id")
+        if not isinstance(receiver, str) or not receiver or receiver in forbidden or receiver in receivers:
             return False
-        sources.add(source)
-        amount = move.get("amount")
+        receivers.add(receiver)
+        amount = allocation.get("amount")
         if not _is_finite_number(amount) or amount <= 0:
             return False
-        total += amount
-    if not math.isclose(total, shortfall, abs_tol=1e-6):
-        return False
+    return True
 
+
+def _is_valid_rebalance_jars(raw: dict) -> bool:
+    """Validate a parsed rebalance_jars payload (raw["type"] == "rebalance_jars"): ONE jar (`from_jar_id`) gives
+    money to one or more other jars (`allocations`, the same shape distribute_amount uses). Since 2026-09-24; the
+    older shape (`target_jar_id`/`shortfall`/`moves`: one jar receiving from many sources) is no longer accepted.
+
+    Shape only: the giving jar is a real-looking jar id (never `"pool"`, that is distribute_amount's source), each
+    receiving jar appears once and is not the giving jar, amounts are positive. Whether the giver has that much
+    (`spendable`) and whether the ids exist is checked from the summary the agent read (ui_guard.py,
+    jar_checks.py) and again by pfm.
+    """
+    source = raw.get("from_jar_id")
+    if not isinstance(source, str) or not source or source == _POOL_SOURCE_ID:
+        return False
+    if not _valid_allocations(raw.get("allocations"), {_POOL_SOURCE_ID, source}):
+        return False
     reason = raw.get("reason")
     return isinstance(reason, str) and bool(reason)
 
@@ -349,20 +355,8 @@ def _is_valid_distribute_amount(raw: dict) -> bool:
     that is the source). Whether the total fits in the pool and whether the ids exist is checked from the summary
     the agent read (ui_guard.py, jar_checks.py) and again by pfm.
     """
-    allocations = raw.get("allocations")
-    if not isinstance(allocations, list) or not allocations:
+    if not _valid_allocations(raw.get("allocations"), {_POOL_SOURCE_ID}):
         return False
-    receivers: set[str] = set()
-    for allocation in allocations:
-        if not isinstance(allocation, dict):
-            return False
-        receiver = allocation.get("to_jar_id")
-        if not isinstance(receiver, str) or not receiver or receiver == _POOL_SOURCE_ID or receiver in receivers:
-            return False
-        receivers.add(receiver)
-        amount = allocation.get("amount")
-        if not _is_finite_number(amount) or amount <= 0:
-            return False
     reason = raw.get("reason")
     return isinstance(reason, str) and bool(reason)
 

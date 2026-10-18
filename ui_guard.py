@@ -15,9 +15,6 @@ from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage, ToolMessage
 
-_POOL = "pool"  # the "unallocated" money, a legitimate rebalance source that is not a jar id
-
-
 @dataclass(frozen=True)
 class TurnFacts:
     """What the agent read in the current turn. `None` means the tool was not called (or failed)."""
@@ -72,7 +69,7 @@ def ui_matches_facts(ui: dict, facts: TurnFacts) -> bool:
         if facts.jar_summary is None:
             return False
         known = _jar_ids(facts.jar_summary)
-        return ui["target_jar_id"] in known and all(m["from_jar_id"] in known | {_POOL} for m in ui["moves"])
+        return ui["from_jar_id"] in known and all(a["to_jar_id"] in known for a in ui["allocations"])
     if kind == "distribute_amount":
         if facts.jar_summary is None:
             return False

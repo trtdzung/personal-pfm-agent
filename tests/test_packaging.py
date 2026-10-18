@@ -30,7 +30,7 @@ def test_the_docker_image_keeps_the_files_the_jar_endpoint_reads_at_runtime():
         line.strip() for line in (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     ]
-    for runtime_file in ("prompts/jar_cover.md", "prompts/jar_distribute.md"):
+    for runtime_file in ("prompts/jar_rebalance.md", "prompts/jar_distribute.md"):
         assert (REPO_ROOT / runtime_file).is_file(), runtime_file
     assert not [rule for rule in ignored if rule in ("prompts", "prompts/", "*.md", "**/*.md")], ignored
     for module in ("jar_endpoint.py", "jar_checks.py", "ui_guard.py", "llm.py"):

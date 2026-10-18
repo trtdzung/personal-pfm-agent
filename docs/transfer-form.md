@@ -130,7 +130,7 @@ hiện đủ 6 field lên form.
 
 `transfer_form` **độc lập** với các form về hũ (`create_jar`/`edit_jar`/`rebalance_jars`): không có field hũ
 nguồn, khách chọn nguồn tiền (tài khoản hay hũ) trên màn chuyển tiền của `pfm`. Nếu hũ nguồn không đủ tiền,
-việc gợi ý lấy tiền từ hũ khác là form `rebalance_jars` riêng, xem [`docs/jar-rebalance.md`](./jar-rebalance.md).
+việc gợi ý lấy tiền từ hũ khác là form `rebalance_jars` riêng, xem [`docs/jars/rebalance-jars.md`](./jars/rebalance-jars.md).
 
 ## Luồng UI gợi ý
 

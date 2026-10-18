@@ -5,8 +5,11 @@ from tools.customer_data_tools import (
     PFM_BASE_URL,
     fetch_account_summary,
     fetch_categories,
+    fetch_jar_spending,
     fetch_jar_summary,
     fetch_live_account_snapshot,
+    jar_spending_by_month,
+    render_jar_spending,
     fetch_transactions_full,
     get_categories,
     get_jar_summary,
@@ -36,8 +39,10 @@ _JAR_SUMMARY = {
             "id": "food",
             "label": "Ăn uống",
             "categoryIds": ["dining", "groceries"],
+            "limit": 4000000,
             "budgetLimit": 4000000,
             "spent": 1622000,
+            "balance": 2378000,
             "remaining": 2378000,
             "spendable": 2378000,
             "overLimit": False,
@@ -46,8 +51,10 @@ _JAR_SUMMARY = {
             "id": "lifestyle",
             "label": "Hưởng thụ",
             "categoryIds": ["entertainment"],
+            "limit": 2500000,
             "budgetLimit": 2500000,
             "spent": 2900000,
+            "balance": -400000,
             "remaining": -400000,
             "spendable": 0,
             "overLimit": True,
@@ -56,8 +63,10 @@ _JAR_SUMMARY = {
             "id": "savings",
             "label": "Tiết kiệm",
             "categoryIds": [],
+            "limit": None,
             "budgetLimit": None,
             "spent": 0,
+            "balance": None,
             "remaining": None,
             "spendable": None,
             "overLimit": False,
@@ -93,11 +102,20 @@ def test_get_jar_summary_lists_every_jar_with_the_endpoint_fields(monkeypatch):
     assert "Ăn uống" in food
     assert "role" not in food  # pfm has no jar roles any more
     assert "dining" in food and "groceries" in food
-    assert "budgetLimit: 4.000.000đ" in food
+    assert "limit: 4.000.000đ" in food
     assert "spent: 1.622.000đ" in food
-    assert "remaining: 2.378.000đ" in food
+    assert "balance: 2.378.000đ" in food
+    assert "remaining" not in food and "budgetLimit" not in food  # the deprecated aliases are not shown
     assert "spendable: 2.378.000đ" in food
     assert "overLimit: không" in food
+
+
+def test_get_jar_summary_description_teaches_the_split_between_limit_and_balance():
+    text = get_jar_summary.description
+    assert "`limit`" in text and "`balance`" in text
+    assert "initial_balance" in text  # the headroom caps the money put into a new jar ...
+    assert "MORE limit" not in text  # ... and is NOT the room left for monthly limits any more
+    assert "does NOT" in text and "limit" in text.split("allocationHeadroom")[1]
 
 
 def test_get_jar_summary_shows_the_global_numbers(monkeypatch):
@@ -114,18 +132,18 @@ def test_get_jar_summary_keeps_a_negative_headroom_negative(monkeypatch):
     assert "allocationHeadroom: -1.000.000đ" in result
 
 
-def test_get_jar_summary_flags_an_over_limit_jar_and_keeps_its_negative_remaining(monkeypatch):
+def test_get_jar_summary_flags_an_over_limit_jar_and_keeps_its_negative_balance(monkeypatch):
     monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY))
     lifestyle = _summary_lines(_invoke_with_actor(get_jar_summary, "CIF_0001"))["lifestyle"]
-    assert "remaining: -400.000đ" in lifestyle
+    assert "balance: -400.000đ" in lifestyle
     assert "overLimit: có" in lifestyle
 
 
 def test_get_jar_summary_never_turns_null_into_zero(monkeypatch):
     monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY))
     savings = _summary_lines(_invoke_with_actor(get_jar_summary, "CIF_0001"))["savings"]
-    assert "budgetLimit: chưa đặt" in savings
-    assert "remaining: chưa biết" in savings
+    assert "limit: chưa đặt" in savings
+    assert "balance: chưa có số dư" in savings  # `balance: null` is "no balance yet", never 0
     assert "spendable: chưa biết" in savings
     assert "0đ" not in savings.replace("spent: 0đ", "")  # only the real `spent: 0` may read as zero
 
@@ -223,7 +241,7 @@ def test_get_jar_summary_hands_the_raw_summary_to_the_server_as_the_tool_artifac
     monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_jar_summary_response(_JAR_SUMMARY))
     message = _invoke_as_tool_call(get_jar_summary, "CIF_0001")
     assert message.artifact == _JAR_SUMMARY
-    assert "budgetLimit: 4.000.000đ" in message.content
+    assert "limit: 4.000.000đ" in message.content
 
 
 def test_get_jar_summary_artifact_is_empty_when_pfm_failed(monkeypatch):
@@ -262,7 +280,7 @@ def test_fetch_jar_summary_raises_instead_of_hiding_a_failure(monkeypatch):
 
 def test_render_jar_summary_is_what_the_tool_shows_the_model():
     rendered = render_jar_summary(_JAR_SUMMARY)
-    assert "casaBalance: 16.000.000đ" in rendered and "budgetLimit: 4.000.000đ" in rendered
+    assert "casaBalance: 16.000.000đ" in rendered and "limit: 4.000.000đ" in rendered
 
 
 # --- get_categories(): 1:1 with GET /api/categories?cif= ---------------------------------------------------
@@ -558,6 +576,77 @@ def test_fetch_live_account_snapshot_raises_when_any_of_the_3_calls_fails(monkey
     )
     try:
         fetch_live_account_snapshot("CIF_0001", "2026-06-01", "2026-09-23")
+    except httpx.HTTPError:
+        pass
+    else:
+        raise AssertionError("expected httpx.HTTPError")
+
+
+# --- per-jar spending: what each jar's categories cost over the last months, for the two jar endpoints --------------
+
+
+def _txn(month_day, amount, category, direction="debit", kind="expense", hidden=False):
+    return {"id": f"t-{month_day}-{category}", "postedAt": f"2026-{month_day}T10:00:00.000Z", "amount": amount,
+            "direction": direction, "type": kind, "categoryId": category, "hidden": hidden}
+
+
+_SPEND_SUMMARY = {"jars": [
+    {"id": "food", "label": "Ăn uống", "categoryIds": ["dining", "groceries"]},
+    {"id": "transport", "label": "Di chuyển", "categoryIds": ["transport"]},
+    {"id": "savings", "label": "Tiết kiệm", "categoryIds": []},
+]}
+_SPEND_CATEGORIES = [{"id": "dining", "label": "Ăn uống ngoài"}, {"id": "groceries", "label": "Nhu yếu phẩm"},
+                     {"id": "transport", "label": "Di chuyển"}, {"id": "shopping", "label": "Mua sắm"}]
+_SPEND_TXNS = [
+    _txn("07-03", 100000, "dining"), _txn("07-10", 250000, "groceries"), _txn("08-02", 400000, "dining"),
+    _txn("08-05", 150000, "dining", direction="credit", kind="refund"),  # a refund reduces the spend
+    _txn("08-07", 999000, "dining", hidden=True),  # hidden rows are excluded, like in jar-summary
+    _txn("08-09", 70000, "transport"), _txn("08-11", 555000, "shopping"),  # shopping belongs to no jar
+    _txn("08-12", 3000000, "dining", direction="credit", kind="income"),  # not spending at all
+]
+
+
+def test_jar_spending_groups_net_spend_by_jar_and_month_and_ignores_categories_no_jar_holds():
+    spending = jar_spending_by_month(_SPEND_SUMMARY, _SPEND_TXNS, _SPEND_CATEGORIES)
+    assert spending["food"]["2026-07"] == {"total_vnd": 350000, "by_category_vnd": {"Ăn uống ngoài": 100000, "Nhu yếu phẩm": 250000}}
+    assert spending["food"]["2026-08"] == {"total_vnd": 250000, "by_category_vnd": {"Ăn uống ngoài": 250000}}  # 400.000 - 150.000 refund
+    assert spending["transport"]["2026-08"]["total_vnd"] == 70000
+    assert "shopping" not in str(spending) and "Mua sắm" not in str(spending)
+    assert spending["savings"] == {}  # a jar with no category has no spending
+
+
+def test_render_jar_spending_lists_every_jar_with_its_months_and_says_when_there_is_none():
+    spending = jar_spending_by_month(_SPEND_SUMMARY, _SPEND_TXNS, _SPEND_CATEGORIES)
+    text = render_jar_spending(_SPEND_SUMMARY, spending)
+    assert "Ăn uống (id: food)" in text and "2026-07: 350.000đ" in text and "2026-08: 250.000đ" in text
+    assert "Nhu yếu phẩm" in text  # the categories behind the jar's spending
+    assert "Tiết kiệm (id: savings)" in text and "chưa có chi tiêu" in text
+
+
+def test_fetch_jar_spending_reads_the_last_three_calendar_months_of_transactions_and_categories(monkeypatch):
+    from datetime import date
+
+    calls = []
+
+    def _fake_get(url, params=None, timeout=None):
+        calls.append((url, params))
+        payload = _SPEND_TXNS if url.endswith("/api/transactions-full") else _SPEND_CATEGORIES
+        return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _fake_get)
+    spending = fetch_jar_spending("CIF_0001", _SPEND_SUMMARY, today=date(2026, 9, 23))
+    txn_call = next(p for u, p in calls if u.endswith("/api/transactions-full"))
+    assert txn_call == {"cif": "CIF_0001", "from": "2026-07-01", "to": "2026-09-23"}  # this month + the 2 before it
+    assert spending["food"]["2026-07"]["total_vnd"] == 350000
+
+
+def test_fetch_jar_spending_raises_when_pfm_fails_so_the_caller_can_go_on_without_it(monkeypatch):
+    def _boom(url, params=None, timeout=None):
+        raise httpx.ConnectError("boom", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.customer_data_tools.httpx.get", _boom)
+    try:
+        fetch_jar_spending("CIF_0001", _SPEND_SUMMARY)
     except httpx.HTTPError:
         pass
     else:

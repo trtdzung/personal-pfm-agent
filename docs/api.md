@@ -172,14 +172,9 @@ các field còn lại.**
   [`docs/chart-visualization.md`](./chart-visualization.md).
 - `"transfer_form"` — đề xuất trả nợ thẻ tín dụng điền sẵn, xem
   [`docs/transfer-form.md`](./transfer-form.md).
-- `"create_jar"` / `"edit_jar"` — đề xuất tạo mới/chỉnh sửa 1 hũ chi tiêu
-  (`edit_jar` nhận `jar_id`, `create_jar` có `category_ids`),
-  xem [`docs/spending-jar.md`](./spending-jar.md).
-- `"rebalance_jars"` — đề xuất lấy tiền từ hũ/tiền chưa phân bổ khác để bù hũ
-  đang thiếu hoặc đã chi vượt, xem [`docs/jar-rebalance.md`](./jar-rebalance.md).
-- `"distribute_amount"` — đề xuất chia một số tiền khách nêu vào số dư nhiều hũ. **Không** đến từ
-  `POST /chat` mà từ `POST /jar-rebalance` (bên dưới), xem
-  [`docs/jar-rebalance-endpoint.md`](./jar-rebalance-endpoint.md).
+- `"create_jar"` / `"edit_jar"` / `"distribute_amount"` / `"rebalance_jars"` — bốn loại `ui` về hũ chi tiêu (tạo hũ, sửa hũ, chia tiền chưa phân bổ
+  vào hũ, chuyển số dư từ hũ này sang hũ khác). Field, quy tắc và khi nào `ui = null`: xem thư mục [`docs/jars/`](./jars/README.md); `distribute_amount` và
+  `rebalance_jars` còn đến từ hai endpoint riêng (dưới đây).
 - `"clarify_options"` — hỏi lại bằng 2–4 nút bấm thay vì 1 câu mở, dùng chung cho mọi flow (không riêng
   hũ), kể cả câu hỏi khảo sát sở thích (nhóm lựa chọn chuẩn, không cần dữ liệu thật của khách). `ui.questions`
   là **mảng 1–4 câu hỏi độc lập** (thường chỉ 1). `answer` vẫn có nội dung — chỉ là 1 câu dẫn ngắn, không
@@ -201,14 +196,11 @@ mới — bỏ qua `type` chưa hỗ trợ thay vì báo lỗi.
 
 ---
 
-## `POST /jar-rebalance`
+## `POST /jar-distribute` và `POST /jar-rebalance`
 
-Endpoint **không cần chat** cho các màn hình đã biết sẵn việc cần làm: bù cho hũ thiếu tiền bằng số dư các hũ khác
-(`mode: "cover"`) hoặc chia một số tiền khách nêu vào số dư các hũ (`mode: "distribute"`). Không có hội thoại, không có `thread_id`, không dùng chung agent
-hay bộ nhớ với `/chat`. Cùng server, cùng `X-API-Key` (và Bearer khi qua AgentBase như `/chat`).
-
-Đầy đủ request/response, các trường hợp trả lời không cần gọi model, mã lỗi và contract `distribute_amount`:
-[`docs/jar-rebalance-endpoint.md`](./jar-rebalance-endpoint.md).
+Hai endpoint **không cần chat** cho các màn hình đã biết sẵn việc cần làm: chia một số tiền chưa phân bổ vào hũ (`/jar-distribute`) và chuyển số dư từ một hũ sang
+các hũ khác (`/jar-rebalance`). Không có hội thoại, không có `thread_id`, không dùng chung agent hay bộ nhớ với `/chat`. Cùng server, cùng `X-API-Key` (và Bearer khi
+qua AgentBase như `/chat`). Request, response, các trường hợp trả lời không cần gọi model và mã lỗi: [`docs/jars/endpoints.md`](./jars/endpoints.md).
 
 ---
 

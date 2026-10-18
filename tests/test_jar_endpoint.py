@@ -1,7 +1,9 @@
-"""POST /jar-rebalance: one endpoint, two modes, no chat.
+"""The two jar endpoints, no chat: `POST /jar-distribute` (unallocated money into jars -> `distribute_amount`) and
+`POST /jar-rebalance` (one jar gives money to one or more other jars -> `rebalance_jars`).
 
-The model only proposes and writes the sentence for the customer. Everything true -- the shortfall, the pool,
-whether a proposal is allowed -- comes from code, against the jar-summary the server itself read (jar_checks.py)."""
+The model only proposes and writes the sentence for the customer. Everything true -- what the pool holds, what the
+giving jar can give, whether a proposal is allowed -- comes from code, against the jar-summary the server itself read
+(jar_checks.py). Both prompts also carry each jar's spending of the last 3 months."""
 
 import os
 from typing import ClassVar
@@ -23,19 +25,28 @@ import server  # noqa: E402
 HEADERS = {"X-API-Key": "test-key-for-pytest"}
 
 
-def _jar(id, label, limit, spent, remaining):
-    return {"id": id, "label": label, "categoryIds": [], "budgetLimit": limit, "spent": spent, "remaining": remaining,
-            "spendable": None if remaining is None else max(0, remaining), "overLimit": limit is not None and spent > limit}
+def _jar(id, label, limit, spent, balance):
+    # the jar-summary shape since 2026-09-23 (backend_docs): `limit` (plan) and `balance` (money) are independent
+    return {"id": id, "label": label, "categoryIds": [], "limit": limit, "spent": spent, "balance": balance,
+            "spendable": None if balance is None else max(0, balance), "overLimit": limit is not None and spent > limit}
 
 
 def _summary(unallocated=13044000, jars=None):
-    return {"month": "2026-09", "casaBalance": 18000000, "unallocated": unallocated, "allocationHeadroom": 1000000,
+    return {"month": "2026-09", "casaBalance": 18000000, "unallocated": unallocated, "allocationHeadroom": unallocated,
             "jars": jars if jars is not None else [
                 _jar("food", "Ăn uống", 4000000, 2187000, 1813000),
                 _jar("lifestyle", "Hưởng thụ", 2500000, 1204000, 1296000),
                 _jar("move", "Di chuyển", 1000000, 204000, 796000),
                 _jar("savings", "Tiết kiệm", None, 0, None),
             ]}
+
+
+SPENDING = {
+    "food": {"2026-08": {"total_vnd": 2900000, "by_category_vnd": {"Ăn uống ngoài": 2900000}}},
+    "lifestyle": {"2026-08": {"total_vnd": 1500000, "by_category_vnd": {"Mua sắm": 1500000}}},
+    "move": {"2026-08": {"total_vnd": 300000, "by_category_vnd": {"Di chuyển": 300000}}},
+    "savings": {},
+}
 
 
 class _FakeModel(GenericFakeChatModel):
@@ -55,254 +66,318 @@ def _reply(tool_name: str, **args) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": tool_name, "args": args, "id": "call"}])
 
 
-def _cover_reply(moves, answer="Hũ Ăn uống thiếu 14.187.000đ.", reason="Lấy từ tiền chưa phân bổ và hũ Hưởng thụ"):
-    return _reply("CoverDraft", answer=answer, moves=moves, reason=reason)
+def _dist_reply(allocations, answer="Mình đề xuất chia 1.000.000đ vào các hũ.", reason="Ưu tiên hũ chi nhiều"):
+    return _reply("DistributeDraft", answer=answer, allocations=allocations, reason=reason)
 
 
-GOOD_MOVES = [{"from_jar_id": "pool", "amount": 13044000}, {"from_jar_id": "lifestyle", "amount": 1143000}]
+def _reb_reply(allocations, answer="Mình đề xuất chuyển 500.000đ từ hũ Ăn uống.", reason="Hũ Ăn uống còn nhiều tiền"):
+    return _reply("RebalanceDraft", answer=answer, allocations=allocations, reason=reason)
+
+
+DIST_BODY = {"user_id": "CIF_0001", "amount": 1000000}
+REB_BODY = {"user_id": "CIF_0001", "from_jar_id": "food", "amount": 500000}
+GOOD_DIST = [{"to_jar_id": "food", "amount": 600000}, {"to_jar_id": "move", "amount": 400000}]
+GOOD_REB = [{"to_jar_id": "move", "amount": 300000}, {"to_jar_id": "savings", "amount": 200000}]
 
 
 @pytest.fixture
 def api(monkeypatch):
-    """Returns `call(replies, summary=..., **body)`; the model plays `replies` in order and records what it saw."""
-    state = {"model_calls": 0}
+    """`call(path, replies, summary=..., body=..., spending=...)`: the model plays `replies` in order and records what
+    it saw. `spending=None` makes the spending read fail (pfm down); a dict is what the read returns."""
 
-    def _install(replies, summary=None):
+    def call(path, replies, summary=None, body=None, headers=HEADERS, spending=SPENDING):
         _FakeModel.seen = []
         script = iter(replies)
         monkeypatch.setattr(jar_endpoint, "fetch_jar_summary", lambda customer_id, month="": summary or _summary())
-        monkeypatch.setattr(jar_endpoint, "_model", lambda: _FakeModel(messages=script))
-        return TestClient(server.app)
 
-    def call(replies, summary=None, body=None, headers=HEADERS):
-        client = _install(replies, summary)
-        payload = {"user_id": "CIF_0001", "mode": "cover", "target_jar_id": "food", "spend_amount": 16000000}
-        payload.update(body or {})
-        return client.post("/jar-rebalance", json=payload, headers=headers)
+        def _spending(customer_id, summ, today=None):
+            if spending is None:
+                raise httpx.ConnectError("pfm down")
+            return spending
+
+        monkeypatch.setattr(jar_endpoint, "fetch_jar_spending", _spending)
+        monkeypatch.setattr(jar_endpoint, "_model", lambda: _FakeModel(messages=script))
+        default = DIST_BODY if path == "/jar-distribute" else REB_BODY
+        return TestClient(server.app).post(path, json={**default, **(body or {})}, headers=headers)
 
     call.model_calls = lambda: len(_FakeModel.seen)
-    call.state = state
+    call.dist = lambda replies, **kw: call("/jar-distribute", replies, **kw)
+    call.reb = lambda replies, **kw: call("/jar-rebalance", replies, **kw)
     return call
+
+
+def _shown(index=0) -> str:
+    return " ".join(str(m.content) for m in _FakeModel.seen[index])
 
 
 # --- wiring, auth, request shape ----------------------------------------------------------------------------
 
 
-def test_the_endpoint_is_part_of_the_same_server_and_chat_is_untouched():
+def test_both_routes_are_part_of_the_same_server_and_guarded_like_chat():
     client = TestClient(server.app)
-    # 401 (not 404) without a key: the route exists, and it is guarded like /chat
-    valid = {"user_id": "CIF_0001", "mode": "distribute", "amount": 1000}
-    assert client.post("/jar-rebalance", json=valid).status_code == 401
+    # 401 (not 404) without a key: the routes exist
+    assert client.post("/jar-distribute", json=DIST_BODY).status_code == 401
+    assert client.post("/jar-rebalance", json=REB_BODY).status_code == 401
     assert client.post("/chat", json={"message": "hi", "user_id": "CIF_0001"}).status_code == 401
 
 
-def test_it_needs_the_same_api_key_as_chat(api):
-    assert api([], headers={}).status_code == 401
-    assert api([], headers={"X-API-Key": "wrong"}).status_code == 401
+def test_they_need_the_same_api_key_as_chat(api):
+    for call in (api.dist, api.reb):
+        assert call([], headers={}).status_code == 401
+        assert call([], headers={"X-API-Key": "wrong"}).status_code == 401
 
 
 @pytest.mark.parametrize(
     "body",
     [
-        {"mode": "sideways"},
-        {"target_jar_id": None},  # cover needs a target
-        {"spend_amount": 0},
-        {"spend_amount": -1},
-        {"mode": "distribute", "target_jar_id": "food", "spend_amount": None},  # distribute has no target
-        {"mode": "distribute", "target_jar_id": None, "spend_amount": 5},  # ... and no planned spend
-        {"mode": "distribute", "target_jar_id": None, "spend_amount": None, "amount": 0},
-        {"mode": "distribute", "target_jar_id": None, "spend_amount": None, "amount": None},  # distribute needs the amount
-        {"mode": "cover", "amount": 5},  # `amount` is for distribute only
+        {"amount": 0}, {"amount": -1}, {"amount": None},
+        {"jar_ids": []}, {"jar_ids": ["food", "food"]}, {"jar_ids": "food"},
+        {"mode": "distribute"},  # the old `mode` field is gone
     ],
 )
-def test_a_malformed_request_is_rejected_before_anything_is_read(api, body):
-    assert api([], body=body).status_code == 422
+def test_a_malformed_distribute_request_is_rejected_before_anything_is_read(api, body):
+    assert api.dist([], body=body).status_code == 422
+    assert api.model_calls() == 0
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"amount": 0}, {"amount": -1}, {"amount": None},
+        {"from_jar_id": ""}, {"from_jar_id": None},
+        {"to_jar_ids": []}, {"to_jar_ids": ["move", "move"]},
+        {"to_jar_ids": ["food"]},  # the giving jar cannot be a destination
+        {"mode": "cover"}, {"target_jar_id": "food"}, {"spend_amount": 5},  # the old request fields are gone: refuse, do not ignore
+    ],
+)
+def test_a_malformed_rebalance_request_is_rejected_before_anything_is_read(api, body):
+    assert api.reb([], body=body).status_code == 422
     assert api.model_calls() == 0
 
 
 def test_the_customer_id_comes_from_the_request_and_is_what_pfm_is_asked_for(api, monkeypatch):
     asked = []
     monkeypatch.setattr(jar_endpoint, "fetch_jar_summary", lambda customer_id, month="": asked.append(customer_id) or _summary())
-    script = iter([_cover_reply(GOOD_MOVES)])
+    monkeypatch.setattr(jar_endpoint, "fetch_jar_spending", lambda customer_id, summ, today=None: asked.append(customer_id) or SPENDING)
+    script = iter([_dist_reply(GOOD_DIST)])
     monkeypatch.setattr(jar_endpoint, "_model", lambda: _FakeModel(messages=script))
-    TestClient(server.app).post("/jar-rebalance", json={"user_id": "CIF_0003", "mode": "cover", "target_jar_id": "food", "spend_amount": 16000000}, headers=HEADERS)
-    assert asked == ["CIF_0003"]
+    TestClient(server.app).post("/jar-distribute", json={"user_id": "CIF_0003", "amount": 1000000}, headers=HEADERS)
+    assert asked == ["CIF_0003", "CIF_0003"]  # the jar summary and the spending, both for that customer
 
 
-def test_a_pfm_failure_is_a_502_not_an_empty_answer(monkeypatch):
+@pytest.mark.parametrize("path", ["/jar-distribute", "/jar-rebalance"])
+def test_a_pfm_failure_reading_the_jars_is_a_502_not_an_empty_answer(monkeypatch, path):
     def _fail(customer_id, month=""):
         raise httpx.ConnectError("boom")
 
     monkeypatch.setattr(jar_endpoint, "fetch_jar_summary", _fail)
-    response = TestClient(server.app).post("/jar-rebalance", json={"user_id": "CIF_0001", "mode": "cover", "target_jar_id": "food", "spend_amount": 1}, headers=HEADERS)
-    assert response.status_code == 502
+    body = DIST_BODY if path == "/jar-distribute" else REB_BODY
+    assert TestClient(server.app).post(path, json=body, headers=HEADERS).status_code == 502
 
 
-# --- cover -----------------------------------------------------------------------------------------------------
-
-
-def test_cover_returns_a_rebalance_jars_ui_whose_shortfall_was_computed_by_the_server(api):
-    response = api([_cover_reply(GOOD_MOVES)])
-    assert response.status_code == 200
-    body = response.json()
-    assert body["ui"] == {
-        "type": "rebalance_jars", "target_jar_id": "food", "shortfall": 14187000,  # 16.000.000 - 1.813.000, not the model's
-        "moves": GOOD_MOVES, "reason": "Lấy từ tiền chưa phân bổ và hũ Hưởng thụ",
-    }
-    assert body["answer"] == "Hũ Ăn uống thiếu 14.187.000đ."
-    assert api.model_calls() == 1
-
-
-def test_the_model_is_given_the_computed_shortfall_and_the_jars_it_must_use(api):
-    api([_cover_reply(GOOD_MOVES)])
-    shown = " ".join(str(m.content) for m in _FakeModel.seen[0])
-    assert "14187000" in shown or "14.187.000" in shown
-    assert "unallocated: 13.044.000đ" in shown and "id: lifestyle" in shown
-
-
-def test_a_wrong_order_gets_one_retry_that_states_the_correct_plan(api):
-    wrong = _cover_reply([{"from_jar_id": "pool", "amount": 13044000}, {"from_jar_id": "move", "amount": 796000}, {"from_jar_id": "lifestyle", "amount": 347000}])
-    response = api([wrong, _cover_reply(GOOD_MOVES)])
-    assert response.json()["ui"]["moves"] == GOOD_MOVES
-    assert api.model_calls() == 2
-    feedback = " ".join(str(m.content) for m in _FakeModel.seen[1])
-    assert "lifestyle 1143000" in feedback  # the retry tells the model the right answer
-
-
-def test_an_order_that_stays_wrong_is_still_returned_because_the_order_is_only_a_preference(api):
-    wrong = [{"from_jar_id": "pool", "amount": 13044000}, {"from_jar_id": "move", "amount": 796000}, {"from_jar_id": "lifestyle", "amount": 347000}]
-    response = api([_cover_reply(wrong), _cover_reply(wrong)])
-    assert response.json()["ui"]["moves"] == wrong  # every hard rule holds, pfm accepts it
-    assert api.model_calls() == 2
-
-
-def test_a_source_that_gives_more_than_it_has_is_never_returned(api):
-    too_much = [{"from_jar_id": "pool", "amount": 13044000}, {"from_jar_id": "move", "amount": 1143000}]  # move has 796.000
-    response = api([_cover_reply(too_much), _cover_reply(too_much)])
-    body = response.json()
-    assert body["ui"] is None
-    assert "thử lại" in body["answer"] and "1.143.000" not in body["answer"]  # a generic sentence, not the model's claim
-    assert api.model_calls() == 2
-
-
-def test_a_hard_error_on_the_first_try_can_be_fixed_by_the_retry(api):
-    invented = _cover_reply([{"from_jar_id": "du-phong", "amount": 14187000}])
-    assert api([invented, _cover_reply(GOOD_MOVES)]).json()["ui"]["moves"] == GOOD_MOVES
-
-
-def test_a_jar_that_already_has_enough_needs_no_model_call(api):
-    response = api([], body={"spend_amount": 1000000})
-    body = response.json()
-    assert body["ui"] is None and "đủ" in body["answer"] and "Ăn uống" in body["answer"]
+def test_an_unknown_jar_in_the_request_is_a_404_without_a_model_call(api):
+    assert api.dist([], body={"jar_ids": ["khong-co"]}).status_code == 404
+    assert api.reb([], body={"from_jar_id": "khong-co"}).status_code == 404
+    assert api.reb([], body={"to_jar_ids": ["khong-co"]}).status_code == 404
     assert api.model_calls() == 0
 
 
-def test_sources_that_cannot_cover_the_shortfall_are_reported_without_a_model_call(api):
-    response = api([], summary=_summary(unallocated=0), body={"spend_amount": 16000000})
-    body = response.json()
-    assert body["ui"] is None and "chưa đủ" in body["answer"]
-    assert "14.187.000đ" in body["answer"] and "2.092.000đ" in body["answer"]  # what is missing and what exists
-    assert api.model_calls() == 0
-
-
-def test_a_jar_that_needs_covering_is_covered_without_a_planned_spend(api):
-    summary = _summary(unallocated=0, jars=[_jar("food", "Ăn uống", 4000000, 4400000, -400000), _jar("move", "Di chuyển", 1000000, 204000, 796000)])
-    reply = _cover_reply([{"from_jar_id": "move", "amount": 400000}])
-    body = api([reply], summary=summary, body={"spend_amount": None}).json()
-    assert body["ui"]["shortfall"] == 400000 and body["ui"]["moves"] == [{"from_jar_id": "move", "amount": 400000}]
-
-
-def test_an_unknown_target_is_a_404_and_a_jar_without_a_limit_gets_an_explanation(api):
-    assert api([], body={"target_jar_id": "khong-co"}).status_code == 404
-    body = api([], body={"target_jar_id": "savings"}).json()
-    assert body["ui"] is None and "hạn mức" in body["answer"]
-    assert api.model_calls() == 0
-
-
-def test_foreign_script_glitches_are_stripped_from_the_answer(api):
-    body = api([_cover_reply(GOOD_MOVES, answer="Hũ Ăn uống thiếu 14.187.000đ，远远 cần bù.")]).json()
-    assert "远" not in body["answer"] and "cần bù" in body["answer"]
-
-
-# --- distribute ---------------------------------------------------------------------------------------------------
-
-DIST = {"mode": "distribute", "target_jar_id": None, "spend_amount": None, "amount": 1000000}
-
-
-def _dist_reply(allocations, answer="Mình đề xuất chia 1.000.000đ vào các hũ.", reason="Ưu tiên hũ chi nhiều"):
-    return _reply("DistributeDraft", answer=answer, allocations=allocations, reason=reason)
+# --- distribute: unallocated money into jars ---------------------------------------------------------------------
 
 
 def test_distribute_returns_a_distribute_amount_ui(api):
-    allocations = [{"to_jar_id": "food", "amount": 600000}, {"to_jar_id": "move", "amount": 400000}]
-    body = api([_dist_reply(allocations)], body=DIST).json()
-    assert body["ui"] == {"type": "distribute_amount", "allocations": allocations, "reason": "Ưu tiên hũ chi nhiều"}
-
-
-def test_distribute_shows_the_model_the_amount_the_receiving_jars_and_the_customers_spending(api):
-    api([_dist_reply([{"to_jar_id": "food", "amount": 1000000}])], body=DIST)
-    shown = " ".join(str(m.content) for m in _FakeModel.seen[0])
-    assert "1000000" in shown or "1.000.000" in shown
-    assert "id: food" in shown and "id: savings" not in shown  # a jar without a limit cannot receive, so it is not offered
-    assert "monthly_spending_summary" in shown  # the seeded customer data: what to base the split on
-
-
-def test_the_amount_to_distribute_is_the_customers_own_and_not_limited_by_the_unallocated_money(api):
-    summary = _summary(unallocated=0)  # nothing unallocated at all
-    allocations = [{"to_jar_id": "food", "amount": 500000}, {"to_jar_id": "lifestyle", "amount": 200000}]
-    body = api([_dist_reply(allocations)], summary=summary, body={**DIST, "amount": 700000}).json()
-    assert body["ui"]["allocations"] == allocations
+    body = api.dist([_dist_reply(GOOD_DIST)]).json()
+    assert body["ui"] == {"type": "distribute_amount", "allocations": GOOD_DIST, "reason": "Ưu tiên hũ chi nhiều"}
+    assert body["answer"] == "Mình đề xuất chia 1.000.000đ vào các hũ."
     assert api.model_calls() == 1
 
 
+def test_distribute_shows_the_model_the_amount_the_jars_and_each_jars_spending(api):
+    api.dist([_dist_reply(GOOD_DIST)])
+    shown = _shown()
+    assert "1000000" in shown or "1.000.000" in shown
+    assert "id: food" in shown and "id: savings" in shown  # every jar can receive, even one with no balance yet
+    assert "balance: chưa có số dư" in shown
+    assert "Ăn uống ngoài" in shown and "2026-08: 2.900.000đ" in shown  # the food jar's spending, by month and category
+    assert "chưa có chi tiêu" in shown  # the savings jar has none
+    assert "chưa nêu" in shown or "không chỉ định" in shown  # the customer named no jar: the agent picks
+
+
+def test_distribute_only_offers_the_jars_the_customer_named(api):
+    api.dist([_dist_reply([{"to_jar_id": "move", "amount": 1000000}])], body={"jar_ids": ["move", "food"]})
+    shown = _shown()
+    assert "id: move" in shown and "id: food" in shown
+    assert "id: lifestyle" not in shown and "id: savings" not in shown
+
+
+def test_distribute_to_a_jar_the_customer_did_not_name_is_never_returned(api):
+    outside = _dist_reply([{"to_jar_id": "lifestyle", "amount": 1000000}])
+    body = api.dist([outside, outside], body={"jar_ids": ["move", "food"]}).json()
+    assert body["ui"] is None and "thử lại" in body["answer"]
+
+
+def test_distribute_goes_on_without_the_spending_when_pfm_cannot_give_it(api):
+    response = api.dist([_dist_reply(GOOD_DIST)], spending=None)
+    assert response.status_code == 200 and response.json()["ui"]["allocations"] == GOOD_DIST
+    assert "chưa đọc được chi tiêu" in _shown().lower()  # the model is told, so it splits by balance
+
+
+def test_the_money_comes_only_from_the_unallocated_pool_so_a_bigger_amount_needs_no_model_call(api):
+    body = api.dist([], summary=_summary(unallocated=700000)).json()  # 1.000.000 asked, 700.000 unallocated
+    assert body["ui"] is None and "700.000đ" in body["answer"] and "chưa phân bổ" in body["answer"]
+    assert api.model_calls() == 0
+
+
+def test_an_empty_pool_needs_no_model_call(api):
+    for unallocated in (0, -500000, None):
+        body = api.dist([], summary=_summary(unallocated=unallocated)).json()
+        assert body["ui"] is None and "chưa phân bổ" in body["answer"]
+    assert api.model_calls() == 0
+
+
+def test_distribute_with_no_jar_at_all_needs_no_model_call(api):
+    body = api.dist([], summary=_summary(jars=[])).json()
+    assert body["ui"] is None and "chưa có hũ nào" in body["answer"]
+    assert api.model_calls() == 0
+
+
 def test_giving_out_more_than_the_amount_is_never_returned(api):
-    too_much = _dist_reply([{"to_jar_id": "food", "amount": 500000}])
-    assert api([too_much, too_much], body={**DIST, "amount": 400000}).json()["ui"] is None
+    too_much = _dist_reply([{"to_jar_id": "food", "amount": 1000001}])
+    body = api.dist([too_much, too_much]).json()
+    assert body["ui"] is None and "1.000.001" not in body["answer"]  # a generic sentence, not the model's claim
+    assert api.model_calls() == 2
 
 
 def test_distribute_that_leaves_money_over_is_retried_then_accepted(api):
     partial = _dist_reply([{"to_jar_id": "food", "amount": 300000}])
-    body = api([partial, partial], body=DIST).json()
+    body = api.dist([partial, partial]).json()
     assert body["ui"]["allocations"] == [{"to_jar_id": "food", "amount": 300000}]  # only a soft error: nothing forbidden
     assert api.model_calls() == 2
 
 
 def test_distribute_to_a_jar_that_does_not_exist_is_never_returned(api):
     bad = _dist_reply([{"to_jar_id": "du-lich", "amount": 1000000}])
-    assert api([bad, bad], body=DIST).json()["ui"] is None
+    assert api.dist([bad, bad]).json()["ui"] is None
 
 
-def test_distribute_without_an_amount_is_rejected(api):
-    assert api([], body={**DIST, "amount": None}).status_code == 422
+def test_a_hard_error_on_the_first_try_can_be_fixed_by_the_retry(api):
+    bad = _dist_reply([{"to_jar_id": "du-lich", "amount": 1000000}])
+    assert api.dist([bad, _dist_reply(GOOD_DIST)]).json()["ui"]["allocations"] == GOOD_DIST
+    assert "không nằm trong jar-summary" in _shown(1)  # the retry message states what was wrong
+
+
+# --- rebalance: one jar gives money to one or more other jars ----------------------------------------------------
+
+
+def test_rebalance_returns_a_rebalance_jars_ui_whose_giver_comes_from_the_request(api):
+    body = api.reb([_reb_reply(GOOD_REB)]).json()
+    assert body["ui"] == {"type": "rebalance_jars", "from_jar_id": "food", "allocations": GOOD_REB, "reason": "Hũ Ăn uống còn nhiều tiền"}
+    assert body["answer"] == "Mình đề xuất chuyển 500.000đ từ hũ Ăn uống."
+    assert api.model_calls() == 1
+
+
+def test_rebalance_shows_the_model_the_giver_the_amount_the_candidates_and_their_spending(api):
+    api.reb([_reb_reply(GOOD_REB)])
+    shown = _shown()
+    assert "Ăn uống (id: food)" in shown
+    assert "500000" in shown or "500.000" in shown
+    assert "id: move" in shown and "id: lifestyle" in shown and "id: savings" in shown  # every other jar can receive
+    assert "Mua sắm" in shown and "2026-08: 1.500.000đ" in shown  # the candidates' spending
+    assert "không chỉ định" in shown or "chưa nêu" in shown
+
+
+def test_rebalance_only_offers_the_destinations_the_customer_named(api):
+    api.reb([_reb_reply([{"to_jar_id": "move", "amount": 500000}])], body={"to_jar_ids": ["move"]})
+    shown = _shown()
+    assert "id: move" in shown and "id: lifestyle" not in shown and "id: savings" not in shown
+
+
+def test_rebalance_to_a_jar_the_customer_did_not_name_is_never_returned(api):
+    outside = _reb_reply([{"to_jar_id": "lifestyle", "amount": 500000}])
+    body = api.reb([outside, outside], body={"to_jar_ids": ["move"]}).json()
+    assert body["ui"] is None and "thử lại" in body["answer"]
+
+
+def test_a_giver_with_no_balance_yet_is_explained_without_a_model_call(api):
+    body = api.reb([], body={"from_jar_id": "savings"}).json()
+    assert body["ui"] is None and "chưa có số dư" in body["answer"] and "Tiết kiệm" in body["answer"]
     assert api.model_calls() == 0
 
 
-def test_distribute_with_no_jar_that_can_receive_needs_no_model_call(api):
-    only_unlimited = _summary(jars=[_jar("savings", "Tiết kiệm", None, 0, None)])
-    body = api([], summary=only_unlimited, body=DIST).json()
-    assert body["ui"] is None and "hạn mức" in body["answer"]
+def test_a_giver_that_has_less_than_the_amount_is_reported_without_a_model_call(api):
+    body = api.reb([], body={"amount": 2000000}).json()  # food has 1.813.000
+    assert body["ui"] is None and "1.813.000đ" in body["answer"] and "Ăn uống" in body["answer"]
     assert api.model_calls() == 0
+
+
+def test_a_giver_with_nothing_left_is_reported_without_a_model_call(api):
+    summary = _summary(jars=[_jar("food", "Ăn uống", 4000000, 4400000, -400000), _jar("move", "Di chuyển", 1000000, 204000, 796000)])
+    body = api.reb([], summary=summary).json()
+    assert body["ui"] is None and "hết số dư" in body["answer"]
+    assert api.model_calls() == 0
+
+
+def test_a_single_jar_has_nowhere_to_give_to(api):
+    body = api.reb([], summary=_summary(jars=[_jar("food", "Ăn uống", 4000000, 2187000, 1813000)])).json()
+    assert body["ui"] is None and "hũ khác" in body["answer"]
+    assert api.model_calls() == 0
+
+
+def test_a_giver_that_gives_more_than_it_has_is_never_returned(api):
+    too_much = _reb_reply([{"to_jar_id": "move", "amount": 1813001}])
+    body = api.reb([too_much, too_much], body={"amount": 1813000}).json()
+    assert body["ui"] is None
+    assert api.model_calls() == 2
+
+
+def test_rebalance_that_moves_more_than_the_amount_is_never_returned(api):
+    too_much = _reb_reply([{"to_jar_id": "move", "amount": 600000}])
+    assert api.reb([too_much, too_much]).json()["ui"] is None
+
+
+def test_rebalance_that_moves_less_than_the_amount_is_retried_then_accepted(api):
+    partial = _reb_reply([{"to_jar_id": "move", "amount": 200000}])
+    body = api.reb([partial, partial]).json()
+    assert body["ui"]["allocations"] == [{"to_jar_id": "move", "amount": 200000}]
+    assert api.model_calls() == 2
+
+
+def test_rebalance_to_itself_or_to_an_invented_jar_is_never_returned(api):
+    for bad_target in ("food", "du-lich", "pool"):
+        bad = _reb_reply([{"to_jar_id": bad_target, "amount": 500000}])
+        assert api.reb([bad, bad]).json()["ui"] is None, bad_target
+
+
+def test_rebalance_goes_on_without_the_spending_when_pfm_cannot_give_it(api):
+    response = api.reb([_reb_reply(GOOD_REB)], spending=None)
+    assert response.status_code == 200 and response.json()["ui"]["allocations"] == GOOD_REB
+    assert "chưa đọc được chi tiêu" in _shown().lower()
 
 
 # --- what the customer reads ----------------------------------------------------------------------------------
 
 
+def test_foreign_script_glitches_are_stripped_from_the_answer(api):
+    body = api.dist([_dist_reply(GOOD_DIST, answer="Mình đề xuất chia，远远 vào các hũ.")]).json()
+    assert "远" not in body["answer"] and "vào các hũ" in body["answer"]
+
+
 def test_internal_words_in_the_reason_get_one_retry_that_names_them(api):
-    jargon = _cover_reply(GOOD_MOVES, reason="Tổng amount đúng bằng shortfall; hũ có spendable lớn nhất.")
-    body = api([jargon, _cover_reply(GOOD_MOVES)]).json()
-    assert body["ui"]["reason"] == "Lấy từ tiền chưa phân bổ và hũ Hưởng thụ"
-    feedback = " ".join(str(m.content) for m in _FakeModel.seen[1])
-    assert "shortfall" in feedback and "spendable" in feedback
+    jargon = _reb_reply(GOOD_REB, reason="Tổng amount đúng bằng balance; hũ có spendable lớn nhất.")
+    body = api.reb([jargon, _reb_reply(GOOD_REB)]).json()
+    assert body["ui"]["reason"] == "Hũ Ăn uống còn nhiều tiền"
+    feedback = _shown(1)
+    assert "balance" in feedback and "spendable" in feedback
 
 
 def test_jargon_that_stays_is_still_returned_because_the_proposal_itself_is_right(api):
-    jargon = _cover_reply(GOOD_MOVES, reason="Hũ có spendable lớn nhất.")
-    body = api([jargon, jargon]).json()
-    assert body["ui"]["moves"] == GOOD_MOVES  # a wording slip must not throw away a correct proposal
+    jargon = _dist_reply(GOOD_DIST, reason="Hũ có spendable lớn nhất.")
+    body = api.dist([jargon, jargon]).json()
+    assert body["ui"]["allocations"] == GOOD_DIST  # a wording slip must not throw away a correct proposal
 
 
 def test_the_sentences_of_the_answer_are_separated_by_a_blank_line(api):
-    body = api([_cover_reply(GOOD_MOVES, answer="Câu một.\nCâu hai.\n\n\nCâu ba.")]).json()
+    body = api.dist([_dist_reply(GOOD_DIST, answer="Câu một.\nCâu hai.\n\n\nCâu ba.")]).json()
     assert body["answer"] == "Câu một.\n\nCâu hai.\n\nCâu ba."
 
 
@@ -310,15 +385,15 @@ def test_the_sentences_of_the_answer_are_separated_by_a_blank_line(api):
 
 
 def test_a_retry_that_fails_keeps_the_acceptable_first_proposal(api):
-    jargon = _cover_reply(GOOD_MOVES, reason="Hũ có spendable lớn nhất.")
-    body = api([jargon]).json()  # the script ends: the retry call fails (as a dropped connection would)
-    assert body["ui"]["moves"] == GOOD_MOVES
+    jargon = _dist_reply(GOOD_DIST, reason="Hũ có spendable lớn nhất.")
+    body = api.dist([jargon]).json()  # the script ends: the retry call fails (as a dropped connection would)
+    assert body["ui"]["allocations"] == GOOD_DIST
     assert api.model_calls() == 2
 
 
 def test_a_first_try_with_a_broken_rule_and_a_failing_retry_returns_nothing(api):
-    invented = _cover_reply([{"from_jar_id": "du-phong", "amount": 14187000}])
-    body = api([invented]).json()
+    bad = _reb_reply([{"to_jar_id": "du-lich", "amount": 500000}])
+    body = api.reb([bad]).json()
     assert body["ui"] is None and "thử lại" in body["answer"]
 
 
@@ -326,19 +401,5 @@ def test_a_first_try_with_a_broken_rule_and_a_failing_retry_returns_nothing(api)
 
 
 def test_when_every_model_call_fails_the_answer_is_a_503(api):
-    response = api([])  # the script is empty: every call fails
-    assert response.status_code == 503
-    assert api.model_calls() == 2  # the first try and the retry
-
-
-def test_the_model_used_by_this_endpoint_has_a_short_timeout_and_no_hidden_retries(monkeypatch):
-    seen = {}
-
-    def _fake_default_model(api_key, **kwargs):
-        seen.update(kwargs)
-        return _FakeModel(messages=iter([]))
-
-    monkeypatch.setattr(jar_endpoint, "default_model", _fake_default_model)
-    jar_endpoint._model()
-    assert seen == {"timeout": jar_endpoint.MODEL_TIMEOUT_SECONDS, "max_retries": 0}
-    assert 0 < jar_endpoint.MODEL_TIMEOUT_SECONDS <= 60
+    assert api.dist([]).status_code == 503  # the script is empty: every call fails
+    assert api.reb([]).status_code == 503

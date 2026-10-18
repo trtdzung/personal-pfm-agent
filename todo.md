@@ -1909,6 +1909,81 @@ Hỏi lại có nên đồng bộ luôn file mock — chọn "Có".
   `direction`/`type` của mock, không import thẳng hàm production).
 - **Test:** 645 pass.
 
+### 1.39. [Đã làm] Cập nhật logic hũ theo contract mới của backend: tách HẠN MỨC (`limit`) khỏi SỐ DƯ (`balance`), `create_jar` bắt buộc `initial_balance`
+
+**Người dùng:** "Tôi mới cập nhật phần backend, kiểm tra xem logic hiện tại liên quan đến hũ (tạo hũ, sửa hũ, chuyển tiền giữa hũ) có vấn đề gì không?" rồi "Làm đi". `git diff backend_docs/pfm-read-api.md` (2026-09-23) + GET thật
+`/api/jar-summary` xác nhận backend **đã deploy**: mỗi hũ có `limit` (hạn mức tháng, `budgetLimit` là alias) và `balance` (số dư chạy, cộng dồn qua tháng; `remaining` là alias **deprecated**); `allocationHeadroom` giờ **bằng `unallocated`**
+(tiền còn nạp được vào hũ, trần của `initial_balance`), không còn là trần hạn mức; `create_jar` bắt buộc `initial_balance`; đích của `rebalance_jars` cần `balance` ≠ null (không phải có hạn mức). Toàn bộ agent lúc đó chưa có từ nào của contract mới.
+
+**Lỗi thật đã tái hiện bằng model thật trên CIF_0001 (trước khi sửa):**
+1. "Tạo hũ Du lịch 800 nghìn" → `create_jar` **không có `initial_balance`** → `pfm` bỏ im lặng cả form (khách chỉ thấy chữ); agent không tự bắt được (validator không biết field, `reason` còn viết "phần hạn mức còn được đặt thêm 9.895.000đ nên đủ chỗ").
+2. "Tăng hạn mức hũ Ăn uống lên 15 triệu" → agent **từ chối** vì skill vẫn dạy "tăng hạn mức ≤ `allocationHeadroom`" (kèm tính sai: 13,495tr bị gọi là "chưa đủ" 10,2tr). Contract mới: tăng hạn mức không cần headroom.
+3. Bù giữa hũ chạy đúng nhưng chỉ nhờ alias `remaining`; điều kiện hũ đích/nhận (`cover_shortfall`, `receivers`) vẫn xét `budgetLimit` thay vì `balance`.
+
+**Đã sửa (TDD: test đỏ → sửa → xanh, từng bước):**
+- `text_utils._is_valid_create_jar`: `initial_balance` **bắt buộc**, số nguyên ≥ 0 (0 hợp lệ; thiếu/âm/lẻ/chuỗi/bool/NaN → bỏ). Chỉ kiểm hình dạng, giữ triết lý "ui_guard chỉ kiểm id, số tiền/headroom để `pfm` kiểm" (không thêm kiểm ≤ headroom ở agent).
+- `skills/project/spending-jar/SKILL.md` viết lại: `limit`/`balance`/`allocationHeadroom` theo nghĩa mới; `create_jar` kèm `initial_balance` (khách nêu → dùng, không nêu → `min(hạn mức, headroom)`, headroom ≤ 0 → `0` và **vẫn chèn form**); `edit_jar` tăng/giảm hạn mức luôn được, **không kiểm headroom**, nói rõ hạn mức không thêm tiền vào hũ; bỏ hẳn logic "giảm hũ khác để có chỗ"; ví dụ ĐÚNG/SAI mới (gồm ví dụ tăng hạn mức 15tr > headroom vẫn đề xuất, ví dụ headroom âm vẫn tạo hũ với `initial_balance: 0`).
+- `skills/project/jar-rebalance/SKILL.md`: `balance` thay `remaining`, hũ đích cần `balance` ≠ null (chưa có số dư → không trả `ui`, nhắc khách nạp trong pfm), số dư sau bù mang sang tháng sau, cách nói "hết số dư, còn thiếu … chưa được bù" (đúng câu chữ doc backend), `balance: null` → "hũ chưa có số dư".
+- `instructions.md`, docstring `get_jar_summary` (câu cũ "how much MORE limit can still be set" là nguyên nhân lỗi 2), `render_jar_summary`/`_jar_line` (in `limit`/`balance`, "chưa có số dư"), `jar_checks.py` (`cover_shortfall`/`receivers` theo `balance`, từ cấm thêm `balance`/`initial_balance`), `jar_endpoint.py` (3 câu trả lời/thông điệp), `prompts/jar_cover.md`, `prompts/jar_distribute.md`, notebook Option J/K (đọc `limit`/`balance`).
+- Docs: `docs/spending-jar.md`, `jar-rebalance.md`, `jar-rebalance-endpoint.md`, `api.md` — đã đồng bộ sang `pfm/agent_backend_docs/`.
+- Test: sửa fixture sang shape mới (`limit`/`balance`, không alias để chắc chắn code không đọc alias), thêm test mới (initial_balance, headroom không giới hạn hạn mức, hũ có số dư không có hạn mức bù được, hũ có hạn mức không có số dư không bù được, prompt/doc), **xoá 1 test** khoá logic đã bỏ ("phải giảm hũ khác bao nhiêu để có chỗ"). 684 pass.
+
+**Còn treo / cần xác nhận:**
+- [ ] `distribute_amount` / `POST /jar-rebalance mode: distribute`: doc `pfm` ghi "Chia tiền vào hũ" là việc khách tự làm ("không có form Agent cho việc này") và không nhắc `distribute_amount` — cần `pfm` xác nhận có render card này không (đã ghi cảnh báo trong `docs/jar-rebalance-endpoint.md`). Điều kiện hũ nhận đổi sang `balance` ≠ null theo "cùng quy tắc với hũ đích", nhưng hũ chưa nạp bao giờ (`balance: null`) thì không nhận được — chưa rõ có đúng ý sản phẩm không.
+- [ ] Doc `pfm` phần C ghi "cần đo lại sau khi Agent cập nhật" — chạy lại bộ kịch bản C1 trên agent thật.
+- [ ] `tests/test_insight_endpoint.py::test_rejects_missing_key_mismatched_metrics_and_ungrounded_number` đang đỏ **từ trước** (không liên quan): endpoint chưa kiểm "không có chữ số trong `explanation`/`suggested_action`" như test mong đợi.
+
+### 1.40. [Đã làm] Skill `jar-rebalance` gọn lại thành "chuyển một số tiền chưa phân bổ vào hũ" — chat trả `distribute_amount`
+
+**Người dùng (qua nhiều lượt chỉnh hướng):** ban đầu "chỉnh skill rebalance để chuyển từ hũ này sang hũ khác" → sau đó làm rõ: "nó là chuyển một số tiền chưa chia vào các hũ ấy", "chưa có số dư vẫn được chuyển tiền", nguồn = **tiền chưa phân bổ**
+(một số tiền cụ thể), nhiều hũ trong 1 câu thì **chat trả luôn `distribute_amount`**. Câu thử: "chuyển 300k vào hũ tiết kiệm" (hũ Tiết kiệm của CIF_0001 đang `balance: null`).
+
+**Bằng chứng đọc từ repo `pfm` (không đoán):** card `AgentRebalanceCard` chỉ dùng `shortfall` để điền sẵn, tự kiểm nguồn ≤ `spendable`; `AllocationSheet` ("Chia ngay") nạp từ "Chờ phân bổ" vào **mọi hũ** (kể cả `balance: null`), guardrail Σ ≤ pool;
+**nhưng `agent-api.ts` của pfm chỉ biết chart/transfer_form/create_jar/edit_jar/rebalance_jars/clarify_options — chưa có `distribute_amount`**.
+
+- `skills/project/jar-rebalance/SKILL.md` viết lại còn ~120 dòng (trước ~230): một form `distribute_amount`; tiền luôn từ tiền chưa phân bổ, tối đa max(0, `unallocated`), **không lấy từ hũ khác**; vượt → không trả `ui`, nói còn bao nhiêu; khách nêu số từng hũ → dùng đúng; chỉ nêu tổng cho nhiều hũ → hũ cần bù trước rồi chia đều; hũ `balance: null` **vẫn nhận được**; "bù hũ âm" = nạp đúng −`balance`. Bỏ hẳn logic chọn hũ nguồn/thứ tự/`shortfall`/`moves`. Tên thư mục skill giữ `jar-rebalance` (tránh đổi hàng loạt tham chiếu).
+- `jar_checks.receivers()`: **mọi hũ** nhận được (trước: chỉ hũ có `balance`); `jar_endpoint.py` mode `distribute`: chỉ còn trả sớm khi khách chưa có hũ nào; `prompts/jar_distribute.md`, `docs/jar-rebalance-endpoint.md` khớp. `/jar-rebalance` mode `cover` **giữ nguyên** (vẫn `rebalance_jars`, lấy từ pool rồi hũ khác, đích cần `balance`).
+- `instructions.md`: bảng chọn form và đoạn "Chuyển tiền vào hũ (`distribute_amount`)"; chat **không còn trả `rebalance_jars`**. Docs: `api.md`, `spending-jar.md`, `jar-rebalance.md` (ghi chú từ 2026-09-24), `jar-rebalance-endpoint.md` (thêm mục "Trong chat") — đã đồng bộ sang `pfm/agent_backend_docs/`.
+- Notebook: Option M = "Chuyển 300 nghìn vào hũ Tiết kiệm" gọi agent trực tiếp + `check_distribute`; Option K bước 2 đổi sang `distribute_amount`.
+- Test (TDD): viết lại block test skill; **xoá** các test khoá logic đã bỏ (thứ tự nguồn, pool-first, so nguồn với shortfall, hũ đích cần balance ở chat); thêm test hũ không số dư nhận được, tiền vượt pool, nhiều hũ, skill ≤ 120 dòng, docs, notebook. 691 pass.
+- **Chạy thật (CIF_0001, unallocated 13.244.000đ):** "Chuyển 300 nghìn vào hũ Tiết kiệm" → đọc skill `jar-rebalance`, `distribute_amount` [savings 300000], `check_distribute` hard `[]`; "Chia 1 triệu vào Ăn uống 600 nghìn và Di chuyển 400 nghìn" → 1 form 2 hũ đúng số; "Chuyển 50 triệu vào Ăn uống" → không `ui`, nói còn 13.244.000đ.
+
+**Còn treo:**
+- [ ] **`pfm` chưa có card `distribute_amount`** — chat trả loại này thì UI thật chỉ hiện `answer` cho tới khi pfm thêm (doc pfm cũng ghi "Chia tiền vào hũ" là khách tự làm). Cần pfm xác nhận/làm card (có thể tái dùng logic `AllocationSheet`).
+- [ ] Chat kiểm Σ ≤ pool chỉ bằng skill (agent không kiểm bằng code, đúng phạm vi `ui_guard`); pfm kiểm lại khi ghi.
+- [ ] Chưa còn đường nào trong chat để lấy tiền từ hũ này sang hũ khác — nếu cần thì thêm lại `rebalance_jars` nhánh chuyển tự nguyện (`JarTransferSheet` của pfm hiện khách tự làm).
+
+### 1.41. [Đã làm] `docs/jar.md` — trang tổng hợp Agent trả gì cho hũ (tạo, sửa, chuyển tiền vào hũ)
+
+**Người dùng:** "tạo hũ, sửa hũ và chuyển tiền vào hũ thì đang có các type trả ra thế nào, hãy doc lại vào một file jar.md hướng dẫn cách Agent trả dữ liệu". Viết `docs/jar.md` (đồng bộ sang `pfm/agent_backend_docs/`, link từ `docs/api.md`):
+bảng type theo tình huống (`create_jar`/`edit_jar`/`distribute_amount` từ chat; `rebalance_jars` chỉ từ `POST /jar-rebalance` cover), phân biệt `limit`/`balance`/`allocationHeadroom`(= `unallocated`), schema + ví dụ JSON đầy đủ (envelope `answer/thread_id/ui`) cho từng loại,
+quy tắc nghiệp vụ, khi nào `ui = null`, 2 lớp kiểm (`text_utils.py`, `ui_guard.py`) và phần `pfm` kiểm lại, luồng UI gợi ý, và cảnh báo `pfm` chưa có card `distribute_amount`.
+Test mới (6): mọi ví dụ JSON trong `jar.md` đi qua validator thật, `reason` không lộ tên nội bộ, có đủ các type/khái niệm, link từ `api.md`. 697 pass.
+
+### 1.42. [Đã làm] Thêm skill `rebalance-jars` (form `rebalance_jars`) và đổi tên skill `jar-rebalance` → `distribute-amount`
+
+**Người dùng:** "Thêm cho tôi skill rebalance jar" → "hãy để là rebalance_jars" → "Sửa lại tên jar-rebalance thành distribute_amount". Kết quả: **hai skill, hai form** (tên thư mục theo quy ước gạch nối):
+- `skills/project/distribute-amount/` (đổi tên từ `jar-rebalance`): nạp một số **tiền chưa phân bổ** vào 1 hoặc nhiều hũ → `distribute_amount` (mục 1.40 giữ nguyên nội dung).
+- `skills/project/rebalance-jars/` (mới, ~130 dòng): chuyển **số dư từ hũ này sang hũ khác** hoặc lấy bù từ hũ khác cho hũ thiếu → `rebalance_jars`. Ba tình huống: (1) khách nêu hũ nguồn + số tiền → hũ đích B, `shortfall` = số tiền khách nêu, `moves` = **đúng hũ nguồn khách nêu**, không thêm `pool`; (2) hũ đích thiếu, không nêu nguồn → `pool` trước rồi hũ nhiều `spendable` nhất; (3) nêu nguồn không nêu số → cho đúng số thiếu, không thiếu thì hỏi lại. Quy tắc cứng như contract `pfm` (Σ moves = shortfall, nguồn ≤ `spendable`, `pool` ≤ max(0, `unallocated`), hũ đích cần `balance` ≠ null); 1 hũ đích mỗi lượt; nguồn khách nêu không đủ → không trả `ui`.
+- Nối dây: mô tả 2 skill trỏ sang nhau; `instructions.md` (bảng chọn form, 2 đoạn quy tắc, danh sách skill); `spending-jar` và `transfer-form` trỏ đúng skill theo việc (chuyển giữa hũ → `rebalance-jars`, nạp tiền chưa phân bổ → `distribute-amount`); README tree; docs `api.md`/`jar.md`/`jar-rebalance.md`/`jar-rebalance-endpoint.md`/`spending-jar.md` (chat lại trả `rebalance_jars`, qua skill riêng) — đồng bộ sang `pfm/agent_backend_docs/`. Endpoint `POST /jar-rebalance` và tên file `docs/jar-rebalance*.md` **không đổi**.
+- Test (TDD): đảo các khẳng định "chat không còn trả `rebalance_jars`"; test mới cho skill `rebalance-jars` (front matter không có ": " chưa quote, nguồn khách nêu, pool-first khi không nêu, 1 hũ đích/lượt, ví dụ qua validator), test "tên skill cũ không còn ở đâu agent đọc". 710 pass.
+- Chạy thật (CIF_0001): "Chuyển 500 nghìn từ hũ Ăn uống sang hũ Di chuyển" → đọc `rebalance-jars`, `rebalance_jars` {target transport, shortfall 500000, moves [food 500000]}; "Chuyển 300 nghìn vào hũ Tiết kiệm" → đọc `distribute-amount`, `distribute_amount`; "định chi 5 triệu từ hũ Thiết yếu, thiếu thì lấy từ hũ khác" → `rebalance-jars`, moves [pool 3349000]. Cả 3 `check_*` không có lỗi cứng.
+
+**Còn treo:** `jar_checks.check_cover` (dùng cho endpoint) luôn nhắc "pool trước" ở mức mềm nên với chuyển có hũ nguồn khách nêu sẽ in 1 soft note (không ảnh hưởng, không chặn) — chưa dạy nó biết nguồn khách chọn. Card `pfm` cho `distribute_amount` vẫn chưa có (mục 1.40). Notebook Option M vẫn là câu nạp tiền (`distribute_amount`); chưa có Option riêng cho `rebalance-jars` (Option K bước 2 đã đổi sang `distribute_amount`).
+
+### 1.43. [Đã làm] `rebalance_jars` đổi dạng (1 hũ nguồn → nhiều hũ nhận), 2 endpoint `POST /jar-distribute` + `POST /jar-rebalance`, và gom toàn bộ doc hũ vào `docs/jars/`
+
+**Người dùng:** "Agent cần các skill: spending-jar (tạo/sửa hũ), distribute-amount (chia tiền vào 1 hoặc nhiều hũ), rebalance-jars (chuyển một số tiền từ hũ này sang 1 hoặc nhiều hũ khác). Ngoài ra cần 2 endpoint hoạt động như distribute-amount và rebalance-jar, inject đầy đủ thông tin về hũ, chi tiêu của hũ và trả ra format tương tự" → chọn: đổi shape `rebalance_jars`, giữ tên `/jar-rebalance` + thêm `/jar-distribute`, đầu vào tối thiểu (Agent tự quyết chia) → "viết doc sang một folder riêng docs/jars, bỏ các thông tin trùng lặp ở các doc khác".
+- **Shape mới (breaking cho `pfm`):** `rebalance_jars` = `{from_jar_id, allocations:[{to_jar_id, amount}], reason}`; dạng cũ `target_jar_id/shortfall/moves` (và nguồn `"pool"`) bị `text_utils.py` từ chối. Quy tắc: Σ ≤ `spendable` hũ nguồn, nguồn ≠ hũ nhận, không `"pool"`, mỗi hũ nhận một lần. `distribute_amount` gộp cùng quy tắc: tổng ≤ max(0, `unallocated`) (cả chat lẫn endpoint).
+- **Endpoint** (`jar_endpoint.py` viết lại): `POST /jar-distribute {user_id, amount, jar_ids?}` và `POST /jar-rebalance {user_id, from_jar_id, amount, to_jar_ids?}`, không còn `mode` (`extra="forbid"` → 422 với field cũ). Server đọc `jar-summary` **và chi tiêu ròng 3 tháng dương lịch gần nhất theo từng hũ** (`fetch_jar_spending`, gom theo `categoryIds`, chi − hoàn, bỏ giao dịch ẩn) rồi đưa vào lời nhắc; đọc giao dịch lỗi thì vẫn chạy (chia theo số dư). Code trả lời sớm (không gọi model) khi không đủ tiền chưa phân bổ / hũ nguồn chưa có số dư / hết số dư / không đủ / không có hũ nhận. `jar_checks.check_distribute` / `check_rebalance` (hard/soft), thử lại 1 lần; hũ nguồn của rebalance lấy từ request, không do model. Prompt: `prompts/jar_distribute.md`, `prompts/jar_rebalance.md` (xoá `jar_cover.md`).
+- **Skill:** `rebalance-jars` viết lại theo shape mới; `distribute-amount` giữ nguyên hành vi; `spending-jar` cập nhật theo doc pfm 2026-09-24 (không còn hũ "Khác" tự sinh → "chưa xếp hũ"; `limit: null` ≠ `balance: null`).
+- **Doc:** thư mục `docs/jars/` (`README.md` tổng quan + khái niệm + ai kiểm gì, `create-edit-jar.md`, `distribute-amount.md`, `rebalance-jars.md`, `endpoints.md`); xoá `docs/jar.md`, `spending-jar.md`, `jar-rebalance.md`, `jar-rebalance-endpoint.md`; `docs/api.md` chỉ còn con trỏ; README/`transfer-form.md`/`text_utils.py` trỏ lại; mirror sang `../pfm/agent_backend_docs/` (thư mục gitignore của pfm; xoá bản phẳng cũ).
+- **Notebook:** Option J (2 endpoint + `check_distribute`/`check_rebalance`), K/M cập nhật đường dẫn doc, thêm Option N (`rebalance-jars` gọi thẳng agent). Nhớ Restart Kernel trước khi chạy.
+- **Test (TDD):** `tests/test_jar_checks.py` (18), `tests/test_jar_endpoint.py` (56), `test_text_utils`/`test_ui_guard`/`test_customer_data_tools` (43), `test_jar_skills.py` (73; ví dụ JSON trong `docs/jars/*.md` đi qua validator thật, không còn doc phẳng cũ, link tương đối đều tồn tại), `test_notebook.py` (28), `test_readme.py`. Toàn bộ: 728 pass + 1 fail có từ trước (`test_insight_endpoint.py::test_rejects_missing_key_mismatched_metrics_and_ungrounded_number`, không liên quan).
+- **Chạy thật (CIF_0001, pfm sống):** `/jar-distribute` 500.000đ → chia Ăn uống 350k + Hưởng thụ 150k (hard=[], soft=[], 10s); `/jar-rebalance` từ Ăn uống 500.000đ → sang Thiết yếu (hard=[], 30s; lần đầu `reason` 335 ký tự bị soft-retry rồi ra bản ngắn); chat "300 nghìn từ hũ Ăn uống sang hũ Thiết yếu và 200 nghìn sang hũ Di chuyển" → `rebalance_jars` {from food, 2 allocations}.
+
+**Còn treo (việc của `pfm`, chưa sửa vì là repo/file của bạn):** (1) `AgentRebalanceCard`, `isRebalanceJarsUi`, `agent-rebalance.ts` và route proxy `/api/agent/jar-rebalance` còn theo dạng/`mode` cũ; cần thêm proxy `/api/agent/jar-distribute`. (2) `pfm` chưa có card `distribute_amount`. (3) `backend_docs/pfm-read-api.md` (file của bạn) vẫn mô tả `rebalance_jars` dạng cũ và `POST /jar-rebalance` cover — cần cập nhật khi bạn chốt.
+
 ## 2. Chưa được verify bằng cách chạy thật — cần làm trước khi tin tưởng agent
 
 - [ ] Chạy đủ **11 câu hỏi** trong

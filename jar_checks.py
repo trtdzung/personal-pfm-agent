@@ -1,21 +1,20 @@
-"""The deterministic side of POST /jar-rebalance (jar_endpoint.py).
+"""The deterministic side of the two jar endpoints (jar_endpoint.py): `POST /jar-distribute` and `POST /jar-rebalance`.
 
-The LLM proposes; this module says what is true. It computes the numbers the model must not compute (the
-shortfall, the pool) and checks a proposal against the `jar-summary` the server read for this very request.
+The LLM proposes; this module says what is true. It reads the numbers the model must not compute (what the pool holds,
+what the giving jar can give) from the `jar-summary` the server read for this very request, and checks a proposal
+against them.
 
 Two grades of error, on purpose:
-- `hard`: breaks a rule pfm enforces (a source gives more than it has, a made-up id, a wrong shortfall, a total
-  that does not add up). The proposal must not be returned.
-- `soft`: breaks only the preferred order (backend_docs/pfm-read-api.md B4: "gợi ý, không phải quy tắc cứng").
-  Worth one retry with the correct plan, but a proposal that still has only this is acceptable.
+- `hard`: breaks a rule pfm enforces (a source gives more than it has, a made-up id, more than the amount asked, a
+  broken shape). The proposal must not be returned.
+- `soft`: only incomplete (part of the amount is left over) or badly worded. Worth one retry, but a proposal that still
+  has only this is acceptable.
 """
 
 from dataclasses import dataclass, field
 
 from text_utils import is_valid_ui
 from ui_guard import TurnFacts, ui_matches_facts
-
-POOL = "pool"
 
 
 @dataclass
@@ -33,102 +32,68 @@ def _jars(summary: dict) -> dict[str, dict]:
 
 
 def pool_available(summary: dict) -> int:
-    """The "Chưa phân bổ" money that can be given away: never negative, never unknown-as-something."""
+    """The "Chưa phân bổ" money that can be handed out: never negative, never unknown-as-something."""
     unallocated = summary.get("unallocated")
     return max(0, unallocated) if isinstance(unallocated, (int, float)) else 0
 
 
-def cover_shortfall(summary: dict, target_id: str, spend_amount: int | None) -> int | None:
-    """VND the target jar is short. `None` when it cannot be covered at all (unknown jar, or no `budgetLimit`).
-
-    (a) a planned spend: `spend_amount − spendable` (the formula of backend_docs B4);
-    (b) no planned spend: a jar that "needs covering" (`remaining` < 0) is short by `−remaining`.
-    0 means nothing to cover.
-    """
-    target = _jars(summary).get(target_id)
-    if target is None or target.get("budgetLimit") is None:
-        return None
-    if spend_amount is not None:
-        return max(0, spend_amount - (target.get("spendable") or 0))
-    remaining = target.get("remaining")
-    return -remaining if isinstance(remaining, (int, float)) and remaining < 0 else 0
-
-
-def cover_plan(summary: dict, target_id: str, shortfall: int) -> list[tuple[str, int]] | None:
-    """The preferred way to cover `shortfall`: the pool first, then the other jars by `spendable`, biggest first,
-    each giving min(what it has, what is still missing). `None` when everything together is not enough."""
-    plan: list[tuple[str, int]] = []
-    missing = shortfall
-    pool = pool_available(summary)
-    if pool > 0:
-        take = min(pool, missing)
-        plan.append((POOL, take))
-        missing -= take
-    others = [j for j in _jars(summary).values() if j["id"] != target_id and (j.get("spendable") or 0) > 0]
-    for jar in sorted(others, key=lambda j: j["spendable"], reverse=True):
-        if missing <= 0:
-            break
-        take = min(jar["spendable"], missing)
-        plan.append((jar["id"], take))
-        missing -= take
-    return plan if missing <= 0 else None
-
-
-def check_cover(summary: dict, target_id: str, shortfall: int, ui: dict) -> Verdict:
-    verdict = Verdict()
-    if not is_valid_ui(ui) or ui.get("type") != "rebalance_jars":
-        verdict.hard.append("Sai cấu trúc rebalance_jars (đủ field, amount > 0, không lặp nguồn, Σ moves phải bằng shortfall).")
-        return verdict
-    if ui["target_jar_id"] != target_id:
-        verdict.hard.append(f"target_jar_id phải là {target_id!r}.")
-    if ui["shortfall"] != shortfall:
-        verdict.hard.append(f"shortfall phải đúng bằng {shortfall} ({_vnd(shortfall)}), không phải {ui['shortfall']}.")
-    if not ui_matches_facts(ui, TurnFacts(jar_summary=summary, expense_category_ids=None)):
-        verdict.hard.append("Có id hũ không nằm trong jar-summary.")
-        return verdict
-    jars = _jars(summary)
-    for move in ui["moves"]:
-        source, amount = move["from_jar_id"], move["amount"]
-        if source == POOL:
-            if amount > pool_available(summary):
-                verdict.hard.append(f"pool chỉ cho tối đa {pool_available(summary)} ({_vnd(pool_available(summary))}), không phải {amount}.")
-        elif jars[source].get("spendable") is None or amount > jars[source]["spendable"]:
-            verdict.hard.append(f"hũ {source} chỉ cho tối đa spendable {jars[source].get('spendable')}, không phải {amount}.")
-    if not verdict.hard:
-        plan = cover_plan(summary, target_id, shortfall)
-        given = {m["from_jar_id"]: m["amount"] for m in ui["moves"]}
-        if plan is not None and given != dict(plan):
-            verdict.soft.append(
-                "Thứ tự ưu tiên là pool trước, rồi hũ có spendable lớn nhất, dừng khi đủ. Cách đúng: "
-                + ", ".join(f"{source} {amount}" for source, amount in plan) + "."
-            )
-    return verdict
+def source_available(summary: dict, jar_id: str) -> int:
+    """What a jar can give away: its `spendable`. 0 for an unknown jar or one with no balance yet (`null`)."""
+    spendable = _jars(summary).get(jar_id, {}).get("spendable")
+    return spendable if isinstance(spendable, (int, float)) else 0
 
 
 def receivers(summary: dict) -> list[dict]:
-    """Jars that can receive money: only those with a `budgetLimit` (same rule as a rebalance target)."""
-    return [j for j in _jars(summary).values() if j.get("budgetLimit") is not None]
+    """Jars that can receive money: every jar. A jar with no balance yet (or no limit) can still be topped up --
+    the deposit is how it gets its first balance (pfm's "Chia ngay" sheet lists every jar). Only a jar that is not in
+    the summary (an invented id) cannot."""
+    return list(_jars(summary).values())
+
+
+def _known_ids(summary: dict, ui: dict) -> bool:
+    return ui_matches_facts(ui, TurnFacts(jar_summary=summary, expense_category_ids=None))
 
 
 def check_distribute(summary: dict, amount: int, ui: dict) -> Verdict:
-    """`amount` is the customer's own money to share into the jars' balances. It is not taken from the pool or from
-    any jar, so nothing about the pool limits it (only the shape, the jar ids and that the total is `amount`)."""
+    """`amount` of the unallocated money is shared into the jars' balances: the total may not exceed `amount` nor what
+    the pool really holds."""
     verdict = Verdict()
     if not is_valid_ui(ui) or ui.get("type") != "distribute_amount":
-        verdict.hard.append("Sai cấu trúc distribute_amount (allocations không rỗng, amount > 0, mỗi hũ một lần, có reason).")
+        verdict.hard.append("Sai cấu trúc distribute_amount (allocations không rỗng, amount > 0, mỗi hũ một lần, không có pool, có reason).")
         return verdict
-    if not ui_matches_facts(ui, TurnFacts(jar_summary=summary, expense_category_ids=None)):
+    if not _known_ids(summary, ui):
         verdict.hard.append("Có id hũ không nằm trong jar-summary.")
         return verdict
-    can_receive = {j["id"] for j in receivers(summary)}
-    for allocation in ui["allocations"]:
-        if allocation["to_jar_id"] not in can_receive:
-            verdict.hard.append(f"hũ {allocation['to_jar_id']} chưa đặt hạn mức nên không nhận được tiền.")
     total = sum(a["amount"] for a in ui["allocations"])
     if total > amount:
         verdict.hard.append(f"Tổng chia {total} vượt số tiền cần chia {amount} ({_vnd(amount)}).")
     elif total < amount:
         verdict.soft.append(f"Mới chia {total}, còn {amount - total} ({_vnd(amount - total)}) chưa chia; hãy chia hết {_vnd(amount)} (hoặc nói rõ lý do giữ lại trong reason).")
+    if total > pool_available(summary):
+        verdict.hard.append(f"Tiền chưa phân bổ chỉ còn {pool_available(summary)} ({_vnd(pool_available(summary))}), không đủ để chia {total}.")
+    return verdict
+
+
+def check_rebalance(summary: dict, from_jar_id: str, amount: int, ui: dict) -> Verdict:
+    """One jar (`from_jar_id`) gives `amount` to one or more other jars: the total may not exceed `amount` nor what the
+    giving jar really has (`spendable`); a giver with no balance yet has nothing to give."""
+    verdict = Verdict()
+    if not is_valid_ui(ui) or ui.get("type") != "rebalance_jars":
+        verdict.hard.append("Sai cấu trúc rebalance_jars (from_jar_id là hũ thật, allocations không rỗng, amount > 0, mỗi hũ nhận một lần, không tự chuyển cho chính mình, có reason).")
+        return verdict
+    if ui["from_jar_id"] != from_jar_id:
+        verdict.hard.append(f"from_jar_id phải là {from_jar_id!r}.")
+    if not _known_ids(summary, ui):
+        verdict.hard.append("Có id hũ không nằm trong jar-summary.")
+        return verdict
+    total = sum(a["amount"] for a in ui["allocations"])
+    available = source_available(summary, ui["from_jar_id"])
+    if total > available:
+        verdict.hard.append(f"hũ {ui['from_jar_id']} chỉ cho tối đa spendable {available} ({_vnd(available)}), không phải {total}.")
+    if total > amount:
+        verdict.hard.append(f"Tổng chuyển {total} vượt số tiền cần chuyển {amount} ({_vnd(amount)}).")
+    elif total < amount:
+        verdict.soft.append(f"Mới chuyển {total}, còn {amount - total} ({_vnd(amount - total)}) chưa chuyển; hãy chuyển hết {_vnd(amount)} (hoặc nói rõ lý do giữ lại trong reason).")
     return verdict
 
 
@@ -138,7 +103,7 @@ def check_distribute(summary: dict, amount: int, ui: dict) -> Verdict:
 
 _INTERNAL_WORDS = (
     "spendable", "remaining", "unallocated", "budgetLimit", "allocationHeadroom", "overLimit",
-    "shortfall", "amount", "jar-summary", "jar_id", "pfm",
+    "balance", "initial_balance", "shortfall", "amount", "jar-summary", "jar_id", "pfm",
 )
 MAX_REASON_CHARS = 300
 

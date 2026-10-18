@@ -38,7 +38,7 @@ hỏi)? Mỗi phần tử chỉ có `question` (string) và `options` (mảng st
 **sửa lại ngay** trước khi trả lời, đừng gửi đi.
 
 Đây **không phải** cách để đỡ phải tự quyết định. Các skill khác (`transfer-form`, `spending-jar`,
-`jar-rebalance`) đều có quy tắc **TỰ quyết định** khi dữ liệu đã đủ (ví dụ: chỉ 1 thẻ đang có dư nợ chưa
+`distribute-amount`) đều có quy tắc **TỰ quyết định** khi dữ liệu đã đủ (ví dụ: chỉ 1 thẻ đang có dư nợ chưa
 thanh toán → tự chọn thẻ đó, không hỏi lại). Skill này **chỉ dùng khi đã thử tự quyết định mà không được**
 — tức là có ≥ 2 phương án hợp lý và **không phương án nào rõ ràng đúng hơn hẳn** các phương án còn lại.
 

@@ -309,6 +309,7 @@ def _create_jar(**overrides) -> dict:
         "type": "create_jar",
         "jar_name": "Cà phê & giải trí",
         "allocation_amount": 1500000,
+        "initial_balance": 500000,
         "category_ids": ["entertainment"],
         "reason": "Chi Giải trí 3 tháng gần nhất trung bình ~1.400.000đ/tháng",
     }
@@ -330,15 +331,15 @@ def _edit_jar(**overrides) -> dict:
 
 
 def _rebalance_jars(**overrides) -> dict:
+    # since 2026-09-24: ONE source jar gives money to one or more other jars (same `allocations` as distribute_amount)
     payload = {
         "type": "rebalance_jars",
-        "target_jar_id": "food",
-        "shortfall": 1500000,
-        "moves": [
-            {"from_jar_id": "pool", "amount": 1000000},
-            {"from_jar_id": "lifestyle", "amount": 500000},
+        "from_jar_id": "food",
+        "allocations": [
+            {"to_jar_id": "transport", "amount": 300000},
+            {"to_jar_id": "health", "amount": 200000},
         ],
-        "reason": "Hũ Ăn uống thiếu 1.500.000đ; lấy 1.000.000đ từ tiền chưa phân bổ và 500.000đ từ hũ Hưởng thụ",
+        "reason": "Chuyển 500.000đ từ hũ Ăn uống sang hũ Di chuyển và hũ Sức khỏe theo đúng số khách nêu",
     }
     payload.update(overrides)
     return payload
@@ -401,6 +402,38 @@ def test_create_jar_requires_category_ids():
     assert _ui_of(payload) is None
 
 
+# --- initial_balance (backend_docs B2, since 2026-09-23): the money moved into the new jar, required ---------
+
+
+def test_create_jar_requires_initial_balance():
+    # pfm drops a create_jar without it and does NOT treat the gap as 0 -- so the agent must never emit one
+    payload = _create_jar()
+    del payload["initial_balance"]
+    assert _ui_of(payload) is None
+
+
+def test_create_jar_accepts_a_zero_initial_balance():
+    assert _ui_of(_create_jar(initial_balance=0)) == _create_jar(initial_balance=0)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [-1, -500000, 500000.5, "500000", None, True, float("nan"), [500000]],
+)
+def test_create_jar_rejects_an_initial_balance_that_is_not_a_whole_non_negative_number(value):
+    assert _ui_of(_create_jar(initial_balance=value)) is None
+
+
+def test_create_jar_initial_balance_is_independent_of_the_monthly_limit():
+    # the limit is a plan, not money: a balance bigger than the limit is fine (pfm caps it by the headroom)
+    assert _ui_of(_create_jar(allocation_amount=800000, initial_balance=2000000)) is not None
+
+
+def test_edit_jar_has_no_balance_field_and_does_not_require_one():
+    assert "initial_balance" not in _edit_jar()
+    assert _ui_of(_edit_jar()) == _edit_jar()
+
+
 def test_extract_ui_block_splits_out_valid_edit_jar_block():
     assert _ui_of(_edit_jar()) == _edit_jar()
 
@@ -435,35 +468,34 @@ def test_edit_jar_requires_jar_id_not_just_a_name():
 
 
 def test_extract_ui_block_splits_out_valid_rebalance_jars_block():
-    text = "Hũ Ăn uống thiếu 1.500.000đ.\n\n" + _ui_text(_rebalance_jars())
+    text = "Mình đề xuất chuyển 500.000đ.\n\n" + _ui_text(_rebalance_jars())
     cleaned, ui = extract_ui_block(text)
-    assert cleaned == "Hũ Ăn uống thiếu 1.500.000đ."
+    assert cleaned == "Mình đề xuất chuyển 500.000đ."
     assert ui == _rebalance_jars()
 
 
-def test_rebalance_jars_accepts_a_single_move():
-    payload = _rebalance_jars(shortfall=800000, moves=[{"from_jar_id": "pool", "amount": 800000}])
+def test_rebalance_jars_accepts_a_single_destination():
+    payload = _rebalance_jars(allocations=[{"to_jar_id": "transport", "amount": 800000}])
     assert _ui_of(payload) == payload
 
 
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"shortfall": 1400000},  # moves add up to 1.500.000, not the shortfall
-        {"shortfall": 0},
-        {"shortfall": -5},
-        {"shortfall": "1500000"},
-        {"target_jar_id": ""},
-        {"target_jar_id": "pool"},  # the pool can be a source, never the jar that is short
-        {"moves": []},
-        {"moves": "pool"},
-        {"moves": [{"from_jar_id": "pool", "amount": 1500000}, {"from_jar_id": "pool", "amount": 0}]},
-        {"moves": [{"from_jar_id": "pool", "amount": 750000}, {"from_jar_id": "pool", "amount": 750000}]},  # repeated source
-        {"moves": [{"from_jar_id": "food", "amount": 1500000}]},  # a jar cannot fund itself
-        {"moves": [{"from_jar_id": "", "amount": 1500000}]},
-        {"moves": [{"from_jar_id": "pool", "amount": "1500000"}]},
-        {"moves": [{"amount": 1500000}]},
-        {"moves": ["pool"]},
+        {"from_jar_id": ""},
+        {"from_jar_id": "pool"},  # rebalance_jars moves money between JARS; the pool is distribute_amount's source
+        {"from_jar_id": 5},
+        {"allocations": []},
+        {"allocations": "transport"},
+        {"allocations": ["transport"]},
+        {"allocations": [{"to_jar_id": "food", "amount": 500000}]},  # a jar cannot give to itself
+        {"allocations": [{"to_jar_id": "pool", "amount": 500000}]},  # the pool is never a destination
+        {"allocations": [{"to_jar_id": "", "amount": 500000}]},
+        {"allocations": [{"to_jar_id": "transport", "amount": 0}]},
+        {"allocations": [{"to_jar_id": "transport", "amount": -1}]},
+        {"allocations": [{"to_jar_id": "transport", "amount": "500000"}]},
+        {"allocations": [{"amount": 500000}]},
+        {"allocations": [{"to_jar_id": "transport", "amount": 300000}, {"to_jar_id": "transport", "amount": 200000}]},  # each jar once
         {"reason": ""},
     ],
 )
@@ -471,18 +503,28 @@ def test_rebalance_jars_rejects_invalid_payloads(overrides):
     assert _ui_of(_rebalance_jars(**overrides)) is None
 
 
-@pytest.mark.parametrize("field", ["target_jar_id", "shortfall", "moves", "reason"])
+@pytest.mark.parametrize("field", ["from_jar_id", "allocations", "reason"])
 def test_rebalance_jars_requires_every_field(field):
     payload = _rebalance_jars()
     del payload[field]
     assert _ui_of(payload) is None
 
 
-def test_rebalance_jars_accepts_float_typed_whole_dong_amounts():
-    # JSON from the model may spell 1500000 as 1500000.0; that is still the same total.
-    payload = _rebalance_jars(shortfall=1500000.0, moves=[{"from_jar_id": "pool", "amount": 1000000.0}, {"from_jar_id": "lifestyle", "amount": 500000.0}])
-    assert _ui_of(payload) == payload
+def test_the_old_rebalance_jars_shape_is_no_longer_accepted():
+    old = {
+        "type": "rebalance_jars",
+        "target_jar_id": "food",
+        "shortfall": 1500000,
+        "moves": [{"from_jar_id": "pool", "amount": 1000000}, {"from_jar_id": "lifestyle", "amount": 500000}],
+        "reason": "x",
+    }
+    assert _ui_of(old) is None
 
+
+def test_rebalance_jars_accepts_float_typed_whole_dong_amounts():
+    # JSON from the model may spell 500000 as 500000.0
+    payload = _rebalance_jars(allocations=[{"to_jar_id": "transport", "amount": 300000.0}, {"to_jar_id": "health", "amount": 200000.0}])
+    assert _ui_of(payload) == payload
 
 
 # --- strip_foreign_script ---------------------------------------------------------------------
