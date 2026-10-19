@@ -142,22 +142,38 @@ def _coerce_flex(v: Any, text: str) -> dict[str, Any] | None:
     return {"value": value, "evidence": evidence}
 
 
+_LOOSE_PAIR = re.compile(r'(\w+)\s*:\s*(?:"([^"]*)"|([^,{}]+))')
+
+
+def _loose_obj(value: Any) -> Any:
+    """A slot sent as a pseudo-JSON string ('{value_vnd: 2500000000, evidence: "2,5 tỷ"}') -> dict."""
+    if not isinstance(value, str) or not value.strip().startswith("{"):
+        return value
+    pairs = {k: (q or b.strip()) for k, q, b in _LOOSE_PAIR.findall(value)}
+    return pairs or value
+
+
 def coerce_extraction(data: Any, text: str) -> GoalExtraction:
     """Repair the usual small-model slips, then validate. Raises on anything still invalid."""
     if isinstance(data, GoalExtraction):
         return data
     if not isinstance(data, dict):
         raise ValueError("model output is not an object")
+    data = {k: _loose_obj(v) for k, v in data.items()}
     out: dict[str, Any] = {"is_savings_goal": _bool(data.get("is_savings_goal"))}
     name = data.get("name")
     if not _null(name):
         if isinstance(name, dict):
             value = name.get("value")
+            if _null(value):
+                value = name.get("name")  # gemma often names the field after the slot
             evidence = name.get("evidence")
             if not _null(value):
                 out["name"] = {"value": str(value), "evidence": "" if _null(evidence) else str(evidence)}
         elif isinstance(name, str):
-            out["name"] = {"value": name, "evidence": name}
+            # the prompt's example notation copied as a string: '{Mua xe, "mua xe"}'
+            m = re.match(r'^\{\s*"?([^",{}]+?)"?\s*,\s*"([^"{}]+)"\s*\}$', name.strip())
+            out["name"] = {"value": m.group(1), "evidence": m.group(2)} if m else {"value": name, "evidence": name}
     for key in ("target_amount", "opening_amount"):
         item = _coerce_amount(data.get(key))
         if item:

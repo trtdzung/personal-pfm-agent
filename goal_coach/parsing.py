@@ -15,10 +15,10 @@ _UNIT_ALT = "|".join(sorted(_UNITS, key=len, reverse=True))
 _HALF = r"(?:\s*(?:rưỡi|ruỡi|ruoi))?"
 
 _NUM_UNIT_RE = re.compile(
-    rf"(?<![\w.,/])(\d+(?:[.,]\d+)*)\s*({_UNIT_ALT})(?!\w)({_HALF})"
+    rf"(?<![\w.,/\-−])(\d+(?:[.,]\d+)*)\s*({_UNIT_ALT})(?!\w)({_HALF})"
 )
 _TAIL_RE = re.compile(r"\s+(\d{1,3})(?![\d\w/.,])(\s*\w+)?")
-_PLAIN_RE = re.compile(r"(?<![\w.,/])(\d{1,3}(?:[.,]\d{3})+|\d{4,})(?![\w.,/])")
+_PLAIN_RE = re.compile(r"(?<![\w.,/\-−])(\d{1,3}(?:[.,]\d{3})+|\d{4,})(?![\w.,/])")
 _TIME_WORDS = ("năm", "tháng", "nam", "thang")
 
 _WORD_NUMS: dict[str, int] = {
@@ -30,6 +30,78 @@ _WORD_ALT = "|".join(sorted(_WORD_NUMS, key=len, reverse=True))
 
 def _norm(text: str) -> str:
     return unicodedata.normalize("NFC", text).lower().strip()
+
+
+def fold(text: str) -> str:
+    """Lowercase without diacritics ("Tháng" -> "thang", "đ" -> "d")."""
+    t = unicodedata.normalize("NFD", text.lower()).replace("đ", "d")
+    return unicodedata.normalize("NFC", "".join(c for c in t if unicodedata.category(c) != "Mn"))
+
+
+# Typed without diacritics ("50 trieu trong 12 thang"): put the accents back on the words the parsers know.
+_ACCENTS = {
+    "thang": "tháng", "nam": "năm", "trieu": "triệu", "ty": "tỷ", "ti": "tỉ", "nghin": "nghìn", "ngan": "ngàn",
+    "ruoi": "rưỡi", "nua": "nửa", "tram": "trăm", "muoi": "mươi", "mot": "một", "bon": "bốn", "sau": "sáu",
+    "bay": "bảy", "tam": "tám", "chin": "chín", "lam": "lăm",
+}
+_ACCENT_RE = re.compile(r"(?<!\w)(" + "|".join(sorted(_ACCENTS, key=len, reverse=True)) + r")(?!\w)")
+
+
+def _restore_accents(t: str) -> str:
+    """Only for text with no diacritics at all, so "từ tháng 3" is never touched."""
+    if t != fold(t):
+        return t
+    return _ACCENT_RE.sub(lambda m: _ACCENTS[m.group(1)], t)
+
+
+# Vietnamese number words right before a unit ("ba mươi lăm triệu", "mười tám tháng") -> digits.
+_DIGIT_WORDS = {"một": 1, "mốt": 1, "hai": 2, "ba": 3, "bốn": 4, "tư": 4, "năm": 5, "lăm": 5, "nhăm": 5,
+                "sáu": 6, "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9}
+_NUM_WORD = r"(?:một|mốt|hai|ba|bốn|tư|năm|lăm|nhăm|sáu|bảy|bẩy|tám|chín|mười|mươi|trăm|linh|lẻ|rưỡi)"
+_WORD_RUN_RE = re.compile(
+    rf"(?<!\w)((?:{_NUM_WORD}\s+)*{_NUM_WORD})\s+(tỷ|tỉ|triệu|củ|nghìn|ngàn|tháng|năm)(?!\w)"
+)
+
+
+def _words_value(words: list[str]) -> int | None:
+    """[hundreds trăm] [tens mươi | mười | linh] [units]; None when it is not one such number."""
+    hundreds = tens = units = None
+    i = 0
+    if len(words) >= 2 and words[1] == "trăm" and words[0] in _DIGIT_WORDS:
+        hundreds, i = _DIGIT_WORDS[words[0]], 2
+        if i < len(words) and words[i] == "rưỡi":
+            return hundreds * 100 + 50 if i == len(words) - 1 else None
+    if i < len(words) and words[i] == "mười":
+        tens, i = 1, i + 1
+    elif i < len(words) and words[i] in ("linh", "lẻ"):
+        tens, i = 0, i + 1
+    elif i + 1 < len(words) and words[i + 1] == "mươi" and words[i] in _DIGIT_WORDS:
+        tens, i = _DIGIT_WORDS[words[i]], i + 2
+    if i < len(words) and words[i] in _DIGIT_WORDS:
+        units, i = _DIGIT_WORDS[words[i]], i + 1
+    if i != len(words) or (hundreds is None and tens is None and units is None):
+        return None
+    return (hundreds or 0) * 100 + (tens or 0) * 10 + (units or 0)
+
+
+def _words_to_digits(t: str) -> str:
+    def sub(m: re.Match[str]) -> str:
+        v = _words_value(m.group(1).split())
+        return f"{v} {m.group(2)}" if v else m.group(0)
+    return _WORD_RUN_RE.sub(sub, t)
+
+
+_EN_UNITS = re.compile(r"(?<=\d)\s*(months?|years?|yrs?)(?!\w)")
+
+
+def _prep(text: str) -> str:
+    """What the parsers read: NFC lowercase, accents restored, number words as digits, "24 months" -> "24 tháng"."""
+    t = _words_to_digits(_restore_accents(_norm(text)))
+    return _EN_UNITS.sub(lambda m: " tháng" if m.group(1).startswith("month") else " năm", t)
+
+
+# "15 triệu nhân 6 tháng": a calculation, not an amount the customer stated.
+_ARITHMETIC = re.compile(r"(?<!\w)(?:nhân|chia|cộng|trừ|nhan|cong|tru|lần)(?!\w)|[×*]|(?<![a-zà-ỹ])x(?=\s*\d)")
 
 
 def _num_to_fraction(raw: str, has_unit: bool) -> Fraction | None:
@@ -46,8 +118,8 @@ def _num_to_fraction(raw: str, has_unit: bool) -> Fraction | None:
 
 def parse_amount(text: str) -> int | None:
     """Return a VND amount, or None if unclear / more than one amount."""
-    t = _norm(text)
-    if not t or "trăm" in t:
+    t = _prep(text)
+    if not t or "trăm" in t or _ARITHMETIC.search(t):
         return None
     matches = list(_NUM_UNIT_RE.finditer(t))
     if matches:
@@ -129,21 +201,24 @@ def _qty(raw: str) -> Fraction | None:
 
 def parse_horizon(text: str) -> dict[str, int | str] | None:
     """Return {"months": n} | {"target_month": "YYYY-MM"} | None."""
-    t = _norm(text)
+    t = _prep(text)
     if not t:
         return None
     absolute: list[str] = []
+    abs_spans: list[tuple[int, int]] = []
     for rx in _ABS_MONTH_RES:
         for m in rx.finditer(t):
             month, year = int(m.group(1)), int(m.group(2))
             if 1 <= month <= 12 and 1900 <= year <= 2200:
                 absolute.append(f"{year:04d}-{month:02d}")
+                abs_spans.append(m.span())
     if not absolute:
         for m in _ABS_YEAR_RE.finditer(t):
             year = int(m.group(1))
             if 1900 <= year <= 2200:
                 absolute.append(f"{year:04d}-12")
-    rel = list(_REL_RE.finditer(t))
+    # "tháng 12 năm 2027": the "12 năm" inside a date is not a duration.
+    rel = [m for m in _REL_RE.finditer(t) if not any(s <= m.start() < e for s, e in abs_spans)]
     half = list(_HALF_YEAR_RE.finditer(t))
     if absolute:
         if rel or half or len(set(absolute)) != 1:

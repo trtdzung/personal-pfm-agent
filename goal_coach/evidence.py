@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 
 from .contracts import MAX_AMOUNT_VND, MAX_NAME_LEN, GoalExtraction
-from .parsing import parse_amount, parse_horizon
+from .parsing import fold, parse_amount, parse_horizon
 
 _TRAIL_PUNCT = " \t\r\n.,;:!?…\"'“”"
 
@@ -17,18 +17,58 @@ def normalize(text: str) -> str:
 
 
 def evidence_in(evidence: str, source: str) -> bool:
+    """The quote is in the source; diacritics ignored (the model re-accents text typed without them)."""
     ev = normalize(evidence)
-    return bool(ev) and ev in normalize(source)
+    return bool(ev) and (ev in normalize(source) or fold(ev) in fold(normalize(source)))
+
+
+def negated(evidence: str, source: str) -> bool:
+    """The quoted amount has a minus sign right before it in the source ("-500 triệu")."""
+    ev, src = normalize(evidence), normalize(source)
+    i = src.find(ev) if ev else -1
+    return i > 0 and src[:i].rstrip().endswith(("-", "−"))
 
 
 def clean_name(value: str) -> str | None:
     """Trim + capitalise; None if empty, too long, or it contains an amount."""
-    name = re.sub(r"\s+", " ", value).strip()
+    name = re.sub(r"\s+", " ", value).strip(_TRAIL_PUNCT + " ")
     if not name or len(name) > MAX_NAME_LEN:
         return None
     if re.search(r"\d", name) and parse_amount(name) is not None:
         return None
     return name[0].upper() + name[1:]
+
+
+# "À, cháu cứ đặt tên là Quỹ hưu trí giúp cô cho dễ nhớ nhé" -> "Quỹ hưu trí"
+_NAME_LEAD = re.compile(
+    r"^(?:(?:à|ừ|ờ|ừm|dạ|vâng|ok|oke|thì|vậy|thế|chắc|chắc là)\b[\s,]*)*"
+    r"(?:(?:chị|anh|em|cô|chú|bác|cháu|mình|tôi|tớ|tao|con)\s+)?(?:cứ\s+)?(?:muốn\s+|định\s+|sẽ\s+|xin\s+)?"
+    r"(?:đặt\s+(?:tên\s+)?(?:(?:cho\s+)?mục\s+tiêu\s+(?:này\s+)?)?(?:là\s+)?|gọi\s+(?:là\s+)?|tên\s+(?:là\s+)?|là\s+)?",
+    re.IGNORECASE,
+)
+_NAME_TAIL_PHRASE = re.compile(r"\s+(?:cho\s+dễ\s+\w+|để\s+dễ\s+\w+)\b.*$", re.IGNORECASE)
+_NAME_TAIL_WORDS = {"đi", "nhé", "nha", "nhá", "ạ", "nhỉ", "luôn", "thôi", "nhen", "nghen", "giúp", "hộ", "với",
+                    "em", "anh", "chị", "cô", "cháu", "chú", "bác"}
+MAX_NAME_WORDS = 6
+
+
+def name_from_answer(text: str) -> str | None:
+    """A short goal name from a typed answer; None when what is left is not a short name."""
+    t = re.sub(r"\s+", " ", text).strip()
+    t = re.split(r"[,.;!?…]", t, maxsplit=1)[0] if not re.match(r"^\W*(?:à|ừ|ờ|dạ|vâng)\W", t, re.I) else t
+    t = _NAME_LEAD.sub("", t, count=1).strip(_TRAIL_PUNCT + " ")
+    t = re.split(r"[,.;!?…]", t, maxsplit=1)[0]
+    t = _NAME_TAIL_PHRASE.sub("", t).strip()
+    words = t.split()
+    while len(words) > 1 and words[-1].lower() in _NAME_TAIL_WORDS:
+        words.pop()
+    if not words or len(words) > MAX_NAME_WORDS:
+        return None
+    return clean_name(" ".join(words))
+
+
+# Says nothing about the goal: better ask than show "Tiết kiệm" as its name.
+_GENERIC_NAMES = {"tiet kiem", "de danh", "muc tieu", "muc tieu tiet kiem", "tich luy", "danh dum", "tiet kiem tien", "de danh tien"}
 
 
 @dataclass
@@ -50,13 +90,14 @@ def verify(ext: GoalExtraction, source: str) -> Verified:
 
     if ext.name and evidence_in(ext.name.evidence, source):
         name = clean_name(ext.name.value)
-        if name:
+        if name and fold(name) not in _GENERIC_NAMES:
             out.name = (name, ext.name.evidence)
 
     ta = ext.target_amount
     if ta:
         if (
             evidence_in(ta.evidence, source)
+            and not negated(ta.evidence, source)
             and 0 < ta.value_vnd <= MAX_AMOUNT_VND
             and parse_amount(ta.evidence) == ta.value_vnd
         ):
@@ -68,6 +109,7 @@ def verify(ext: GoalExtraction, source: str) -> Verified:
     if (
         oa
         and evidence_in(oa.evidence, source)
+        and not negated(oa.evidence, source)
         and 0 < oa.value_vnd <= MAX_AMOUNT_VND
         and parse_amount(oa.evidence) == oa.value_vnd
     ):

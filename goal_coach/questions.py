@@ -1,4 +1,7 @@
-"""Fixed question catalog (Vietnamese). The LLM never writes questions."""
+"""Fixed question catalog (Vietnamese). The LLM never writes questions.
+
+Texts carry {you}/{You}/{me}/{Me}: `tone.say` fills them in the customer's address form.
+"""
 
 from __future__ import annotations
 
@@ -11,40 +14,40 @@ from .contracts import CoachContext, MessageCode, Question, QuestionHint, Questi
 _CATALOG: dict[str, tuple[SlotName, str, list[tuple[str, str]], bool]] = {
     "need_amount": (
         "target_amount",
-        "Bạn cần khoảng bao nhiêu tiền cho mục tiêu này?",
+        "Mục tiêu này {you} cần khoảng bao nhiêu tiền?",
         [("50 triệu", "50000000"), ("100 triệu", "100000000"),
          ("300 triệu", "300000000"), ("500 triệu", "500000000")],
         True,
     ),
     "need_horizon": (
         "horizon",
-        "Bạn muốn đạt mục tiêu trong bao lâu?",
+        "{You} muốn có đủ số tiền đó trong bao lâu?",
         [("6 tháng", "months:6"), ("1 năm", "months:12"),
          ("3 năm", "months:36"), ("5 năm", "months:60")],
         True,
     ),
-    "need_name": ("name", "Bạn đặt tên mục tiêu là gì?", [], True),
+    "need_name": ("name", "{You} muốn đặt tên mục tiêu là gì? Ví dụ: Mua xe, Du lịch Nhật.", [], True),
     "need_flexibility": (
         "flexibility",
-        "Nếu chậm một chút, có thể lùi hạn không?",
+        "Nếu chậm hơn dự kiến một chút thì lùi hạn được không, hay nhất định phải đúng hạn?",
         [("Có thể lùi", "flexible"), ("Phải đúng hạn", "fixed")],
         False,
     ),
     "need_opening": (
         "opening_amount",
-        "Bạn đã để dành sẵn bao nhiêu cho mục tiêu này?",
+        "Hiện {you} đã để riêng được khoản nào cho mục tiêu này chưa?",
         [("Chưa có", "0")],
         True,
     ),
     "amount_unclear": (
         "target_amount",
-        "Mình chưa chắc số tiền, bạn nhập lại giúp (vd 600 triệu)?",
+        "{Me} chưa đọc rõ số tiền, {you} ghi lại giúp {me} nhé, ví dụ 600 triệu.",
         [],
         True,
     ),
     "horizon_unclear": (
         "horizon",
-        "Mình chưa chắc thời hạn, bạn chọn giúp?",
+        "{Me} chưa rõ thời hạn lắm, {you} chọn một mốc bên dưới hoặc ghi rõ hơn nhé, ví dụ 18 tháng hay tháng 6/2028.",
         [("6 tháng", "months:6"), ("1 năm", "months:12"),
          ("3 năm", "months:36"), ("5 năm", "months:60")],
         True,
@@ -52,6 +55,20 @@ _CATALOG: dict[str, tuple[SlotName, str, list[tuple[str, str]], bool]] = {
 }
 
 QUESTION_CODES: tuple[str, ...] = tuple(_CATALOG)
+
+# Second try after an unclear answer: same need, different words (the customer never sees one sentence twice).
+REASK_TEXT = {
+    "target_amount": "{You} cho {me} xin một con số cụ thể nhé, ví dụ 90 triệu hay 1,2 tỷ.",
+    "horizon": "{You} ghi giúp {me} số tháng hoặc số năm nhé, ví dụ 24 tháng hay 3 năm.",
+}
+
+# Asked twice and still not understood: chips only (the draft can be edited afterwards), never a third identical ask.
+_STUCK_AMOUNTS = [50, 100, 300, 500, 1000, 2000]  # million VND
+_STUCK_MONTHS = [6, 12, 24, 36, 60]
+_STUCK_TEXT = {
+    "target_amount": "{Me} vẫn chưa đọc được số tiền, {you} chọn mức gần nhất nhé, lát nữa sửa lại được ở bản nháp.",
+    "horizon": "{Me} vẫn chưa rõ thời hạn, {you} chọn mốc gần nhất nhé, lát nữa sửa lại được ở bản nháp.",
+}
 
 
 def get_question(code: MessageCode) -> Question:
@@ -140,6 +157,17 @@ def _opening_question(q: Question, amount: int, ctx: CoachContext) -> Question:
         if value >= _ROUND:
             options.append(QuestionOption(label=f"Dùng tiết kiệm ({fmt_vnd(value)})", value=str(value)))
     return q.model_copy(update={"options": options[:6]})
+
+
+def stuck_question(q: Question) -> Question:
+    """Chips-only version of an amount / horizon question that failed twice."""
+    if q.slot == "target_amount":
+        options = [QuestionOption(label=fmt_vnd(m * 10**6), value=str(m * 10**6)) for m in _STUCK_AMOUNTS]
+    else:
+        paced = [int(o.value[7:]) for o in q.options if o.value.startswith("months:")][:1]  # fastest personalised pace
+        months = sorted(set(_STUCK_MONTHS) | set(paced))[:6]
+        options = [QuestionOption(label=fmt_months(m), value=f"months:{m}") for m in months]
+    return q.model_copy(update={"text": _STUCK_TEXT[q.slot], "options": options, "allow_free_text": False})
 
 
 def personalise(q: Question, slots: Slots, ctx: CoachContext | None) -> Question:

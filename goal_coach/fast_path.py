@@ -21,6 +21,8 @@ from .parsing import (
     _TIME_WORDS,
     _is_time_context,
     _num_to_fraction,
+    _restore_accents,
+    fold,
     parse_amount,
     parse_horizon,
 )
@@ -60,8 +62,18 @@ _NAME_START = re.compile(
 _NAME_FOR = re.compile(r"(?:tiết kiệm|để dành|dành dụm|tích lũy)\s+(?:tiền\s+)?(?:để|cho)\s+(.+)$")
 _NAME_FILLER = {
     "khoảng", "tầm", "cỡ", "hết", "là", "với", "giá", "trị", "trong", "vào", "cần", "có", "được", "đến",
-    "chừng", "khoảng chừng", "dự", "định", "và", "mà", "thì", "cho", "mất", "hơn", "gần",
+    "chừng", "khoảng chừng", "dự", "định", "và", "mà", "thì", "cho", "mất", "hơn", "gần", "bằng",
 }
+_NAME_FILLER_F = {fold(w) for w in _NAME_FILLER}
+
+
+def _folded(rx: re.Pattern[str]) -> re.Pattern[str]:
+    """Same pattern without diacritics, run on fold(text): matches typed-without-accents text too (same offsets)."""
+    return re.compile(fold(rx.pattern))
+
+
+_GOAL_CUE_F, _NAME_START_F, _NAME_FOR_F = _folded(_GOAL_CUE), _folded(_NAME_START), _folded(_NAME_FOR)
+_FIXED_F, _FLEX_F = _folded(_FIXED), _folded(_FLEX)
 
 
 @dataclass
@@ -84,9 +96,12 @@ class FastResult:
 def find_flexibility(text: str) -> tuple[str, str] | None:
     """('fixed'|'flexible', evidence) from keywords; None when absent or contradictory."""
     t = unicodedata.normalize("NFC", text).lower()
-    fixed = _FIXED.search(t)
-    rest = _FIXED.sub(" ", t) if fixed else t
-    flex = _FLEX.search(rest)
+    f = fold(t)
+    if len(f) != len(t):
+        return None
+    fixed = _FIXED_F.search(f)
+    rest = _FIXED_F.sub(" ", f) if fixed else f
+    flex = _FLEX_F.search(rest)
     if fixed and flex:
         return None
     if fixed:
@@ -158,15 +173,17 @@ def _horizon(t: str) -> tuple[tuple[int, int] | None, bool]:
 def _name(src: str, t: str, first_span_start: int | None) -> tuple[str, str] | None:
     prefix = src[:first_span_start] if first_span_start is not None else src
     phrase = ""
-    m_for = _NAME_FOR.search(t[: len(prefix)])
+    f = fold(t)[: len(prefix)]
+    m_for = _NAME_FOR_F.search(f)
     if m_for:
         phrase = src[m_for.start(1): len(prefix)].strip()
     else:
-        m = _NAME_START.search(t[: len(prefix)])
+        m = _NAME_START_F.search(f)
         if m:
             phrase = src[m.start(): len(prefix)].strip()
-    words = phrase.strip(" ,.;:!?").split()
-    while words and words[-1].lower() in _NAME_FILLER:
+    phrase = re.split(r"[,.;:!?]", phrase, maxsplit=1)[0]  # the name ends at the first clause break
+    words = phrase.split()
+    while words and fold(words[-1]) in _NAME_FILLER_F:
         words.pop()
     if not 2 <= len(words) <= 5 or any(re.search(r"\d", w) for w in words):
         return None
@@ -183,6 +200,10 @@ def fast_extract(text: str) -> FastResult:
         out.injection = True
         return out
     out.injection = bool(_INJECTION_CUE.search(t))
+    t = _restore_accents(t)  # "50 trieu trong 12 thang" -> accented unit words, same length
+    if len(fold(t)) != len(t):
+        out.injection = True
+        return out
 
     spans, out.ambiguous_amount = _amount_spans(t)
     targets: list[tuple[int, int, int]] = []
@@ -224,5 +245,5 @@ def fast_extract(text: str) -> FastResult:
 
     have = (out.amount is not None) + (out.horizon is not None)
     if not out.injection and not _NEGATIVE_CUE.search(t):
-        out.goal_hint = have == 2 or (have == 1 and bool(_GOAL_CUE.search(t)))
+        out.goal_hint = have == 2 or (have == 1 and bool(_GOAL_CUE_F.search(fold(t))))
     return out

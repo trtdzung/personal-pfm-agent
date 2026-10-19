@@ -21,13 +21,15 @@ from .contracts import (
     Slots,
 )
 from .adjust import read_adjustment
-from .evidence import Verified, clean_name, verify
+from .evidence import Verified, clean_name, name_from_answer, verify
 from .fast_path import FastResult, fast_extract
+from .nlu import ModelUnavailableError
 from .nlu import extract as default_extract
 from .nlu import extract_adjust as default_extract_adjust
 from .parsing import parse_amount, parse_horizon
 from .policy import decide
 from .questions import parse_option
+from .tone import say
 
 logger = logging.getLogger("goal_coach.service")
 
@@ -42,7 +44,7 @@ def new_request_id() -> str:
 
 def _set(slots: Slots, slot: str, value: object, source: str, evidence: str | None) -> None:
     if slot == "name":
-        slots.name = NameSlot(value=str(value), source=source, evidence=evidence)  # type: ignore[arg-type]
+        slots.name = NameSlot(value=clean_name(str(value)) or str(value), source=source, evidence=evidence)  # type: ignore[arg-type]
     elif slot in ("target_amount", "opening_amount"):
         setattr(slots, slot, AmountSlot(value=int(value), source=source, evidence=evidence))  # type: ignore[arg-type]
     elif slot == "horizon":
@@ -70,7 +72,7 @@ def _text_answer_direct(slot: str, text: str) -> object | None:
     if slot == "horizon":
         return parse_horizon(text)
     if slot == "name":
-        return clean_name(text)
+        return name_from_answer(text)
     return None
 
 
@@ -102,13 +104,23 @@ def _understand(
     need_llm = bool(reasons)
     code_found = _code_slots(fast)
     trace.note(code_slots=sorted(code_found), llm_reasons=reasons, horizon_relative=fast.horizon_relative)
-    v = verify(extract(text), text) if need_llm else Verified(is_goal=True)
+    ext = extract(text) if need_llm else None
+    v = verify(ext, text) if ext is not None else Verified(is_goal=True)
     if need_llm:
         trace.note(llm_verified={"is_goal": v.is_goal, "unclear": sorted(v.unclear),
                                  "slots": [k for k in _ALL_SLOTS if getattr(v, k) is not None]})
     if need_llm and not v.is_goal and not fast.goal_hint:
         return v, True, set()  # model says "not a goal": code-found numbers must not turn it into one
+    conflict = (
+        ext is not None and ext.target_amount is not None and fast.amount is not None
+        and ext.target_amount.value_vnd != fast.amount[0]
+    )
     _overlay(v, fast)
+    if conflict:  # code and model read different amounts ("6 tháng chi tiêu, mỗi tháng 15 triệu"): ask, don't guess
+        v.target_amount = None
+        v.unclear.add("amount_unclear")
+        code_found.discard("target_amount")
+        trace.note(amount_conflict=True)
     return v, need_llm, code_found
 
 
@@ -179,8 +191,12 @@ def run_turn(
     llm_used = False
     origin: dict[str, str] = {}  # slot -> option | answer_code | answer_llm | request_code | request_llm
 
-    # 1) answers (later answers win). Options go straight in; typed text is parser-first.
-    for ans in req.answers:
+    # 1) answers (later answers win, so only the last one per slot is read: an earlier, not understood
+    #    answer is not sent to the model again). Options go straight in; typed text is parser-first.
+    last_per_slot = {ans.slot: i for i, ans in enumerate(req.answers)}
+    for i, ans in enumerate(req.answers):
+        if last_per_slot[ans.slot] != i:
+            continue
         if ans.source == "option":
             val = parse_option(ans.slot, ans.value)
             if val is not None:
@@ -195,8 +211,12 @@ def run_turn(
             origin[ans.slot] = "answer_code"
             continue
         if ans.slot == "name":
-            continue
-        v = verify(extract(ans.value), ans.value)  # NLU only for the slot that was asked
+            try:  # a long sentence: let the model find the name in it; any model trouble -> policy default
+                v = verify(extract(ans.value), ans.value)
+            except ModelUnavailableError:
+                continue
+        else:
+            v = verify(extract(ans.value), ans.value)  # NLU only for the slot that was asked
         item = getattr(v, ans.slot)
         if item is not None:
             _set(slots, ans.slot, item[0], "answer", item[1])
@@ -227,7 +247,17 @@ def run_turn(
 
     # 3) policy
     # `req.context` only shapes chips here; it is never passed to the extractor (the model never sees figures).
-    d = decide(slots, is_goal=is_goal, unclear=unclear, answers_count=len(req.answers), context=req.context)
+    asked: dict[str, int] = {}
+    for ans in req.answers:
+        asked[ans.slot] = asked.get(ans.slot, 0) + 1
+    d = decide(slots, is_goal=is_goal, unclear=unclear, answers_count=len(req.answers), context=req.context, asked=asked)
+    if d.question is not None:
+        if len(req.answers) == 0:
+            captured = {k for k, o in origin.items() if o.startswith("request")}
+        else:
+            last = req.answers[-1].slot  # later answers win: a set answer-origin means the last one was understood
+            captured = {last} if origin.get(last, "").startswith(("option", "answer")) else set()
+        d.question = d.question.model_copy(update={"text": say(d.question.text, req, slots, captured)})
     resp = CoachResponse(
         request_id=request_id,
         status=d.status,  # type: ignore[arg-type]
