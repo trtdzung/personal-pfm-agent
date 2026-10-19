@@ -1079,3 +1079,40 @@ def test_memory_preferences_endpoints_handle_dict_records_like_the_real_client(m
     deleted = client.delete("/memory/preferences/rec-1", params={"user_id": "CIF_0001"}, headers=headers)
     assert deleted.status_code == 200
     assert fake_memory_client.delete_calls == [{"id": "test-memory-id-for-pytest", "memoryRecordId": "rec-1"}]
+
+
+# --- guardrails on /chat (guardrails.py): profanity in, sensitive data in, unsafe text out ----------------
+
+
+def _chat(message, monkeypatch, responses=("Đây là câu trả lời giả.",)):
+    fake_model = _ToolCapableFakeChatModel(responses=list(responses))
+    fake_agent = server.build_agent(model=fake_model, checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", fake_agent)
+    response = TestClient(server.app).post(
+        "/chat",
+        json={"message": message, "user_id": "CIF_0001", "thread_id": "guard"},
+        headers={"X-API-Key": "test-key-for-pytest"},
+    )
+    return response, fake_agent
+
+
+def test_chat_with_profanity_gets_a_polite_reply_and_never_reaches_the_agent(monkeypatch):
+    response, fake_agent = _chat("địt mẹ app này", monkeypatch)
+    assert response.status_code == 200
+    body = response.json()
+    assert "lịch sự" in body["answer"]
+    assert body["ui"] is None
+    assert fake_agent.get_state(config={"configurable": {"thread_id": "guard"}}).values == {}
+
+
+def test_chat_masks_sensitive_input_before_the_agent_sees_it_and_warns_the_customer(monkeypatch):
+    response, fake_agent = _chat("mã OTP là 482913, giúp tôi xem số dư", monkeypatch)
+    assert response.status_code == 200
+    assert "không gửi" in response.json()["answer"].lower()
+    stored = fake_agent.get_state(config={"configurable": {"thread_id": "guard"}}).values["messages"]
+    assert "482913" not in " ".join(str(m.content) for m in stored)
+
+
+def test_chat_replaces_an_answer_that_contains_profanity(monkeypatch):
+    response, _ = _chat("hi", monkeypatch, responses=("Bạn là đồ chó đẻ",))
+    assert "chó" not in response.json()["answer"]

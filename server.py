@@ -37,6 +37,7 @@ from tools.investment_tools import calculate_deposit_interest, project_investmen
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
 import tools.memory_tools as memory_tools
+from guardrails import PROFANITY_REPLY, SENSITIVE_INPUT_NOTE, contains_profanity, mask_sensitive_input, sanitize_output
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
@@ -257,10 +258,16 @@ def chat(
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
     thread_id = request.thread_id or _default_thread_id(request.user_id)
+    if contains_profanity(request.message):
+        logger.warning("guardrail=profanity_input user_id=%s", request.user_id)
+        return ChatResponse(answer=PROFANITY_REPLY, thread_id=thread_id, ui=None)
+    message, masked_input = mask_sensitive_input(request.message)
+    if masked_input:
+        logger.warning("guardrail=sensitive_input user_id=%s", request.user_id)
     invalidate_checkpointer_cache(agent.checkpointer, thread_id, request.user_id)
     try:
         result = agent.invoke(
-            {"messages": [{"role": "user", "content": request.message}]},
+            {"messages": [{"role": "user", "content": message}]},
             config={"configurable": {"thread_id": thread_id, "actor_id": request.user_id}},
         )
     except ModelPermissionDeniedError as exc:
@@ -277,6 +284,14 @@ def chat(
         logger.warning("Dropping ui block: ids not among what get_jar_summary/get_categories returned this turn: %r", ui)
         ui = None
     answer = strip_foreign_script(answer)  # after the ui block is split off: its strings are left alone
+    verdict = sanitize_output(answer, request.user_id)
+    if verdict.changed:
+        logger.warning("guardrail=%s user_id=%s", ",".join(verdict.reasons), request.user_id)
+        answer = verdict.text
+        if "profanity" in verdict.reasons or "system_prompt_leak" in verdict.reasons:
+            ui = None
+    if masked_input:
+        answer = f"{answer}\n\n{SENSITIVE_INPUT_NOTE}"
     return ChatResponse(answer=answer, thread_id=thread_id, ui=ui)
 
 
