@@ -4,7 +4,7 @@ import unicodedata
 from decimal import Decimal, InvalidOperation
 from collections.abc import Iterable
 from guardrails import mask_sensitive_input
-from .contracts import InterveneResponse
+from .contracts import CaseResponse, InterveneResponse
 
 
 class GuardViolation(ValueError):
@@ -89,6 +89,36 @@ def validate_diagnosis(proposals: Iterable[str], text: str) -> None:
 
 
 _SCAN_RANKS = {"none": 0, "suspicious": 1, "danger": 2}
+
+
+_CASE_LABELS = ("thời gian", "số tiền", "tài khoản và ngân hàng nhận", "kẻ gian liên lạc qua kênh nào", "ảnh chụp tin nhắn")
+_CASE_KEYS = ("time", "amount", "recipient", "channel", "image")
+
+
+def validate_case(output: CaseResponse, answers: list[str], facts: object) -> None:
+    """The next question must be the first unanswered field; a dossier copies those answers."""
+    if len(answers) != 5:
+        raise GuardViolation("unknown_case")
+    missing = next((i for i, value in enumerate(answers) if not value.strip()), None)
+    spoken = " ".join(part for part in (output.next_question, output.guidance) if part)
+    if output.dossier is not None:
+        spoken += " " + " ".join(getattr(output.dossier, key) for key in _CASE_KEYS)
+    if re.search(r"data:image|base64", spoken, re.I):
+        raise GuardViolation("image_payload")
+    validate_text(spoken, facts, max_length=4000)
+    if missing is not None:
+        if output.dossier is not None or output.guidance or not output.next_question:
+            raise GuardViolation("early_dossier")
+        if _plain(_CASE_LABELS[missing]) not in _plain(output.next_question or ""):
+            raise GuardViolation("wrong_question")
+        return
+    if output.next_question is not None or output.dossier is None or not output.guidance:
+        raise GuardViolation("missing_dossier")
+    if "co quan cong an" not in _plain(output.guidance or ""):
+        raise GuardViolation("missing_guidance")
+    for key, value in zip(_CASE_KEYS, answers):
+        if getattr(output.dossier, key) != value:
+            raise GuardViolation("dossier_mismatch")
 
 
 def validate_scan(level: str, rule_level: str, text: str, facts: object) -> None:
