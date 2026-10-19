@@ -88,6 +88,15 @@ def validate_diagnosis(proposals: Iterable[str], text: str) -> None:
         raise GuardViolation("suggests_continue")
 
 
+_SCAN_RANKS = {"none": 0, "suspicious": 1, "danger": 2}
+
+
+def validate_scan(level: str, rule_level: str, text: str, facts: object) -> None:
+    if rule_level not in _SCAN_RANKS or level not in _SCAN_RANKS or _SCAN_RANKS[level] < _SCAN_RANKS[rule_level]:
+        raise GuardViolation("lowered_level")
+    validate_text(text, facts)
+
+
 def validate_intervention(output: InterveneResponse, rule_level: str, allowed_chips: Iterable[str], facts: object) -> None:
     ranks = {"green": 0, "yellow": 1, "red": 2}
     if rule_level not in ranks or ranks[output.level] < ranks[rule_level]:
