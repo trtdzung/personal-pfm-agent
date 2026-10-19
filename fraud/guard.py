@@ -80,6 +80,14 @@ def validate_text(text: str, facts: object, *, max_length: int = 1600) -> None:
         raise GuardViolation("unsupported_number")
 
 
+def validate_diagnosis(proposals: Iterable[str], text: str) -> None:
+    allowed = {"callback", "emergency_lock", "case", "none"}
+    if any(item not in allowed for item in proposals):
+        raise GuardViolation("invalid_proposal")
+    if re.search(r"tiep tuc chuyen", _plain(text)):
+        raise GuardViolation("suggests_continue")
+
+
 def validate_intervention(output: InterveneResponse, rule_level: str, allowed_chips: Iterable[str], facts: object) -> None:
     ranks = {"green": 0, "yellow": 1, "red": 2}
     if rule_level not in ranks or ranks[output.level] < ranks[rule_level]:
