@@ -201,6 +201,17 @@ class Draft(_Strict):
 # ---------------------------------------------------------------- response
 
 
+ReplyKind = Literal["greeting", "advice", "frustrated", "other"]
+
+
+class CoachReply(_Strict):
+    """What the coach says when the message is not a goal yet; suggestions are ready-to-send goal sentences."""
+
+    kind: ReplyKind
+    text: str = Field(min_length=1, max_length=400)
+    suggestions: list[str] = Field(default_factory=list, max_length=4)
+
+
 class CoachResponse(_Strict):
     version: Literal["goal-coach/v1"] = VERSION
     request_id: str = Field(min_length=1, max_length=40)
@@ -210,6 +221,7 @@ class CoachResponse(_Strict):
     question: Question | None = None
     message_code: MessageCode
     adjustment: Adjustment | None = None
+    reply: CoachReply | None = None  # only with status=out_of_scope
 
     @model_validator(mode="after")
     def _status_shape(self) -> "CoachResponse":
@@ -220,6 +232,8 @@ class CoachResponse(_Strict):
         else:
             ok = self.draft is None and self.question is None
         if (self.status == "adjust") != (self.adjustment is not None):
+            ok = False
+        if self.reply is not None and self.status != "out_of_scope":
             ok = False
         if not ok:
             raise ValueError(f"draft/question do not match status={self.status}")

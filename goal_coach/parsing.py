@@ -8,6 +8,7 @@ from fractions import Fraction
 
 _UNITS: dict[str, int] = {
     "tỷ": 10**9, "tỉ": 10**9, "ty": 10**9,
+    "tỏi": 10**9,
     "triệu": 10**6, "trieu": 10**6, "tr": 10**6, "củ": 10**6, "cu": 10**6,
     "nghìn": 10**3, "nghin": 10**3, "ngàn": 10**3, "ngan": 10**3, "k": 10**3,
 }

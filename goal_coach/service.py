@@ -22,13 +22,14 @@ from .contracts import (
 )
 from .adjust import read_adjustment
 from .evidence import Verified, clean_name, name_from_answer, verify
-from .fast_path import FastResult, fast_extract
+from .fast_path import FastResult, fast_extract, find_flexibility
 from .nlu import ModelUnavailableError
 from .nlu import extract as default_extract
 from .nlu import extract_adjust as default_extract_adjust
 from .parsing import parse_amount, parse_horizon
 from .policy import decide
 from .questions import parse_option
+from .smalltalk import reply as smalltalk_reply
 from .tone import say
 
 logger = logging.getLogger("goal_coach.service")
@@ -73,6 +74,9 @@ def _text_answer_direct(slot: str, text: str) -> object | None:
         return parse_horizon(text)
     if slot == "name":
         return name_from_answer(text)
+    if slot == "flexibility":  # typed instead of a chip: "dung han", "lùi được"
+        found = find_flexibility(text)
+        return found[0] if found else None
     return None
 
 
@@ -265,6 +269,7 @@ def run_turn(
         draft=d.draft,
         question=d.question,
         message_code=d.message_code,
+        reply=smalltalk_reply(req) if d.status == "out_of_scope" else None,
     )
     _trace_turn(req, resp, origin, unclear, llm_used)
     logger.info(
