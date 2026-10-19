@@ -7,6 +7,7 @@ import time
 import uuid
 from collections.abc import Callable
 
+from . import trace
 from .contracts import (
     AdjustExtraction,
     AmountSlot,
@@ -73,29 +74,42 @@ def _text_answer_direct(slot: str, text: str) -> object | None:
     return None
 
 
+def _code_slots(fast: FastResult) -> set[str]:
+    found = {"target_amount": fast.amount, "opening_amount": fast.opening, "horizon": fast.horizon,
+             "flexibility": fast.flexibility, "name": fast.name}
+    return {k for k, v in found.items() if v is not None}
+
+
 def _understand(
     text: str, missing: set[str], req: CoachRequest, extract: Extractor
-) -> tuple[Verified, bool]:
+) -> tuple[Verified, bool, set[str]]:
     """Read the original sentence: code first, LLM only for what code cannot settle.
 
-    Returns (verified slots, llm_used). Slots found by code win over the model's.
+    Returns (verified slots, llm_used, slots code found). Slots found by code win over the model's.
     """
     fast = fast_extract(text)
     amount_known = "target_amount" not in missing or fast.amount is not None
     horizon_known = "horizon" not in missing or fast.horizon is not None
-    need_llm = (
-        fast.injection
-        or (fast.ambiguous_amount and "target_amount" in missing)
-        or (fast.ambiguous_horizon and "horizon" in missing)
-        or (fast.unit_word_no_amount and "target_amount" in missing)
-        or (not req.answers and not fast.goal_hint)  # goal / out-of-scope needs the model
-        or ("name" in missing and fast.name is None and amount_known and horizon_known)
-    )
+    checks = {
+        "injection": fast.injection,
+        "ambiguous_amount": fast.ambiguous_amount and "target_amount" in missing,
+        "ambiguous_horizon": fast.ambiguous_horizon and "horizon" in missing,
+        "unit_word_no_amount": fast.unit_word_no_amount and "target_amount" in missing,
+        "no_goal_hint": not req.answers and not fast.goal_hint,  # goal / out-of-scope needs the model
+        "name_missing": "name" in missing and fast.name is None and amount_known and horizon_known,
+    }
+    reasons = [k for k, hit in checks.items() if hit]
+    need_llm = bool(reasons)
+    code_found = _code_slots(fast)
+    trace.note(code_slots=sorted(code_found), llm_reasons=reasons, horizon_relative=fast.horizon_relative)
     v = verify(extract(text), text) if need_llm else Verified(is_goal=True)
+    if need_llm:
+        trace.note(llm_verified={"is_goal": v.is_goal, "unclear": sorted(v.unclear),
+                                 "slots": [k for k in _ALL_SLOTS if getattr(v, k) is not None]})
     if need_llm and not v.is_goal and not fast.goal_hint:
-        return v, True  # model says "not a goal": code-found numbers must not turn it into one
+        return v, True, set()  # model says "not a goal": code-found numbers must not turn it into one
     _overlay(v, fast)
-    return v, need_llm
+    return v, need_llm, code_found
 
 
 def _overlay(v: Verified, fast: FastResult) -> None:
@@ -129,6 +143,14 @@ def _adjust_turn(
         if adj
         else CoachResponse(request_id=request_id, status="out_of_scope", slots=Slots(), message_code="adjust_unclear")
     )
+    trace.note(
+        request=trace.text(req.request),
+        current_draft=req.current_draft.model_dump(),
+        llm_used=llm_used,
+        status=resp.status,
+        message_code=resp.message_code,
+        adjustment=None if adj is None else {"kind": adj.kind, "value": adj.value},
+    )
     logger.info(
         "goal_coach request_id=%s user_id=%s status=%s message_code=%s kind=%s llm=%s latency_ms=%d",
         request_id, req.user_id, resp.status, resp.message_code, adj.kind if adj else None, llm_used,
@@ -155,6 +177,7 @@ def run_turn(
     unclear: set[str] = set()
     is_goal = False
     llm_used = False
+    origin: dict[str, str] = {}  # slot -> option | answer_code | answer_llm | request_code | request_llm
 
     # 1) answers (later answers win). Options go straight in; typed text is parser-first.
     for ans in req.answers:
@@ -163,11 +186,13 @@ def run_turn(
             if val is not None:
                 _set(slots, ans.slot, val, "answer", None)
                 answered.add(ans.slot)
+                origin[ans.slot] = "option"
             continue
         val = _text_answer_direct(ans.slot, ans.value)
         if val is not None:
             _set(slots, ans.slot, val, "answer", ans.value if ans.slot != "name" else None)
             answered.add(ans.slot)
+            origin[ans.slot] = "answer_code"
             continue
         if ans.slot == "name":
             continue
@@ -176,15 +201,19 @@ def run_turn(
         if item is not None:
             _set(slots, ans.slot, item[0], "answer", item[1])
             answered.add(ans.slot)
+            origin[ans.slot] = "answer_llm"
         else:
             unclear |= v.unclear & {"amount_unclear" if ans.slot == "target_amount" else "horizon_unclear"}
 
     # 2) original sentence, only if some slot still has to come from it
     missing = {s for s in _ALL_SLOTS if s not in answered}
     if missing:
-        v, llm_used = _understand(req.request, missing, req, extract)
+        v, llm_used, code_found = _understand(req.request, missing, req, extract)
         is_goal = v.is_goal
         _apply_verified(slots, v, missing, "request")
+        for s in missing:
+            if getattr(slots, s) is not None:
+                origin[s] = "request_code" if s in code_found else "request_llm"
         if slots.target_amount is None and "target_amount" in missing:
             unclear |= v.unclear & {"amount_unclear"}
         if slots.horizon is None and "horizon" in missing:
@@ -207,6 +236,7 @@ def run_turn(
         question=d.question,
         message_code=d.message_code,
     )
+    _trace_turn(req, resp, origin, unclear, llm_used)
     logger.info(
         "goal_coach request_id=%s user_id=%s status=%s message_code=%s answers=%d llm=%s latency_ms=%d",
         request_id, req.user_id, resp.status, resp.message_code, len(req.answers), llm_used,
@@ -214,3 +244,34 @@ def run_turn(
     )
     logger.debug("goal_coach request_id=%s text=%r", request_id, req.request)
     return resp
+
+
+def _slot_value(slots: Slots, name: str) -> object:
+    item = getattr(slots, name)
+    if item is None:
+        return None
+    if name == "name":
+        return trace.text(item.value)  # the customer's words
+    return item.value.to_wire() if name == "horizon" else item.value
+
+
+def _trace_turn(req: CoachRequest, resp: CoachResponse, origin: dict[str, str], unclear: set[str], llm_used: bool) -> None:
+    q = resp.question
+    trace.note(
+        turn=len(req.answers),
+        request=trace.text(req.request),
+        answers=[{"slot": a.slot, "source": a.source, "value": a.value if a.source == "option" else trace.text(a.value)}
+                 for a in req.answers],
+        has_context=req.context is not None,
+        llm_used=llm_used,
+        status=resp.status,
+        message_code=resp.message_code,
+        slots={s: {"value": _slot_value(resp.slots, s), "origin": origin.get(s)}
+               for s in _ALL_SLOTS if getattr(resp.slots, s) is not None},
+        unclear=sorted(unclear),
+        question=None if q is None else {
+            "slot": q.slot, "code": q.code, "text": q.text,
+            "options": [o.label for o in q.options], "hint": q.hint.code if q.hint else None,
+        },
+        draft=None if resp.draft is None else {**resp.draft.model_dump(mode="json"), "name": trace.text(resp.draft.name)},
+    )

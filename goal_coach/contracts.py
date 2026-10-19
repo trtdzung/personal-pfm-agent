@@ -29,6 +29,8 @@ MessageCode = Literal[
 MAX_AMOUNT_VND = 10**14
 MAX_NAME_LEN = 80
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+# Set by the caller to link the turns of one conversation in traces; never affects the answer.
+CONVERSATION_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
 
 class _Strict(BaseModel):
@@ -73,6 +75,7 @@ class CoachRequest(_Strict):
     answers: list[AnswerIn] = Field(default_factory=list, max_length=6)
     current_draft: CurrentDraft | None = None
     context: CoachContext | None = None
+    conversation_id: str | None = Field(default=None, pattern=CONVERSATION_ID_PATTERN)
 
     @model_validator(mode="after")
     def _trim_request(self) -> "CoachRequest":
@@ -299,6 +302,7 @@ class NarrateRequest(_Strict):
     action: DialogueAction | None = None
     facts: NarrateFacts = Field(default_factory=NarrateFacts)
     history: list[HistoryTurn] = Field(default_factory=list, max_length=6)
+    conversation_id: str | None = Field(default=None, pattern=CONVERSATION_ID_PATTERN)
 
     @model_validator(mode="after")
     def _mode_shape(self) -> "NarrateRequest":

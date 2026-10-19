@@ -18,6 +18,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from . import trace
 from .contracts import (
     DialogueAction,
     FallbackReason,
@@ -150,6 +151,7 @@ def _from_llm(req: NarrateRequest, texts: dict[str, str]) -> list[NarrateBlock] 
     """Validated blocks, or None when anything is missing or rejected."""
     expected = _expected_ids(req)
     if set(texts) != set(expected):
+        trace.add("rejected", {"id": None, "reason": "ids", "got": sorted(texts), "expected": expected})
         return None
     converse = req.mode == "converse"
     blocks: list[NarrateBlock] = []
@@ -157,6 +159,7 @@ def _from_llm(req: NarrateRequest, texts: dict[str, str]) -> list[NarrateBlock] 
         reason = validate_text(texts[bid], verdict=req.verdict, converse=converse)
         if reason:
             logger.warning("narration rejected id=%s reason=%s", bid, reason)
+            trace.add("rejected", {"id": bid, "reason": reason, "text": trace.text(texts[bid])})
             return None
         if converse:
             blocks.append(NarrateBlock(id=bid, kind="say", text=texts[bid]))
@@ -165,6 +168,11 @@ def _from_llm(req: NarrateRequest, texts: dict[str, str]) -> list[NarrateBlock] 
         else:
             blocks.append(NarrateBlock(id=bid, kind="plan", plan_id=bid.split(":", 1)[1], text=texts[bid]))  # type: ignore[arg-type]
     return blocks
+
+
+def _masked(text: str, goal_name: str | None) -> str:
+    """Shown sentence for the trace; the goal name (customer's words) is masked outside full mode."""
+    return text if trace.full() or not goal_name else text.replace(goal_name, "<goal_name>")
 
 
 def narrate(req: NarrateRequest, *, request_id: str, generate: Generator | None = None) -> NarrateResponse:
@@ -181,8 +189,16 @@ def narrate(req: NarrateRequest, *, request_id: str, generate: Generator | None 
                 reason = "invalid"
         except Exception as exc:  # timeout, schema, network...
             logger.warning("narration model failed: %s", type(exc).__name__)
+            trace.note(model_error=type(exc).__name__)
             reason = "model_error"
     source = "llm" if blocks is not None else "template"
+    shown = blocks if blocks is not None else template_blocks(req)
+    trace.note(
+        mode=req.mode, verdict=req.verdict, action=req.action, plan_ids=req.plan_ids,
+        data_quality=req.data_quality, history_turns=len(req.history),
+        source=source, fallback_reason=reason,
+        blocks=[{"id": b.id, "text": _masked(b.text, req.facts.goal_name)} for b in shown],
+    )
     logger.info(
         "goal_coach narrate request_id=%s user_id=%s mode=%s source=%s reason=%s latency_ms=%d",
         request_id, req.user_id, req.mode, source, reason, int((time.monotonic() - started) * 1000),
@@ -191,7 +207,7 @@ def narrate(req: NarrateRequest, *, request_id: str, generate: Generator | None 
         request_id=request_id,
         source=source,
         fallback_reason=reason,
-        blocks=blocks if blocks is not None else template_blocks(req),
+        blocks=shown,
     )
 
 

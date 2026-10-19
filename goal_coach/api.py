@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from . import trace
 from .contracts import CoachRequest, NarrateRequest
 from .nlu import ModelUnavailableError
 from .narration import narrate
@@ -52,7 +53,9 @@ async def goal_coach_narrate(request: Request) -> JSONResponse:
         return _invalid(exc)
     except ValueError:
         return _error(422, "invalid_request", detail=[{"loc": ["body"], "msg": "invalid JSON", "type": "json_invalid"}])
-    resp = await asyncio.to_thread(narrate, body, request_id=new_request_id())
+    request_id = new_request_id()
+    with trace.start("narrate", request_id, body.conversation_id, body.user_id):
+        resp = await asyncio.to_thread(narrate, body, request_id=request_id)
     return JSONResponse(status_code=200, content=resp.model_dump(mode="json"))
 
 
@@ -69,11 +72,15 @@ async def goal_coach(request: Request) -> JSONResponse:
         return _error(422, "invalid_request", detail=[{"loc": ["body"], "msg": "invalid JSON", "type": "json_invalid"}])
 
     request_id = new_request_id()
-    try:
-        resp = await asyncio.to_thread(run_turn, body, request_id=request_id)
-    except ModelUnavailableError:
-        return _error(503, "model_unavailable", request_id=request_id)
-    except Exception:  # never a 500 with internals
-        logger.exception("goal_coach unexpected failure request_id=%s", request_id)
-        return _error(503, "model_unavailable", request_id=request_id)
+    kind = "adjust" if body.current_draft is not None else "coach"
+    with trace.start(kind, request_id, body.conversation_id, body.user_id):
+        try:
+            resp = await asyncio.to_thread(run_turn, body, request_id=request_id)
+        except ModelUnavailableError:
+            trace.note(error="model_unavailable")
+            return _error(503, "model_unavailable", request_id=request_id)
+        except Exception as exc:  # never a 500 with internals
+            trace.note(error=type(exc).__name__)
+            logger.exception("goal_coach unexpected failure request_id=%s", request_id)
+            return _error(503, "model_unavailable", request_id=request_id)
     return JSONResponse(status_code=200, content=resp.model_dump(mode="json"))

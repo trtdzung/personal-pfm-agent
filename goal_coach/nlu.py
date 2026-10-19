@@ -9,11 +9,24 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import trace
 from .contracts import AdjustExtraction, GoalExtraction
 from .fast_path import find_flexibility
 from .parsing import parse_amount, parse_horizon
 
 logger = logging.getLogger("goal_coach.nlu")
+
+
+def _raw(data: Any) -> Any:
+    """Model output for full traces only."""
+    if not trace.full():
+        return None
+    return data.model_dump() if hasattr(data, "model_dump") else data
+
+
+def _trace_call(call: str, attempts: int, started: float, *, ok: bool, raw: Any = None, error: str | None = None) -> None:
+    trace.add("model_calls", {"call": call, "attempts": attempts, "ms": int((time.monotonic() - started) * 1000),
+                              "ok": ok, "error": error, "raw": _raw(raw)})
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "extract_v1.md"
 _MAX_ATTEMPTS = 2  # first try + one retry with the error described
@@ -207,6 +220,7 @@ def extract(text: str) -> GoalExtraction:
                 raise ValueError(err)
             result = coerce_extraction(data, text)
             logger.info("nlu ok attempts=%d ms=%d", attempt, int((time.monotonic() - started) * 1000))
+            _trace_call("extract", attempt, started, ok=True, raw=data)
             return result
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {str(exc)[:300]}"
@@ -217,6 +231,7 @@ def extract(text: str) -> GoalExtraction:
                 ("human", f"Lần trước đầu ra không đúng khuôn ({last_error}). Hãy trả lại đúng khuôn."),
             ]
     logger.error("nlu failed (%s)", last_error[:80])
+    _trace_call("extract", attempt, started, ok=False, error=last_error.split(":", 1)[0])
     raise ModelUnavailableError(last_error)
 
 
@@ -257,7 +272,9 @@ def extract_adjust(text: str) -> AdjustExtraction:
             data, err = unwrap(structured_model(AdjustExtraction, max(1.0, remaining)).invoke(messages))
             if err:
                 raise ValueError(err)
-            return coerce_adjustment(data)
+            result = coerce_adjustment(data)
+            _trace_call("extract_adjust", attempt, started, ok=True, raw=data)
+            return result
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {str(exc)[:300]}"
             logger.warning("adjust nlu attempt %d failed: %s", attempt, type(exc).__name__)
@@ -266,4 +283,5 @@ def extract_adjust(text: str) -> AdjustExtraction:
                 ("human", _wrap(text)),
                 ("human", f"Lần trước đầu ra không đúng khuôn ({last_error}). Hãy trả lại đúng khuôn."),
             ]
+    _trace_call("extract_adjust", attempt, started, ok=False, error=last_error.split(":", 1)[0])
     raise ModelUnavailableError(last_error)
