@@ -1,0 +1,57 @@
+"""Fraud routes: auth first, strict validation, no execution capabilities."""
+import hmac
+import os
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
+from .contracts import InterveneRequest, DiagnoseRequest, ScanRequest, CaseRequest, EducateRequest, ChatSignalRequest, StrictModel
+
+router = APIRouter(prefix="/fraud")
+
+
+def _auth_error(request: Request) -> JSONResponse | None:
+    expected = os.environ.get("SERVER_API_KEY", "")
+    given = request.headers.get("x-api-key", "")
+    if not expected or not given or not hmac.compare_digest(given.encode(), expected.encode()):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    return None
+
+
+async def _pending(request: Request, contract: type[StrictModel]) -> JSONResponse:
+    if (error := _auth_error(request)) is not None:
+        return error
+    try:
+        contract.model_validate(await request.json())
+    except (ValidationError, ValueError):
+        return JSONResponse(status_code=422, content={"error": "invalid_request"})
+    return JSONResponse(status_code=501, content={"error": "not_implemented"})
+
+
+@router.post("/intervene")
+async def intervene(request: Request) -> JSONResponse:
+    return await _pending(request, InterveneRequest)
+
+
+@router.post("/diagnose")
+async def diagnose(request: Request) -> JSONResponse:
+    return await _pending(request, DiagnoseRequest)
+
+
+@router.post("/scan")
+async def scan(request: Request) -> JSONResponse:
+    return await _pending(request, ScanRequest)
+
+
+@router.post("/case")
+async def case(request: Request) -> JSONResponse:
+    return await _pending(request, CaseRequest)
+
+
+@router.post("/educate")
+async def educate(request: Request) -> JSONResponse:
+    return await _pending(request, EducateRequest)
+
+
+@router.post("/chat-signal")
+async def chat_signal(request: Request) -> JSONResponse:
+    return await _pending(request, ChatSignalRequest)
