@@ -10,6 +10,9 @@ def test_every_lookup_tool_has_a_per_request_cap():
         "calculate_deposit_interest",
         "get_jar_summary",
         "get_categories",
+        "check_official_channel",
+        "check_fraud_watchlist",
+        "search_msb_promotions",
     }
     assert all(limit >= 1 for limit in TOOL_RUN_LIMITS.values())
 

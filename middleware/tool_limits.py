@@ -23,6 +23,10 @@ TOOL_RUN_LIMITS = {
     # once to read the jars, once more to compare another month; more means the model is looping
     "get_jar_summary": 2,
     "get_categories": 2,
+    # a pasted message may carry a few links/numbers; more means the model is looping
+    "check_official_channel": 4,
+    "check_fraud_watchlist": 4,
+    "search_msb_promotions": 2,
 }
 
 
