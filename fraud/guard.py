@@ -4,7 +4,7 @@ import unicodedata
 from decimal import Decimal, InvalidOperation
 from collections.abc import Iterable
 from guardrails import mask_sensitive_input
-from .contracts import CaseResponse, EducateResponse, InterveneResponse
+from .contracts import CaseResponse, ChatSignalResponse, EducateResponse, InterveneResponse
 
 
 class GuardViolation(ValueError):
@@ -130,6 +130,14 @@ def validate_educate(output: EducateResponse, article_id: str, allowed_chips: It
     if any(chip not in permitted for chip in output.chips):
         raise GuardViolation("invalid_chip")
     validate_text(" ".join(output.summary), facts, max_length=600)
+
+
+def validate_chat_signal(output: ChatSignalResponse, allowed_ids: Iterable[str]) -> None:
+    """Playbook id must come from this turn's search. SC1 only while a scam is in progress."""
+    if output.playbook is not None and output.playbook not in set(allowed_ids):
+        raise GuardViolation("unknown_playbook")
+    if output.suggest_sc1 and not output.scam_in_progress:
+        raise GuardViolation("sc1_without_scam")
 
 
 def validate_scan(level: str, rule_level: str, text: str, facts: object) -> None:
