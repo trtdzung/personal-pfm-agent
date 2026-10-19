@@ -44,4 +44,12 @@ def get_official_channels() -> dict:
         return _data()["official_channels"].copy()
 
 
+def select_article(trigger: str) -> dict:
+    """Pick one fixed handbook article for a context. No browsing."""
+    for article in _data().get("articles", []):
+        if trigger in article.get("contexts", []):
+            return {key: article[key] for key in ("id", "title", "summary", "chips")}
+    raise KeyError(trigger)
+
+
 PLAYBOOK_TOOLS = [search_scam_playbook, get_official_channels]

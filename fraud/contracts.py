@@ -82,8 +82,15 @@ class CaseResponse(StrictModel):
     trace: list[TraceEntry] = Field(default_factory=list, max_length=30)
 
 
+EducateTrigger = Literal[
+    "new_customer", "device_login", "warned_account", "warned_scan",
+    "hub_first", "balance_up", "after_incident",
+    "BT1", "BT2", "BT3", "BT4", "BT7", "SC4",
+]
+
+
 class EducateRequest(StrictModel):
-    trigger: str = Field(min_length=1, max_length=64)
+    trigger: EducateTrigger
     cif: str = Field(min_length=1, max_length=64)
 
 

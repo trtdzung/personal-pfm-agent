@@ -4,7 +4,7 @@ import unicodedata
 from decimal import Decimal, InvalidOperation
 from collections.abc import Iterable
 from guardrails import mask_sensitive_input
-from .contracts import CaseResponse, InterveneResponse
+from .contracts import CaseResponse, EducateResponse, InterveneResponse
 
 
 class GuardViolation(ValueError):
@@ -119,6 +119,17 @@ def validate_case(output: CaseResponse, answers: list[str], facts: object) -> No
     for key, value in zip(_CASE_KEYS, answers):
         if getattr(output.dossier, key) != value:
             raise GuardViolation("dossier_mismatch")
+
+
+def validate_educate(output: EducateResponse, article_id: str, allowed_chips: Iterable[str], facts: object) -> None:
+    if output.article_id != article_id:
+        raise GuardViolation("wrong_article")
+    if len(output.summary) != 3 or any(not line.strip() for line in output.summary):
+        raise GuardViolation("summary_length")
+    permitted = set(allowed_chips)
+    if any(chip not in permitted for chip in output.chips):
+        raise GuardViolation("invalid_chip")
+    validate_text(" ".join(output.summary), facts, max_length=600)
 
 
 def validate_scan(level: str, rule_level: str, text: str, facts: object) -> None:

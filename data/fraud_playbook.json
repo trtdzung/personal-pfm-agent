@@ -222,5 +222,51 @@
     "zalo_oa": "MSB (mock)",
     "campaigns": [],
     "note": "Kênh tổng hợp để thử demo; không phải danh sách kênh hoặc chương trình MSB thật."
-  }
+  },
+  "articles": [
+    {
+      "id": "common_scams",
+      "title": "Thủ đoạn phổ biến",
+      "contexts": ["new_customer", "BT1"],
+      "summary": [
+        "Giả danh công an hoặc thuế thường ép bạn chuyển tiền gấp.",
+        "Việc làm online trả hoa hồng nhỏ rồi đòi nộp thêm.",
+        "Người lạ báo chuyển nhầm và nhờ chuyển sang tài khoản khác."
+      ],
+      "chips": ["Link bài đầy đủ", "Xem 3 thủ đoạn phổ biến", "Trung tâm bảo mật"]
+    },
+    {
+      "id": "msb_security",
+      "title": "Giải pháp bảo mật MSB",
+      "contexts": ["device_login", "hub_first", "balance_up", "after_incident", "BT2", "BT3", "SC4"],
+      "summary": [
+        "Bật mã chống giả mạo để nhận ra tin nhắn giả của MSB.",
+        "Thêm người thân khẩn cấp để có người cùng kiểm tra giao dịch lạ.",
+        "Kiểm tra thiết bị đăng nhập và đăng xuất thiết bị bạn không dùng."
+      ],
+      "chips": ["Link bài đầy đủ", "Bật mã", "Thêm người thân", "Đổi mật khẩu", "Bật bảo vệ", "Thiết lập", "Thêm danh bạ", "Trung tâm bảo mật"]
+    },
+    {
+      "id": "task_commission",
+      "title": "Làm nhiệm vụ/hoa hồng",
+      "contexts": ["warned_account", "BT4"],
+      "summary": [
+        "Khoản nhỏ liên tiếp từ người lạ thường là mồi làm nhiệm vụ.",
+        "Dừng chuỗi nộp thêm tiền theo yêu cầu.",
+        "Giữ bằng chứng và yêu cầu MSB gọi lại."
+      ],
+      "chips": ["Link bài đầy đủ", "Xem thủ đoạn", "Tôi biết người này"]
+    },
+    {
+      "id": "prize",
+      "title": "Trúng thưởng",
+      "contexts": ["warned_scan", "BT7"],
+      "summary": [
+        "Lời hứa thưởng hoặc hoàn tiền thường dẫn tới trang lạ.",
+        "Dừng trả phí để nhận thưởng.",
+        "Kiểm tra thông báo trong app, không theo link người lạ."
+      ],
+      "chips": ["Link bài đầy đủ", "Báo cáo", "Xem thủ đoạn tương tự"]
+    }
+  ]
 }
