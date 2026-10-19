@@ -52,11 +52,27 @@ class CurrentDraft(_Strict):
     months: int | None = Field(default=None, ge=1, le=600)
 
 
+class ContextJar(_Strict):
+    id: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=40)
+    spendable: int = Field(ge=0, le=MAX_AMOUNT_VND)
+
+
+class CoachContext(_Strict):
+    """Aggregated figures computed by pfm's engine; used by code to shape chips, never shown to the LLM."""
+
+    surplus: int | None = Field(default=None, ge=-MAX_AMOUNT_VND, le=MAX_AMOUNT_VND)  # average monthly surplus
+    savings_balance: int | None = Field(default=None, ge=0, le=MAX_AMOUNT_VND)
+    jars: list[ContextJar] = Field(default_factory=list, max_length=8)
+    missing: list[str] = Field(default_factory=list, max_length=8)  # what pfm could not compute
+
+
 class CoachRequest(_Strict):
     user_id: str = Field(min_length=1, max_length=64)
     request: str = Field(min_length=1, max_length=500)
     answers: list[AnswerIn] = Field(default_factory=list, max_length=6)
     current_draft: CurrentDraft | None = None
+    context: CoachContext | None = None
 
     @model_validator(mode="after")
     def _trim_request(self) -> "CoachRequest":
@@ -140,12 +156,20 @@ class QuestionOption(_Strict):
     value: str = Field(min_length=1, max_length=60)
 
 
+class QuestionHint(_Strict):
+    """Code-decided early warning; pfm owns the wording."""
+
+    code: Literal["far_beyond", "no_surplus"]
+    months: int | None = Field(default=None, ge=1, le=100_000)
+
+
 class Question(_Strict):
     slot: SlotName
     code: MessageCode
     text: str = Field(min_length=1, max_length=200)
     options: list[QuestionOption] = Field(default_factory=list, max_length=6)
     allow_free_text: bool
+    hint: QuestionHint | None = None
 
 
 AdjustKind = Literal["extend_months", "reduce_amount_to", "raise_saving_to", "use_savings_amount"]

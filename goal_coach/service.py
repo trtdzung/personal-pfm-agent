@@ -197,7 +197,8 @@ def run_turn(
                or (u == "horizon_unclear" and slots.horizon is None)}
 
     # 3) policy
-    d = decide(slots, is_goal=is_goal, unclear=unclear, answers_count=len(req.answers))
+    # `req.context` only shapes chips here; it is never passed to the extractor (the model never sees figures).
+    d = decide(slots, is_goal=is_goal, unclear=unclear, answers_count=len(req.answers), context=req.context)
     resp = CoachResponse(
         request_id=request_id,
         status=d.status,  # type: ignore[arg-type]

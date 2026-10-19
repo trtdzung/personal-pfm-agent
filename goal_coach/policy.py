@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .contracts import Draft, MessageCode, Question, Slots
-from .questions import get_question
+from .contracts import CoachContext, Draft, MessageCode, Question, Slots
+from .questions import get_question, personalise
 
 MAX_QUESTIONS = 3
 _REQUIRED: tuple[tuple[str, MessageCode], ...] = (
@@ -24,7 +24,9 @@ class Decision:
     draft: Draft | None = None
 
 
-def decide(slots: Slots, *, is_goal: bool, unclear: set[str], answers_count: int) -> Decision:
+def decide(
+    slots: Slots, *, is_goal: bool, unclear: set[str], answers_count: int, context: CoachContext | None = None
+) -> Decision:
     """`answers_count` = questions already answered; also the number of turns spent."""
     if (
         answers_count == 0
@@ -43,7 +45,7 @@ def decide(slots: Slots, *, is_goal: bool, unclear: set[str], answers_count: int
             code = "amount_unclear"
         if slot == "horizon" and "horizon_unclear" in unclear:
             code = "horizon_unclear"
-        q = get_question(code)
+        q = personalise(get_question(code), slots, context)
         if not turns_left:
             q = q.model_copy(update={"allow_free_text": True})  # pfm suggests "Tự nhập"
         return Decision("need_info", code, question=q)
@@ -54,7 +56,7 @@ def decide(slots: Slots, *, is_goal: bool, unclear: set[str], answers_count: int
         opening = None
         slots.opening_amount = None  # inconsistent: ask again (or fall back to 0)
     if opening is None and turns_left:
-        return Decision("need_info", "need_opening", question=get_question("need_opening"))
+        return Decision("need_info", "need_opening", question=personalise(get_question("need_opening"), slots, context))
 
     draft = Draft(
         name=slots.name.value,
