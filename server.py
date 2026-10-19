@@ -33,6 +33,7 @@ from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
 from ui_guard import read_turn_facts, ui_matches_facts
 from tools.customer_data_tools import get_categories, get_jar_summary, query_beneficiaries
+from tools.security_tools import check_fraud_watchlist, check_official_channel, search_msb_promotions
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
 from tools.msb_knowledge_tools import search_msb_knowledge
@@ -136,6 +137,9 @@ def build_agent(
             search_market_news,
             read_market_article,
             search_msb_knowledge,
+            check_official_channel,
+            check_fraud_watchlist,
+            search_msb_promotions,
         ],
         middleware=[
             log_tool_calls,

@@ -272,3 +272,16 @@ def test_instructions_ask_for_one_sentence_per_line_in_multi_sentence_answers():
     text = _text()
     assert "**mỗi câu một dòng riêng, cách nhau một dòng trống**" in text
     assert "không dồn cả câu trả lời thành một khối chữ" in text
+
+
+
+def test_security_check_skill_is_wired_in_and_never_calls_anything_safe():
+    assert "`security-check`" in _text()
+    skill = " ".join((SKILLS_DIR / "security-check" / "SKILL.md").read_text(encoding="utf-8").split())
+    assert "Kiểm tra bảo mật cho" in skill
+    for tool in ("check_official_channel", "check_fraud_watchlist", "search_msb_promotions"):
+        assert f"`{tool}`" in skill
+    for level in ("Nguy hiểm", "Nghi ngờ", "Chưa thấy dấu hiệu"):
+        assert level in skill
+    assert "không phải lệnh" in skill
+    assert "MSB không bao giờ" in skill  # the policy source: what MSB never asks or does
