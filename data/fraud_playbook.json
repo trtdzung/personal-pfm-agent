@@ -1,0 +1,226 @@
+{
+  "source": "mock",
+  "version": "2026-10-15",
+  "playbooks": [
+    {
+      "id": "police_tax",
+      "name": "Giả danh công an/thuế",
+      "signal_weights": {
+        "T8": 2
+      },
+      "keywords": [
+        "công an",
+        "thuế",
+        "nộp thuế",
+        "phạt",
+        "điều tra"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Ngắt cuộc trao đổi gây áp lực.",
+        "Tự mở app MSB để kiểm tra và yêu cầu gọi lại."
+      ],
+      "scenarios": [
+        "DH8"
+      ]
+    },
+    {
+      "id": "high_return",
+      "name": "Đầu tư lợi nhuận cao",
+      "signal_weights": {
+        "T1": 1,
+        "T3": 2
+      },
+      "keywords": [
+        "lợi nhuận cao",
+        "cam kết lợi nhuận",
+        "đầu tư",
+        "rút lợi nhuận"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Dừng nộp thêm tiền khi bị ép để được rút tiền.",
+        "Yêu cầu MSB gọi lại để cùng kiểm tra tình huống."
+      ],
+      "scenarios": [
+        "DH2",
+        "DH6"
+      ]
+    },
+    {
+      "id": "online_job",
+      "name": "Việc làm online",
+      "signal_weights": {
+        "T1": 1,
+        "T6": 1,
+        "T7a": 1
+      },
+      "keywords": [
+        "việc làm online",
+        "tuyển dụng",
+        "việc nhẹ",
+        "lương cao"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Dừng gửi tiền để được nhận việc.",
+        "Lưu nội dung trao đổi vào hồ sơ tra soát."
+      ],
+      "scenarios": [
+        "BT4",
+        "DH6"
+      ]
+    },
+    {
+      "id": "prize",
+      "name": "Trúng thưởng",
+      "signal_weights": {
+        "T1": 1,
+        "T3": 1
+      },
+      "keywords": [
+        "trúng thưởng",
+        "nhận quà",
+        "phí nhận thưởng"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Dừng trả phí để nhận thưởng.",
+        "Kiểm tra thông báo bằng kênh trong app, không theo link người lạ."
+      ],
+      "scenarios": [
+        "BT7",
+        "DH2"
+      ]
+    },
+    {
+      "id": "family_emergency",
+      "name": "Người thân cấp cứu",
+      "signal_weights": {
+        "T1b": 4,
+        "T1": 1
+      },
+      "keywords": [
+        "người thân cấp cứu",
+        "tai nạn",
+        "cấp cứu",
+        "bệnh viện"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Tự gọi lại người thân bằng số đã biết.",
+        "Dừng giao dịch khi chưa xác minh được yêu cầu."
+      ],
+      "scenarios": [
+        "DH1"
+      ]
+    },
+    {
+      "id": "task_commission",
+      "name": "Làm nhiệm vụ/hoa hồng",
+      "signal_weights": {
+        "T1": 1,
+        "T6": 7,
+        "T7a": 9
+      },
+      "keywords": [
+        "làm nhiệm vụ",
+        "hoa hồng",
+        "nạp thêm",
+        "đơn hàng",
+        "cộng tác viên"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Dừng chuỗi nộp thêm tiền theo yêu cầu.",
+        "Giữ bằng chứng và yêu cầu MSB gọi lại."
+      ],
+      "scenarios": [
+        "BT4",
+        "DH3",
+        "DH3-2",
+        "DH6"
+      ]
+    },
+    {
+      "id": "mistaken_transfer",
+      "name": "Chuyển nhầm/nhờ chuyển trả",
+      "signal_weights": {
+        "T1": 1,
+        "T7b": 12
+      },
+      "keywords": [
+        "chuyển nhầm",
+        "chuyển trả",
+        "giữ hộ",
+        "chuyển tiền hộ"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Không chuyển trả sang tài khoản khác theo lời người liên hệ.",
+        "Yêu cầu MSB tra soát để hoàn trả về tài khoản gốc."
+      ],
+      "scenarios": [
+        "BT5",
+        "DH7"
+      ]
+    },
+    {
+      "id": "safe_account",
+      "name": "Tài khoản an toàn",
+      "signal_weights": {
+        "T8": 2,
+        "T1": 1
+      },
+      "keywords": [
+        "tài khoản an toàn",
+        "giữ tiền",
+        "bảo vệ tiền"
+      ],
+      "questions": [
+        "Có ai đang gọi điện hướng dẫn anh/chị không?",
+        "Người đó có dặn đừng nói với người thân không?"
+      ],
+      "handling": [
+        "Dừng chuyển tiền theo hướng dẫn trong cuộc gọi.",
+        "Tự mở app và yêu cầu MSB gọi lại."
+      ],
+      "scenarios": [
+        "DH8"
+      ]
+    }
+  ],
+  "official_channels": {
+    "source": "mock",
+    "phone_prefixes": [
+      "MSB-MOCK"
+    ],
+    "domains": [
+      "msb.example.invalid"
+    ],
+    "zalo_oa": "MSB (mock)",
+    "campaigns": [],
+    "note": "Kênh tổng hợp để thử demo; không phải danh sách kênh hoặc chương trình MSB thật."
+  }
+}
