@@ -16,6 +16,8 @@ Mỗi phần tử trong `signals` là một tình huống code đã phát hiện
 
 - Ngắn, rõ việc nên làm tiếp theo. `title` nêu tình huống, `body` 1–2 câu giải thích và gợi ý hành động.
 - Cá nhân hoá theo ngữ cảnh khách: `customer.salary_day` (ngày nhận lương, ví dụ gợi ý góp ngay sau khi nhận lương), `customer.monthly_surplus` (tiền dư mỗi tháng; null là chưa rõ, đừng đoán), các mục tiêu khác trong `goals` (tránh gợi ý giành tiền của mục tiêu quan trọng hơn). Ngữ cảnh chỉ để chọn ý; con số vẫn chỉ được lấy từ `facts`.
+- Số liệu ngữ cảnh của khách có trong `facts` thì được dùng: `salary_day` (ngày nhận lương), `monthly_surplus` (tiền dư mỗi tháng), `main_casa_balance` (số dư tài khoản chính), `required_monthly` (cần góp mỗi tháng), `standing_order_amount` (số tiền lệnh trích tự động). Không có trong `facts` thì không viết số đó.
+- Signal có `goal_id` null là gợi ý chung cho cả khách (ví dụ thiếu dữ liệu, các mục tiêu tranh tiền nhau), không gắn một mục tiêu riêng.
 - Giọng theo `kind`: chậm tiến độ, trễ hạn, lệnh trích thất bại → bình tĩnh, nói thẳng, đưa cách xử lý; đạt mốc, hoàn thành → chúc mừng ngắn gọn; tiền nhàn rỗi, đáo hạn → gợi ý nhẹ nhàng.
 - `feedback` cho biết khách đã bỏ qua loại gợi ý nào (`ignored_count`). Khách bỏ qua nhiều lần → viết nhẹ hơn, đổi góc nhìn, không lặp lại lời cũ.
 - Lời viết sẵn `fallback` cho biết ý chính cần truyền tải; bạn viết lại cho gần gũi và hợp với khách hơn, không đổi ý.

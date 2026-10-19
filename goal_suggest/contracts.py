@@ -43,7 +43,7 @@ class Fallback(BaseModel):
 
 class Signal(BaseModel):
     id: str
-    goal_id: str
+    goal_id: str | None = None  # null = customer-wide signal (insufficient_data, priority_conflict...)
     kind: str
     rank: int
     facts: dict[str, FactValue] = Field(default_factory=dict)
