@@ -29,7 +29,21 @@ async def _pending(request: Request, contract: type[StrictModel]) -> JSONRespons
 
 @router.post("/intervene")
 async def intervene(request: Request) -> JSONResponse:
-    return await _pending(request, InterveneRequest)
+    if (error := _auth_error(request)) is not None:
+        return error
+    try:
+        body = InterveneRequest.model_validate(await request.json())
+    except (ValidationError, ValueError):
+        return JSONResponse(status_code=422, content={"error": "invalid_request"})
+    from .intervene import propose
+    from .guard import GuardViolation
+    try:
+        result = await propose(body)
+    except GuardViolation:
+        return JSONResponse(status_code=502, content={"error": "invalid_model_output"})
+    except Exception:
+        return JSONResponse(status_code=503, content={"error": "model_unavailable"})
+    return JSONResponse(content=result.model_dump())
 
 
 @router.post("/diagnose")
