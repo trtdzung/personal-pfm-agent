@@ -53,7 +53,7 @@ class Signal(BaseModel):
 
 class FeedbackIn(BaseModel):
     kind: str
-    goal_id: str
+    goal_id: str | None = None  # null = feedback on a customer-wide signal
     ignored_count: int
 
 
