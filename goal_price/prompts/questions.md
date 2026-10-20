@@ -5,7 +5,7 @@ Quy tắc:
 - Chỉ hỏi điều **làm giá thay đổi nhiều nhất** của đúng loại mục tiêu này. Ví dụ nhà: khu vực (thành phố/quận), loại hình (căn hộ, nhà phố, đất nền), diện tích, tình trạng. Ví dụ xe: hãng hoặc phân khúc, xăng/điện, mới hay cũ.
 - Nếu khách đã mô tả sẵn điều gì thì không hỏi lại điều đó.
 - Không hỏi về thu nhập, tiền hiện có hay thông tin cá nhân.
-- `multi` = true chỉ khi tick nhiều lựa chọn có nghĩa (ví dụ nhiều khu vực). Diện tích, loại hình, tình trạng chọn một.
+- Mỗi câu khách chọn **một** lựa chọn (hoặc tự gõ câu trả lời khác), nên đặt `multi` = false và viết lựa chọn loại trừ nhau.
 - Khoảng diện tích viết dạng "Dưới 50 m²", "50–70 m²", "70–100 m²", "Trên 100 m²".
 
 Đầu ra: danh sách `questions`, mỗi câu có `title`, `options`, `multi`.
