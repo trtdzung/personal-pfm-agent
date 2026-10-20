@@ -1121,3 +1121,8 @@ def test_chat_masks_sensitive_input_before_the_agent_sees_it_and_warns_the_custo
 def test_chat_replaces_an_answer_that_contains_profanity(monkeypatch):
     response, _ = _chat("hi", monkeypatch, responses=("Bạn là đồ chó đẻ",))
     assert "chó" not in response.json()["answer"]
+
+
+def test_the_chat_saves_the_thread_with_langgraphs_default_durability_not_exit():
+    """'exit' stored the tool messages out of order (see the comment on server.CHECKPOINT_DURABILITY)."""
+    assert server.CHECKPOINT_DURABILITY == "async"

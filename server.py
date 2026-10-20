@@ -79,10 +79,12 @@ def _ui_matches_turn(ui: dict, messages: list, user_id: str) -> bool:
     return False
 
 
-# The checkpointer is GreenNode's AgentBase memory: every read/write is a network call (~1.3-1.8s a read, more a write), and
-# LangGraph's default "async" mode saves after EVERY step (model call, tool call), ~7s of overhead per step, ~47% of a turn in the
-# prod traces. "exit" saves once when the turn ends -- also when it fails, so `_resume_after_content_filter` still finds its state.
-CHECKPOINT_DURABILITY = "exit"
+# When LangGraph saves the thread: "async" (its default) after every step, "exit" once when the turn ends. "exit" would save ~7s a
+# turn on GreenNode's AgentBase memory (one network write instead of 12+), but it was measured to CORRUPT the stored history: the
+# turn is right in memory, yet read back from the checkpointer its tool messages are out of order (a tool result with no tool call
+# before it, 3 of 8 messages after the first turn; prod went from 0 to 27 of 33 model calls with such history right after "exit" was
+# deployed). OpenAI refuses such history (400), GLM silently tolerates it. Keep "async" until the checkpointer is fixed for "exit".
+CHECKPOINT_DURABILITY = os.environ.get("CHAT_CHECKPOINT_DURABILITY") or "async"
 
 
 def _with_plan_card(ui: dict | None, plan_cards: list[dict] | None) -> dict | None:
