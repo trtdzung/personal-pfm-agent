@@ -1,84 +1,49 @@
-"""guard.py: số trong lời ⊆ facts (kể cả tiền Việt); action_ids ⊆ allowed_actions."""
-
-from __future__ import annotations
-
 from goal_suggest import guard
 
-
-FACTS = {
-    "salary_day": 5,
-    "monthly_surplus": 4_500_000,
-    "main_casa_balance": 12_000_000,
-    "required_monthly": 3_000_000,
-}
-ALLOWED = ["a0", "a1"]
+DATA = "Cần góp mỗi tháng: 3.757.000 VND. Số đang góp: 3.600.000 VND. Thiếu 157.000 VND. Hạn 15/09/2028. Tăng 18%. Lãi 6,8%/năm."
 
 
-def test_number_not_in_facts_is_rejected():
-    reason = guard.check(
-        "Còn 9 tháng",
-        "Bạn cần thêm 8.000.000 VND mỗi tháng.",
-        ["a0"],
-        facts=FACTS,
-        allowed_action_ids=ALLOWED,
-    )
-    assert reason == "number_not_in_facts"
+def ok(observation="Bạn chi Ăn uống cao hơn 18%.", suggestion="Giảm bớt để bù 157.000 VND.", question="Mình nên giảm chi Ăn uống thế nào?"):
+    return guard.check(observation, suggestion, question, data_text=DATA)
 
 
-def test_number_from_facts_plain_passes():
-    reason = guard.check(
-        "Ngày lương 5",
-        "Số dư chính 12000000 đủ để trích 3000000.",
-        ["a0"],
-        facts=FACTS,
-        allowed_action_ids=ALLOWED,
-    )
-    assert reason is None
+def test_wording_with_numbers_from_the_data_passes():
+    assert ok() is None
+    assert ok(suggestion="Tăng số góp lên 3.757.000 VND, hạn 15/09/2028, lãi 6,8%/năm.") is None
 
 
-def test_vietnamese_money_format_passes_when_in_facts():
-    # 12.000.000 và 4,5 triệu khớp facts main_casa_balance / monthly_surplus.
-    reason = guard.check(
-        "Số dư 12.000.000",
-        "Thặng dư khoảng 4,5 triệu mỗi tháng.",
-        ["a0", "a1"],
-        facts=FACTS,
-        allowed_action_ids=ALLOWED,
-    )
-    assert reason is None
+def test_millions_and_billions_are_compared_by_value():
+    data = "Số dư 12.500.000 VND, mục tiêu 1.200.000.000 VND."
+    check = lambda text: guard.check(text, "Giữ nhịp.", "Mình nên làm gì?", data_text=data)
+    assert check("Có 12,5 triệu") is None and check("Mục tiêu 1,2 tỷ") is None
+    assert check("Có 12,6 triệu").startswith("number_not_in_data")
 
 
-def test_trieu_scale_matches_fact_int():
-    reason = guard.check(
-        "Cần 3 triệu/tháng",
-        "Trích đều cho mục tiêu.",
-        ["a0"],
-        facts={"required_monthly": 3_000_000},
-        allowed_action_ids=ALLOWED,
-    )
-    assert reason is None
+def test_a_number_that_is_not_in_the_data_is_rejected():
+    assert ok(suggestion="Giảm 300.000 VND mỗi tháng.").startswith("number_not_in_data")
+    assert ok(observation="Bạn chi cao hơn 20%.").startswith("number_not_in_data")
 
 
-def test_action_ids_must_be_subset_of_allowed():
-    reason = guard.check(
-        "Ngày lương 5",
-        "Trích thêm cho mục tiêu.",
-        ["a0", "a9"],
-        facts=FACTS,
-        allowed_action_ids=ALLOWED,
-    )
-    assert reason == "unknown_action"
+def test_length_markup_and_promises_are_rejected():
+    assert ok(observation="a" * (guard.MAX_OBSERVATION_LEN + 1)) == "observation_too_long"
+    assert ok(observation="a" * guard.MAX_OBSERVATION_LEN) is None
+    assert ok(suggestion="b" * (guard.MAX_SUGGESTION_LEN + 1)) == "suggestion_too_long"
+    assert ok(suggestion="**Giảm** bớt") == "markup"
+    assert ok(suggestion="Giảm bớt\nngay") == "markup"
+    assert ok(suggestion="Chắc chắn sẽ kịp hạn.") == "promise"
+    assert ok(suggestion="Cam kết sinh lời.") == "promise"
 
 
-def test_empty_or_too_long_rejected():
-    assert (
-        guard.check("  ", "body ok", ["a0"], facts=FACTS, allowed_action_ids=ALLOWED) == "empty"
-    )
-    assert (
-        guard.check("t" * 61, "body ok", ["a0"], facts=FACTS, allowed_action_ids=ALLOWED)
-        == "title_too_long"
-    )
-    assert (
-        guard.check("ok", "b" * 221, ["a0"], facts=FACTS, allowed_action_ids=ALLOWED)
-        == "body_too_long"
-    )
+def test_empty_parts_are_rejected():
+    assert ok(observation="  ") == "empty"
+    assert ok(suggestion="") == "empty"
+
+
+def test_the_question_must_be_short_a_question_and_obey_the_same_number_rules():
+    assert ok(question="Mình nên giảm chi Ăn uống bao nhiêu để bù 157.000 VND mỗi tháng?") is None
+    assert ok(question="q" * (guard.MAX_QUESTION_LEN - 1) + "?") is None
+    assert ok(question="q" * guard.MAX_QUESTION_LEN + "?") == "question_too_long"
+    assert ok(question="Hãy giải thích thêm giúp mình.") == "question_not_a_question"
+    assert ok(question="Mình nên giảm 999.000 VND được không?").startswith("number_not_in_data")
+    assert ok(question="Bạn đảm bảo được không?") == "promise"
+    assert ok(question="  ") == "empty"

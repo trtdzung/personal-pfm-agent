@@ -26,6 +26,8 @@ TOOL_RUN_LIMITS = {
     # goals: once to read, once more after a confirmed change; the market list may be narrowed a few times by name
     "get_goals": 2,
     "get_goal_market": 3,
+    # one reading answers the card's question; again only for a different goal
+    "get_goal_insight": 2,
     # computed once per proposal, again if the customer changes the amount / date
     "plan_monthly": 3,
     # a pasted message may carry a few links/numbers; more means the model is looping

@@ -12,6 +12,7 @@ def test_every_lookup_tool_has_a_per_request_cap():
         "get_categories",
         "get_goals",
         "get_goal_market",
+        "get_goal_insight",
         "plan_monthly",
         "check_official_channel",
         "check_fraud_watchlist",

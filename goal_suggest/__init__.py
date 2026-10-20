@@ -1,16 +1,5 @@
-"""Goal suggestion wording (POST /goal-suggestions). `router` is imported lazily so the pure modules work without FastAPI."""
+"""POST /goal-suggestions: M-You's insight for one goal, written from the customer's whole financial picture."""
 
-from __future__ import annotations
-
-from typing import Any
-
-
-def __getattr__(name: str) -> Any:
-    if name == "router":
-        from .api import router
-
-        return router
-    raise AttributeError(name)
-
+from .api import router
 
 __all__ = ["router"]

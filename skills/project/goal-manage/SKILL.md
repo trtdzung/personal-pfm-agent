@@ -15,6 +15,8 @@ khách bấm xác nhận. Khi câu hỏi khớp skill này, **đừng từ chố
 Trong mọi trường hợp, việc ĐẦU TIÊN là gọi `get_goals` — trước khi viết bất kỳ câu nào hay dựng đề xuất. Đừng dựa vào số
 hay ngày trong hội thoại trước. Sau khi khách xác nhận 1 thay đổi, số đã đổi — gọi lại `get_goals` trước khi gợi ý bước tiếp.
 
+Khách bấm "Chi tiết" trên thẻ M-You gợi ý, hoặc hỏi vì sao mục tiêu chậm: **trả lời trước theo skill `goal-insight`** (giải thích, hướng dẫn). Chỉ khi khách đồng ý đổi số góp, hạn hoặc số tiền mới đề xuất form ở skill này.
+
 ## Đọc dữ liệu — tool `get_goals`
 
 - **`today` (hôm nay theo hệ thống) là ngày duy nhất để tính mọi mốc thời gian.** "6 tháng nữa", "cuối năm sau", "tháng 3"

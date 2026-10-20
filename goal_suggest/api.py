@@ -1,4 +1,4 @@
-"""POST /goal-suggestions: auth, validation, error mapping. Model trouble is never an error (fallbacks, 200)."""
+"""POST /goal-suggestions: auth, validation, error mapping. Model trouble is never an error (200 with `insight: null`)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from .contracts import GoalSuggestionsRequest
+from .contracts import GoalSuggestionRequest
+from .data import DataUnavailable
+from .digest import GoalAmbiguous, GoalNotFound
 from .service import suggest
 
 logger = logging.getLogger("goal_suggest.api")
@@ -38,11 +40,18 @@ async def goal_suggestions(request: Request) -> JSONResponse:
     if (denied := _auth_error(request)) is not None:
         return denied
     try:
-        body = GoalSuggestionsRequest.model_validate(await request.json())
+        body = GoalSuggestionRequest.model_validate(await request.json())
     except ValidationError as exc:
         detail = [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
         return _error(422, "invalid_request", detail=json.loads(json.dumps(detail, default=str)))
     except ValueError:  # malformed JSON
         return _error(422, "invalid_request", detail=[{"loc": ["body"], "msg": "invalid JSON", "type": "json_invalid"}])
-    resp = await suggest(body)
+    try:
+        resp = await suggest(body)
+    except GoalNotFound:
+        return _error(404, "goal_not_found")
+    except GoalAmbiguous as exc:
+        return _error(409, "goal_ambiguous", goal_ids=str(exc).split(", "))
+    except DataUnavailable:
+        return _error(503, "data_unavailable")
     return JSONResponse(status_code=200, content=resp.model_dump(mode="json"))
