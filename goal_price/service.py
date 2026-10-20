@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import statistics
 from collections.abc import Callable
 from pathlib import Path
@@ -25,7 +26,9 @@ logger = logging.getLogger("goal_price.service")
 _PROMPTS = Path(__file__).parent / "prompts"
 DEFAULT_MODEL = "google/gemma-4-31b-it"
 MODEL_TIMEOUT_SECONDS = 45.0
-MIN_POINTS = 2
+MIN_POINTS = 1
+# When the customer ticked no area, a price per m² is multiplied by this (and the summary says so).
+ASSUMED_AREA_M2 = 70
 MIN_VND, MAX_VND = 5_000_000, 500_000_000_000
 LABELS = {
     "car": "xe ô tô",
@@ -149,10 +152,30 @@ def _money(vnd: int) -> str:
     return f"{vnd // 1_000_000} triệu đồng"
 
 
-def verified_totals(extraction: _Extraction, snippets: list[research.Snippet]) -> list[tuple[int, research.Snippet]]:
-    """(total price in VND, snippet) for every point the snippet text really supports. A point is dropped when its quote is not
-    in the snippet, the quote does not contain the number, or it is per m² and the area is unknown."""
-    area = extraction.area_m2 if extraction.area_m2 and 10 <= extraction.area_m2 <= 5000 else None
+_BARE_NUMBER = re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)?)(?![\d])")
+
+
+def _supports(quote: str, value_vnd: int) -> bool:
+    """The number in the quote says `value_vnd`: written in full ("299.000.000"), with its unit ("2,4 tỷ") or as one end of a
+    range that shares the unit ("60 – 180 triệu/m²")."""
+    if str(value_vnd) in guard.number_keys(quote):
+        return True
+    for match in _BARE_NUMBER.finditer(quote):
+        try:
+            number = float(match.group(1).replace(",", "."))
+        except ValueError:
+            continue
+        if any(round(number * scale) == value_vnd for scale in (1_000_000, 1_000_000_000)):
+            return True
+    return False
+
+
+def verified_totals(extraction: _Extraction, snippets: list[research.Snippet]) -> tuple[list[tuple[int, research.Snippet]], bool]:
+    """(totals, area_assumed). Each total is a price in VND with the snippet that supports it. A point is dropped when its quote is
+    not in the snippet or does not contain the number. A price per m² needs an area: the customer's, else ASSUMED_AREA_M2."""
+    given = extraction.area_m2 if extraction.area_m2 and 10 <= extraction.area_m2 <= 5000 else None
+    area = given or ASSUMED_AREA_M2
+    assumed = False
     seen: set[tuple[int, int]] = set()
     totals: list[tuple[int, research.Snippet]] = []
     for p in extraction.points:
@@ -160,19 +183,19 @@ def verified_totals(extraction: _Extraction, snippets: list[research.Snippet]) -
             continue
         snippet = snippets[p.source - 1]
         quote = " ".join(p.quote.split())
-        if not quote or quote not in snippet.text or str(p.value_vnd) not in guard.number_keys(quote):
-            continue
-        if p.per_m2 and area is None:
+        if not quote or quote not in snippet.text or not _supports(quote, p.value_vnd):
             continue
         total = int(p.value_vnd * area) if p.per_m2 else p.value_vnd
+        if p.per_m2 and given is None:
+            assumed = True
         if not MIN_VND <= total <= MAX_VND or (p.source, total) in seen:
             continue
         seen.add((p.source, total))
         totals.append((total, snippet))
-    return totals
+    return totals, assumed and bool(totals)
 
 
-def propose(totals: list[tuple[int, research.Snippet]]) -> Estimate | None:
+def propose(totals: list[tuple[int, research.Snippet]], area_assumed: bool = False) -> Estimate | None:
     if len(totals) < MIN_POINTS:
         return None
     values = sorted(t for t, _ in totals)
@@ -184,7 +207,14 @@ def propose(totals: list[tuple[int, research.Snippet]]) -> Estimate | None:
     amount, low, high = _round(statistics.median(values)), _round(low), _round(high)
     used = list(dict.fromkeys(s.url for _, s in totals))
     sources = [Source(title=next(s.title for _, s in totals if s.url == url)[:120], url=url) for url in used[:5]]
-    summary = f"Tham khảo {len(values)} mức giá từ {len(used)} nguồn trên web: khoảng {_money(low)} đến {_money(high)}."
+    if len(values) == 1:
+        summary = f"M-You chỉ tìm được 1 mức giá tham khảo trên web: khoảng {_money(amount)}."
+    elif low == high:
+        summary = f"Tham khảo {len(values)} mức giá từ {len(used)} nguồn trên web: khoảng {_money(amount)}."
+    else:
+        summary = f"Tham khảo {len(values)} mức giá từ {len(used)} nguồn trên web: khoảng {_money(low)} đến {_money(high)}."
+    if area_assumed:
+        summary += f" Bạn chưa chọn diện tích nên giá theo m² được tính tạm cho {ASSUMED_AREA_M2} m²."
     return Estimate(amount=amount, low=low, high=high, summary=summary, sources=sources)
 
 
@@ -207,7 +237,8 @@ def research_price(req: PriceEstimateRequest, generate: Generator, search: Searc
     except Exception as exc:
         logger.warning("goal_price extraction failed: %s", type(exc).__name__)
         return None, f"model_failed:{type(exc).__name__}"
-    estimate = propose(verified_totals(extraction, snippets))
+    totals, area_assumed = verified_totals(extraction, snippets)
+    estimate = propose(totals, area_assumed)
     return (estimate, None) if estimate else (None, "not_enough_prices")
 
 

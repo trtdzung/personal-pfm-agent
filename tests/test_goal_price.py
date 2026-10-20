@@ -74,13 +74,27 @@ def test_points_the_snippet_does_not_support_are_dropped():
         {"source": 2, "quote": "thuê 15 triệu/tháng", "value_vnd": 1_000},  # absurdly small
         {"source": 7, "quote": "x", "value_vnd": 10_000_000},  # no such snippet
     ]
+    resp = run(req(), extract_generator=lambda s, h: extraction(invented), search=fake_search)
+    assert resp.estimate is None and resp.degraded and resp.reason == "not_enough_prices"
+    # one supported point left: still proposed, but the wording says it is only one
     resp = run(req(), extract_generator=lambda s, h: extraction(invented + GOOD_POINTS[2:]), search=fake_search)
-    assert resp.estimate is None and resp.degraded and resp.reason == "not_enough_prices"  # only one valid point left
+    assert resp.estimate.amount == 2_400_000_000 and "chỉ tìm được 1 mức giá" in resp.estimate.summary
 
 
-def test_a_per_m2_price_needs_the_area():
+def test_one_end_of_a_range_sharing_the_unit_is_supported():
+    assert service._supports("Nhà phố Hà Nội : 120 – 350 triệu/ m²", 120_000_000)
+    assert service._supports("Nhà phố Hà Nội : 120 – 350 triệu/ m²", 350_000_000)
+    assert service._supports("giá 2,4 tỷ", 2_400_000_000) and service._supports("VF3, 299.000.000", 299_000_000)
+    assert not service._supports("giá 2,4 tỷ", 2_000_000_000)
+
+
+def test_a_per_m2_price_without_a_ticked_area_uses_an_assumed_area_and_says_so():
     resp = run(req(), extract_generator=lambda s, h: extraction(GOOD_POINTS[:2], area=None), search=fake_search)
-    assert resp.estimate is None and resp.reason == "not_enough_prices"
+    # 55,5tr x 70 = 3.885.000.000 and 48,2tr x 70 = 3.374.000.000
+    assert resp.estimate.low == 3_370_000_000 and resp.estimate.high == 3_880_000_000
+    assert "chưa chọn diện tích" in resp.estimate.summary and "70 m²" in resp.estimate.summary
+    given = run(req(), extract_generator=lambda s, h: extraction(GOOD_POINTS[:2], area=60), search=fake_search)
+    assert "chưa chọn diện tích" not in given.estimate.summary
 
 
 def test_search_or_model_trouble_is_degraded_not_an_error():
