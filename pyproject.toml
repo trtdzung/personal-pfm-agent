@@ -32,3 +32,4 @@ packages = ["middleware"]
 "data/customers/CIF_0001.json" = "data/customers/CIF_0001.json"
 "data/customers/CIF_0002.json" = "data/customers/CIF_0002.json"
 "data/customers/CIF_0003.json" = "data/customers/CIF_0003.json"
+"data/customers/CIF_0004.json" = "data/customers/CIF_0004.json"
