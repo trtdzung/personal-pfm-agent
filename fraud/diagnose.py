@@ -1,4 +1,4 @@
-"""Two-question diagnosis. Output can suggest actions but cannot execute them."""
+"""Single-question diagnosis. Output can suggest actions but cannot execute them."""
 import asyncio
 import json
 import os
@@ -19,7 +19,7 @@ async def propose(request: DiagnoseRequest) -> DiagnoseResponse:
         context = await get_intervention_context.ainvoke({"intervention_id": request.intervention_id})
         state = context.get("diagnosis") or {}
         answers = state.get("answers") or []
-        if not 1 <= len(answers) <= 2 or answers[-1] != request.answer:
+        if len(answers) != 1 or answers[-1] != request.answer:
             raise GuardViolation("unknown_answer")
         matches = await search_scam_playbook.ainvoke({"signals": [s["code"] for s in context.get("signals", [])], "text": context.get("memo") or ""})
         matches = [{k: m[k] for k in ("id", "name", "questions", "handling") if k in m} for m in matches[:1]]
@@ -35,11 +35,8 @@ async def propose(request: DiagnoseRequest) -> DiagnoseResponse:
         if not isinstance(pending, list) or any(item not in {"callback", "emergency_lock", "case", "none"} for item in pending):
             raise GuardViolation("invalid_proposal")
         output = DiagnoseResponse.model_validate(raw)
-        validate_diagnosis(output.proposals, (output.next_question or "") + " " + (output.conclusion or ""))
-        questions = {q for m in matches for q in m.get("questions", [])[1:2]}
-        # Both UC12 questions are fixed even when no playbook matches.
-        questions.add("Người đó có dặn đừng nói với người thân không?")
-        if output.next_question is not None and (len(answers) >= 2 or output.next_question not in questions):
+        if output.next_question is not None:
             raise GuardViolation("extra_question")
-        validate_text((output.next_question or "") + " " + (output.conclusion or ""), facts, max_length=1200)
+        validate_diagnosis(output.proposals, output.conclusion or "")
+        validate_text(output.conclusion or "", facts, max_length=1200)
         return output.model_copy(update={"trace": entries.copy()})
