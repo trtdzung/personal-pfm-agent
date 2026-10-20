@@ -26,6 +26,7 @@ from jar_endpoint import router as jar_router
 from insight_endpoint import router as insight_router
 from proactive_endpoint import router as proactive_router
 from goal_coach import router as goal_coach_router
+from goal_price import router as goal_price_router
 from goal_suggest import router as goal_suggest_router
 from fraud import router as fraud_router
 from middleware.audit import log_model_calls, log_tool_calls
@@ -185,6 +186,7 @@ app.include_router(insight_router)
 app.include_router(proactive_router)
 app.include_router(goal_coach_router)
 app.include_router(goal_suggest_router)
+app.include_router(goal_price_router)
 app.include_router(fraud_router)
 
 
