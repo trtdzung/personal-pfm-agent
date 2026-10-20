@@ -131,8 +131,9 @@ def test_goal_manage_asks_for_a_missing_amount_or_date_with_buttons():
 
 def test_goal_manage_reads_get_goals_again_after_the_button_and_keeps_replies_plain():
     text = _text("goal-manage")
-    assert "Lượt sau khi khách bấm vẫn phải gọi `get_goals` TRƯỚC KHI trả `create_goal`" in text
-    assert "bỏ luôn form" in text
+    # creating a goal needs no id: the system date comes from plan_monthly and the server re-checks the form
+    assert "Lượt sau khi khách bấm: lấy ngày hôm nay từ `plan_monthly` rồi trả `create_goal` luôn" in text
+    assert "không bắt buộc gọi `get_goals`" in text and "Hệ thống tự kiểm lại hạn của form" in text
     assert 'Gọi khách là **"bạn"**' in text and "Theo skill" in text  # the leak is named as a mistake
 
 

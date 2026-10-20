@@ -64,8 +64,38 @@ def test_create_goal_with_a_date_not_after_the_systems_today_is_dropped(monkeypa
     assert body["ui"] is None and "Mình đề xuất" in body["answer"]
 
 
-def test_a_form_without_reading_the_goals_this_turn_is_dropped(monkeypatch):
-    assert _chat(monkeypatch, [], _block(CREATE))["ui"] is None
+def test_a_valid_form_from_a_turn_that_skipped_get_goals_is_kept_after_a_fresh_read(monkeypatch):
+    body = _chat(monkeypatch, [], _block(CREATE))
+    assert body["ui"] == CREATE and server.FORM_DROPPED_NOTE not in body["answer"]
+
+
+def test_an_invalid_form_from_a_turn_that_skipped_get_goals_is_still_dropped_with_a_note(monkeypatch):
+    body = _chat(monkeypatch, [], _block({**CREATE, "target_date": "2026-09-15"}))
+    assert body["ui"] is None
+    # the text promised a form to review: say plainly that it is missing and how to get it
+    assert body["answer"].startswith("Mình đề xuất") and server.FORM_DROPPED_NOTE in body["answer"]
+
+
+def test_an_invented_goal_id_from_a_turn_that_skipped_get_goals_is_dropped(monkeypatch):
+    body = _chat(monkeypatch, [], _block({**EDIT, "goal_id": "goal-99"}))
+    assert body["ui"] is None and server.FORM_DROPPED_NOTE in body["answer"]
+
+
+def test_when_pfm_cannot_be_read_the_form_is_dropped_with_a_note(monkeypatch):
+    def down(url, params=None, timeout=None):
+        raise httpx.ConnectError("pfm down", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", down)
+    agent = server.build_agent(model=_ToolCallingFakeChatModel(messages=iter([AIMessage(content=_block(CREATE))])), checkpointer=InMemorySaver())
+    monkeypatch.setattr(server, "agent", agent)
+    response = TestClient(server.app).post("/chat", json={"message": "x", "user_id": "CIF_0001", "thread_id": "goal-down"}, headers=HEADERS)
+    body = response.json()
+    assert response.status_code == 200 and body["ui"] is None and server.FORM_DROPPED_NOTE in body["answer"]
+
+
+def test_a_valid_goal_form_gets_no_dropped_note(monkeypatch):
+    body = _chat(monkeypatch, ["get_goals"], _block(CREATE))
+    assert body["ui"] == CREATE and server.FORM_DROPPED_NOTE not in body["answer"]
 
 
 def test_edit_goal_with_a_real_goal_id_passes_and_an_invented_one_is_dropped(monkeypatch):

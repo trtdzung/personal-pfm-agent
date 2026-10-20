@@ -69,6 +69,11 @@ def _categories_known(category_ids: list, facts: TurnFacts) -> bool:
     return facts.expense_category_ids is None or all(c in facts.expense_category_ids for c in category_ids)
 
 
+def is_goal_form(ui: dict) -> bool:
+    """True for the goal / asset forms (`create_goal`, `edit_goal`, ...): the cards the customer is told to review and confirm."""
+    return isinstance(ui, dict) and ui.get("type") in _GOAL_KINDS
+
+
 def ui_matches_facts(ui: dict, facts: TurnFacts) -> bool:
     """True when every jar/category id in `ui` is one the agent read this turn."""
     kind = ui.get("type")

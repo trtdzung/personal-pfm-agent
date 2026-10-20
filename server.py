@@ -34,7 +34,7 @@ from middleware.seed_customer_context import SeedCustomerContext
 from middleware.seed_user_preferences import SeedUserPreferences
 from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
-from ui_guard import read_turn_facts, ui_matches_facts
+from ui_guard import is_goal_form, read_turn_facts, ui_matches_facts
 from tools.customer_data_tools import get_categories, get_jar_summary, query_beneficiaries
 from tools.goal_insight_tools import get_goal_insight
 from tools.goal_price_tools import estimate_goal_price
@@ -49,6 +49,38 @@ from guardrails import PROFANITY_REPLY, SENSITIVE_INPUT_NOTE, contains_profanity
 from tools.memory_tools import recall_preference, remember_preference
 
 logger = logging.getLogger("personal-card-agent")
+
+def _fresh_goals_read(user_id: str):
+    """A `get_goals` read made by the server, for a goal form whose turn never read the goals (the model skipped the first step
+    of skill goal-manage). None when pfm cannot be read."""
+    try:
+        return get_goals.invoke(
+            {"name": "get_goals", "args": {}, "id": "server-goals-read", "type": "tool_call"},
+            config={"configurable": {"actor_id": user_id}},
+        )
+    except Exception:  # noqa: BLE001 -- a failed read only means the form is dropped, like before
+        logger.warning("fresh get_goals read for the form guard failed for user_id=%s", user_id, exc_info=True)
+        return None
+
+
+def _ui_matches_turn(ui: dict, messages: list, user_id: str) -> bool:
+    """`ui_matches_facts` on what the turn read; a goal form from a turn that did NOT read the goals is checked against a fresh
+    read instead (same checks: the date is after pfm's today, ids exist), so a valid form is not lost to a skipped tool call."""
+    facts = read_turn_facts(messages)
+    if ui_matches_facts(ui, facts):
+        return True
+    if is_goal_form(ui) and facts.goals is None:
+        fresh = _fresh_goals_read(user_id)
+        if fresh is not None and ui_matches_facts(ui, read_turn_facts([fresh])):
+            logger.info("goal form kept: checked against a fresh get_goals read, the model had skipped it")
+            return True
+    return False
+
+
+FORM_DROPPED_NOTE = (
+    "Lưu ý: mình chưa hiện được form ở lượt này vì chưa kiểm tra lại dữ liệu mục tiêu của bạn. "
+    "Bạn nhắn lại yêu cầu một lần nữa để mình đề xuất lại nhé."
+)
 
 REPO_ROOT = Path(__file__).resolve().parent
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -302,10 +334,13 @@ def chat(
 
     answer = extract_final_text(result["messages"][-1].content)
     answer, ui = extract_ui_block(answer)
-    if ui is not None and not ui_matches_facts(ui, read_turn_facts(result["messages"])):
+    if ui is not None and not _ui_matches_turn(ui, result["messages"], request.user_id):
         # e.g. an edit_jar for a jar the model never read this turn (backend_docs/pfm-read-api.md C2.2): the
         # customer gets the answer text only, exactly like a shape-invalid ui.
         logger.warning("Dropping ui block: ids not among what get_jar_summary/get_categories returned this turn: %r", ui)
+        if is_goal_form(ui):
+            # the text still says "bạn xem lại và xác nhận": without the form the customer would wait for a card that never comes
+            answer = f"{answer}\n\n{FORM_DROPPED_NOTE}"
         ui = None
     answer = strip_foreign_script(answer)  # after the ui block is split off: its strings are left alone
     verdict = sanitize_output(answer, request.user_id)

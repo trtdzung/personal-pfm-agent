@@ -12,8 +12,11 @@ xuất để khách xem và sửa từng ô. Chèn khối `ui-json` theo skill n
 khách bấm xác nhận. Khi câu hỏi khớp skill này, **đừng từ chối và đừng chỉ trả text rồi bỏ qua khối** (trừ các trường hợp
 "KHÔNG trả `ui-json`" bên dưới).
 
-Trong mọi trường hợp, việc ĐẦU TIÊN là gọi `get_goals` — trước khi viết bất kỳ câu nào hay dựng đề xuất. Đừng dựa vào số
-hay ngày trong hội thoại trước. Sau khi khách xác nhận 1 thay đổi, số đã đổi — gọi lại `get_goals` trước khi gợi ý bước tiếp.
+Khi sửa, đóng mục tiêu hoặc làm việc với tài sản, việc ĐẦU TIÊN là gọi `get_goals` — trước khi viết bất kỳ câu nào hay dựng đề xuất
+(các form này cần `id` thật). Riêng **tạo mục tiêu mới** thì không bắt buộc gọi `get_goals`: tạo mới không cần `id`, ngày hôm nay của
+hệ thống có sẵn trong kết quả `plan_monthly`, và hệ thống tự kiểm lại hạn của form với dữ liệu mới. Chỉ gọi `get_goals` khi cần biết
+khách đã có mục tiêu trùng tên hoặc cùng loại. Đừng dựa vào số hay ngày trong hội thoại trước. Sau khi khách xác nhận 1 thay đổi, số
+đã đổi — gọi lại `get_goals` trước khi gợi ý bước tiếp.
 
 Khách bấm "Chi tiết" trên thẻ M-You gợi ý, hoặc hỏi vì sao mục tiêu chậm: **trả lời trước theo skill `goal-insight`** (giải thích, hướng dẫn). Chỉ khi khách đồng ý đổi số góp, hạn hoặc số tiền mới đề xuất form ở skill này.
 
@@ -64,10 +67,10 @@ Khách bấm xác nhận thẻ `create_goal` thì pfm tự gửi tin "Mình đã
 
 Dùng khi khách **nói thẳng là chưa rõ giá** ("không biết cần bao nhiêu", "mua nhà hết khoảng bao nhiêu", "VF6 giá bao nhiêu thì đặt mục tiêu") **hoặc nêu một sản phẩm cụ thể mà không nói số tiền** ("tôi muốn mua căn hộ 2 phòng ngủ ở Thủ Đức", "mua VF6"). Khách đã nói số tiền, hoặc chỉ nói "mua nhà / mua xe" chung chung và không hỏi giá, thì vẫn dùng các mốc cố định ở mục bên dưới.
 
-1. Gọi `get_goals` như mọi lượt.
+1. Không bắt buộc gọi `get_goals` (chỉ khi cần xem mục tiêu đang có).
 2. **Hỏi thuộc tính bằng đúng một khối `clarify_options`** (skill `clarify-options`): tối đa 4 câu độc lập, mỗi câu 2–4 lựa chọn ngắn, **các lựa chọn của một câu loại trừ nhau và không trùng ý với câu khác** (ví dụ đã hỏi loại hình thì không đưa diện tích vào lựa chọn của câu khác). Chỉ hỏi điều làm giá thay đổi nhiều nhất và điều khách chưa nói: **tối đa 3 câu thuộc tính**, và **câu cuối cùng của khối LUÔN là thời hạn nếu khách chưa nói** (không bỏ câu này). Gợi ý: `house` khu vực, loại hình (căn hộ / nhà phố / đất nền), diện tích ("Dưới 50 m²", "50–70 m²", "70–100 m²", "Trên 100 m²"), tình trạng; `car` hãng hoặc phân khúc, xăng hay điện, mới hay cũ; loại khác 1–2 câu về mức độ hoặc quy mô. Lựa chọn của câu thời hạn lấy theo bảng của `template`. Không hỏi thu nhập, số dư hay thông tin cá nhân.
 3. Khách trả lời xong → gọi **`estimate_goal_price(template, description, details)`**: `description` là sản phẩm theo lời khách, `details` là các lựa chọn khách đã chọn (**không** gồm thời hạn), **chỉ chữ công khai về sản phẩm**, tuyệt đối không đưa tên, số dư, thu nhập của khách.
-4. Dùng giá tool trả về làm `target_amount` (đúng số `amount` đó), rồi `plan_monthly` và trả `create_goal` như "Tạo — đủ thông tin". **Lượt này vẫn phải gọi `get_goals` trước khi trả `create_goal`.**
+4. Dùng giá tool trả về làm `target_amount` (đúng số `amount` đó), rồi `plan_monthly` và trả `create_goal` như "Tạo — đủ thông tin". **Lượt này lấy ngày hôm nay từ `plan_monthly`, không bắt buộc `get_goals`.**
 5. Trong câu trả lời nói ngắn: mức giá tham khảo, khoảng giá, và có nguồn web hay không. Tool ghi "KHÔNG có nguồn web" thì phải nói rõ **đây là ước tính của M-You, chưa có nguồn đối chiếu**, và nhắc khách tự chỉnh số trên form. Không hứa giá chắc chắn; đây không phải báo giá chính thức.
 6. Tool báo chưa ước tính được hoặc lỗi → quay lại hỏi số tiền bằng các mốc cố định (mục bên dưới), không tự bịa giá.
 
@@ -80,7 +83,7 @@ Khách muốn tạo mục tiêu nhưng chưa nói số tiền và/hoặc thời 
 - `answer` chỉ là **một câu dẫn ngắn**, không lặp lại nội dung câu hỏi hay lựa chọn ("Mình cần hỏi thêm hai điều để lên mục tiêu cho bạn.").
 - Khách đã nói một trong hai (ví dụ "mua nhà 2 tỷ") → chỉ hỏi thời hạn; đã nói thời hạn → chỉ hỏi số tiền.
 - Khách bấm / trả lời xong ("Khoảng 2 tỷ đồng. Trong 10 năm.") → lượt sau **trả `create_goal` luôn**, không hỏi lại. "Trong 10 năm" thì `target_date` = `today` cộng đúng 10 năm.
-- **Lượt sau khi khách bấm vẫn phải gọi `get_goals` TRƯỚC KHI trả `create_goal`**, như mọi lượt khác: dữ liệu của lượt trước không dùng lại được, và hệ thống **bỏ luôn form** nếu lượt đó chưa đọc `get_goals` (khách chỉ thấy chữ, không có form để xác nhận). Đừng bỏ qua bước này chỉ vì câu trả lời đã đủ số tiền và thời hạn.
+- **Lượt sau khi khách bấm: lấy ngày hôm nay từ `plan_monthly` rồi trả `create_goal` luôn**, không cần `get_goals`; dữ liệu của lượt trước không dùng lại được. Hệ thống tự kiểm lại hạn của form, nên đừng trì hoãn form vì câu trả lời đã đủ số tiền và thời hạn.
 - Khách bấm xong mà vẫn thiếu một ý → chỉ khi đó mới hỏi bằng chữ phần còn thiếu.
 
 **Lời nhắn đi kèm khối hỏi lại và đi kèm form sau khi khách bấm là lời nói thẳng với khách, không phải ghi chú của bạn:**
@@ -275,6 +278,6 @@ Khách hỏi: "Đóng mục tiêu mua nhà." — `get_goals` ghi "còn khoản v
 {"type": "close_goal", "goal_id": "goal-1", "goal_name": "Mua xe", "reason": "x", "refund": true}
 ```
 
-Sai lầm khác cần tránh: không gọi `get_goals` ở lượt sau khi khách bấm nút (form bị bỏ); viết lập luận hoặc phép tính từng bước vào câu trả lời ("Khách đã nói…", "Theo skill…"); hỏi bằng chữ "bạn muốn bao nhiêu và khi nào" khi thiếu số tiền hoặc thời hạn (phải dùng nút `clarify_options`); hỏi thêm câu ngoài số tiền và thời hạn; viết nội dung câu hỏi vào câu dẫn; nhắc mã (`goal-1`) hoặc gọi khách là "Khách" trong câu trả lời; tự chọn số tiền hoặc thời hạn khi khách chưa nói; nạp ban đầu vượt số dư tài khoản chính;
+Sai lầm khác cần tránh: không trả form sau khi khách đã bấm nút trả lời đủ số tiền và thời hạn; viết lập luận hoặc phép tính từng bước vào câu trả lời ("Khách đã nói…", "Theo skill…"); hỏi bằng chữ "bạn muốn bao nhiêu và khi nào" khi thiếu số tiền hoặc thời hạn (phải dùng nút `clarify_options`); hỏi thêm câu ngoài số tiền và thời hạn; viết nội dung câu hỏi vào câu dẫn; nhắc mã (`goal-1`) hoặc gọi khách là "Khách" trong câu trả lời; tự chọn số tiền hoặc thời hạn khi khách chưa nói; nạp ban đầu vượt số dư tài khoản chính;
 dùng ngày thật thay cho `today` của `get_goals`; đổi sang ngày không sau `today`; đóng mục tiêu mà khách chưa nói rõ; nói tài sản tự khai bị bán khi đóng; không nói hệ quả không hoàn tác khi
-đóng; trả form cho mục tiêu đã đóng hoặc còn vay (với đóng); dùng số cũ sau khi khách đã xác nhận 1 thay đổi; nói "đã tạo" hay "đã đổi"; đề xuất mà chưa gọi `get_goals`.
+đóng; trả form cho mục tiêu đã đóng hoặc còn vay (với đóng); dùng số cũ sau khi khách đã xác nhận 1 thay đổi; nói "đã tạo" hay "đã đổi"; đề xuất sửa, đóng hoặc thêm/sửa tài sản mà chưa gọi `get_goals`.
