@@ -38,7 +38,11 @@ def _customer_data_path(customer_id: str) -> Path:
 
 
 def _today() -> datetime:
-    return datetime.now(_VIETNAM_TZ)
+    # Deferred import: customer_data_tools imports _resolve_customer_id from this module.
+    from tools.customer_data_tools import fetch_customer_today
+
+    today = fetch_customer_today(_resolve_customer_id(), fallback_today=datetime.now(_VIETNAM_TZ).date())
+    return datetime(today.year, today.month, today.day, tzinfo=_VIETNAM_TZ)
 
 
 def _current_date_note() -> str:
