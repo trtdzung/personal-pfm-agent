@@ -150,13 +150,12 @@ def card_call(**over):
     return msg.content, msg.artifact
 
 
-def test_build_goal_plan_card_returns_the_block_in_a_fence_and_as_the_artifact():
+def test_build_goal_plan_card_returns_the_card_as_the_artifact_and_only_a_summary_as_content():
     content, art = card_call()
     assert isinstance(art, dict) and is_valid_ui(art) and art["type"] == "plan_roadmap"
-    m = re.search(r"```ui-json\n(.*?)\n```", content, re.S)
-    assert m and json.loads(m.group(1)) == art
-    summary = content[: m.start()].strip().splitlines()
-    assert 3 <= len(summary) <= 5, summary
+    # the server attaches the card: the model never sees (or re-types) the block
+    assert "```" not in content and "{\"type\"" not in content and "KHÔNG dán" in content
+    assert 3 <= len(content.strip().splitlines()) <= 5, content
     assert "trả nợ" not in content
 
 
@@ -194,7 +193,7 @@ def test_build_goal_plan_card_extra_assets_are_counted_and_validated():
 
 def test_build_goal_plan_card_puts_the_goal_id_on_the_card():
     content, art = card_call(goal_id="goal-7")
-    assert art["goal_id"] == "goal-7" and is_valid_ui(art) and '"goal_id": "goal-7"' in content
+    assert art["goal_id"] == "goal-7" and is_valid_ui(art)
 
 
 def test_build_goal_plan_card_without_a_goal_builds_nothing_and_says_to_create_the_goal_first():

@@ -861,7 +861,7 @@ def test_chat_endpoint_resumes_once_after_the_content_filter_and_succeeds(monkey
         checkpointer = None  # see test_chat_endpoint_masks_internal_error_details's comment
         calls = 0
 
-        def invoke(self, input, config):
+        def invoke(self, input, config, **kwargs):
             self.calls += 1
             if self.calls == 1:
                 assert input is not None, "the first call sends the customer's actual message"
@@ -891,7 +891,7 @@ def test_chat_endpoint_returns_503_when_the_retry_is_rejected_too(monkeypatch):
         checkpointer = None
         calls = 0
 
-        def invoke(self, input, config):
+        def invoke(self, input, config, **kwargs):
             self.calls += 1
             raise ModelPermissionDeniedError("Error code: 403 - ModelArts.81011 Output text May contain sensitive information")
 
@@ -919,7 +919,7 @@ def test_chat_endpoint_gives_up_without_resuming_when_there_is_no_pending_task(m
         checkpointer = None
         resume_calls = 0
 
-        def invoke(self, input, config):
+        def invoke(self, input, config, **kwargs):
             if input is None:
                 self.resume_calls += 1
             raise ModelPermissionDeniedError("Error code: 403 - ModelArts.81011 Output text May contain sensitive information")

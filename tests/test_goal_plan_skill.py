@@ -1,5 +1,3 @@
-import json
-import re
 from pathlib import Path
 
 import yaml
@@ -30,13 +28,10 @@ def test_the_skill_forbids_a_clarify_options_block_in_the_same_reply():
     assert "Không kèm khối `clarify_options` trong cùng câu trả lời" in SKILL
 
 
-def test_the_card_block_is_pasted_last_and_every_example_block_is_a_valid_plan_roadmap():
-    heading = "## Khuôn câu trả lời (khối thẻ là phần cuối cùng)"
-    assert heading in SKILL
-    blocks = [json.loads(b) for b in re.findall(r"```ui-json\n(.*?)\n```", SKILL, flags=re.DOTALL)]
-    assert blocks and all(b["type"] == "plan_roadmap" and is_valid_ui(b) for b in blocks)
-    assert SKILL.index(heading) < SKILL.index("\n```ui-json\n")
-    assert SKILL.count("\n```ui-json\n") == 1 and SKILL.rstrip().endswith("```") and "ví dụ về hình dạng" in SKILL.lower()
+def test_the_model_writes_only_the_text_the_server_attaches_the_card():
+    assert "## Khuôn câu trả lời (chỉ phần chữ, thẻ do hệ thống gắn)" in SKILL
+    assert "hệ thống tự gắn" in SKILL and "không dán, không viết khối `ui-json`" in SKILL
+    assert "```ui-json" not in SKILL  # no example block to copy: it would cost tokens and invite re-typing the card
 
 
 def test_frontmatter_is_valid_yaml_or_the_skill_is_silently_skipped():

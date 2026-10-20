@@ -110,6 +110,13 @@ its own `Dockerfile`.
   Get it from the GreenNode console's API key / Model as a Service section.
 - `LLM_MODEL` -- optional, model path passed to the MaaS endpoint. Defaults
   to `z-ai/glm-5.2-hackathon` if unset.
+- `CHAT_LLM_PROVIDER=openai` + `OPENAI_API_KEY` -- optional, run the `/chat` agent on
+  OpenAI (`gpt-5.5`, reasoning `none`; override with `CHAT_LLM_OPENAI_MODEL` /
+  `CHAT_LLM_OPENAI_REASONING`) instead of GLM. Both are needed: without the flag or with an
+  empty key the agent falls back to GLM. While it runs on OpenAI, a call that fails
+  (connection, timeout, rate limit, 5xx, auth) is answered by GLM instead, and OpenAI is skipped for
+  60s after a failure. Only the main chat agent changes; jar rebalance,
+  fraud, coach and the other side features stay on GLM. `/health` shows the active model.
 - `TINYFISH_API_KEY` -- optional at runtime. Only `tools/market_news_tools.py`
   (public Vietnamese market news from cafef.vn / vietstock.vn / tuoitre.vn, as
   background for the `investment-guidance` skill) calls TinyFish while the agent

@@ -6,7 +6,6 @@ MSB term deposits (each monthly lot earns simple interest until the end date); `
 
 from __future__ import annotations
 
-import json
 import math
 
 from langchain_core.tools import tool
@@ -257,7 +256,7 @@ def build_goal_plan_card(
     reserve_months: float = 3,
 ) -> tuple[str, dict | None]:
     """Build the whole plan answer as ONE `plan_roadmap` card (skill goal-plan): runs the baseline (no loan), the loan-now plan and
-    the optimized plan, plus a bad scenario for each, and returns the ready ```ui-json block with every figure computed. Call it ONCE
+    the optimized plan, plus a bad scenario for each, and returns the ready card (the server attaches it to the answer) with every figure computed. Call it ONCE
     per answer and paste the block UNCHANGED as the last thing in the reply; never edit, shorten or re-type a number in it.
 
     Args:
@@ -312,6 +311,6 @@ def build_goal_plan_card(
     best = next((x for x in card["plans"] if x["verdict"] == "recommended"), None)
     lines.append(
         (f"Phương án khuyến nghị: {best['name']}." if best else "Không phương án nào vừa đúng hạn vừa khả thi dòng tiền.")
-        + " Dán nguyên khối ui-json dưới đây ở cuối câu trả lời, không sửa."
+        + " Thẻ lộ trình đã được dựng và hệ thống tự gắn vào câu trả lời: chỉ viết phần chữ, KHÔNG dán hay viết khối ui-json."
     )
-    return "\n".join(lines) + "\n```ui-json\n" + json.dumps(card, ensure_ascii=False) + "\n```", card
+    return "\n".join(lines), card

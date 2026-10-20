@@ -15,7 +15,7 @@ from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel
 
-from llm import LLM_BASE_URL, LLM_MODEL, default_model  # noqa: F401 -- re-exported: tests/notebooks read them off `server`
+from llm import LLM_BASE_URL, LLM_MODEL, chat_model, chat_model_name, default_model  # noqa: F401 -- re-exported: tests/notebooks read them off `server`
 from langchain_core.exceptions import ModelPermissionDeniedError
 
 from checkpointer_cache import invalidate as invalidate_checkpointer_cache
@@ -79,6 +79,21 @@ def _ui_matches_turn(ui: dict, messages: list, user_id: str) -> bool:
     return False
 
 
+# The checkpointer is GreenNode's AgentBase memory: every read/write is a network call (~1.3-1.8s a read, more a write), and
+# LangGraph's default "async" mode saves after EVERY step (model call, tool call), ~7s of overhead per step, ~47% of a turn in the
+# prod traces. "exit" saves once when the turn ends -- also when it fails, so `_resume_after_content_filter` still finds its state.
+CHECKPOINT_DURABILITY = "exit"
+
+
+def _with_plan_card(ui: dict | None, plan_cards: list[dict] | None) -> dict | None:
+    """The plan roadmap is built by `build_goal_plan_card` and the SERVER attaches it: the model only writes the short text, it
+    does not re-type the card (~800 output tokens, ~20s per answer). A `plan_roadmap` the model pasted anyway is replaced by the
+    tool's own card; another kind of block (e.g. `clarify_options`) is left alone."""
+    if plan_cards and (ui is None or ui.get("type") == "plan_roadmap"):
+        return plan_cards[-1]
+    return ui
+
+
 FORM_DROPPED_NOTE = (
     "Lưu ý: mình chưa hiện được form hoặc lộ trình ở lượt này vì chưa kiểm tra lại dữ liệu mục tiêu của bạn. "
     "Bạn nhắn lại yêu cầu một lần nữa để mình đề xuất lại nhé."
@@ -116,7 +131,7 @@ if not AI_PLATFORM_API_KEY:
     )
 
 def _default_model() -> BaseChatModel:
-    return default_model(AI_PLATFORM_API_KEY)
+    return chat_model(AI_PLATFORM_API_KEY)
 
 
 def _default_tools() -> list:
@@ -283,7 +298,7 @@ def health() -> dict:
     """Liveness plus what this container really runs (model, skills found on disk, tools registered): compare with the repo
     when a deployment behaves differently from a local run. Nothing secret."""
     skills = sorted(p.parent.name for p in (SKILLS_DIR / "project").glob("*/SKILL.md"))
-    return {"status": "ok", "model": LLM_MODEL, "skills": skills, "tools": [t.name for t in _default_tools()]}
+    return {"status": "ok", "model": chat_model_name(), "skills": skills, "tools": [t.name for t in _default_tools()]}
 
 
 def _resume_after_content_filter(thread_id: str, actor_id: str, first_error: Exception) -> dict:
@@ -307,7 +322,7 @@ def _resume_after_content_filter(thread_id: str, actor_id: str, first_error: Exc
         # pending task would be a meaningless no-op call, not a real retry.
         raise HTTPException(status_code=503, detail="Model provider unavailable, try again shortly") from first_error
     try:
-        return agent.invoke(None, config=config)
+        return agent.invoke(None, config=config, durability=CHECKPOINT_DURABILITY)
     except ModelPermissionDeniedError as exc:
         logger.warning("agent.invoke rejected by the model provider's content filter again for thread_id=%s, giving up", thread_id)
         raise HTTPException(status_code=503, detail="Model provider unavailable, try again shortly") from exc
@@ -333,6 +348,7 @@ def chat(
         result = agent.invoke(
             {"messages": [{"role": "user", "content": message}]},
             config={"configurable": {"thread_id": thread_id, "actor_id": request.user_id}},
+            durability=CHECKPOINT_DURABILITY,
         )
     except ModelPermissionDeniedError as exc:
         result = _resume_after_content_filter(thread_id, request.user_id, exc)
@@ -342,6 +358,7 @@ def chat(
 
     answer = extract_final_text(result["messages"][-1].content)
     answer, ui = extract_ui_block(answer)
+    ui = _with_plan_card(ui, read_turn_facts(result["messages"]).plan_cards)
     if ui is not None and not _ui_matches_turn(ui, result["messages"], request.user_id):
         # e.g. an edit_jar for a jar the model never read this turn (backend_docs/pfm-read-api.md C2.2): the
         # customer gets the answer text only, exactly like a shape-invalid ui.
@@ -380,16 +397,23 @@ def chat_history(
         raise HTTPException(status_code=500, detail="Failed to load conversation history") from exc
 
     history: list[HistoryMessage] = []
+    turn_cards: list[dict] = []  # `build_goal_plan_card` artifacts of the turn being walked
     for message in state.values.get("messages", []):
         if isinstance(message, HumanMessage):
+            turn_cards = []
             role = "user"
         elif isinstance(message, AIMessage):
             role = "assistant"
         else:
+            # not shown, but a plan card built by the tool belongs to this turn's answer (see `_with_plan_card`)
+            if getattr(message, "name", None) == "build_goal_plan_card" and isinstance(getattr(message, "artifact", None), dict):
+                turn_cards.append(message.artifact)
             continue  # skip tool/system messages -- not meant for a chat UI transcript
 
         text = extract_final_text(message.content)
         text, ui = extract_ui_block(text)
+        if role == "assistant" and not getattr(message, "tool_calls", None):
+            ui = _with_plan_card(ui, turn_cards)
         if role == "assistant":
             text = strip_foreign_script(text)  # never rewrite what the user typed
         if not text and ui is None:

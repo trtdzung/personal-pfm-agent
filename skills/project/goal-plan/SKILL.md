@@ -26,7 +26,7 @@ Một lộ trình là lộ trình **của một mục tiêu**: không có mục 
 2. Thiếu số tiền hoặc thời hạn → hỏi lại bằng nút theo skill `goal-manage` (mục "Hỏi lại khi thiếu số tiền hoặc thời hạn"); khách chưa rõ giá thì dùng `estimate_goal_price` trước.
 3. Gọi `search_msb_knowledge` (tối đa 2 lần): lãi suất tiết kiệm (một mức nhất quán: **tiền gửi online kỳ 12 tháng**) và lãi suất vay đúng loại mục tiêu (nhà, xe, tiêu dùng). Không tra được lãi vay → dùng một giả định, nói rõ là giả định.
 4. Gọi `build_goal_plan_card` **đúng một lần** với đầu vào ở mục dưới. Tool tự chạy kịch bản gốc, phương án không vay, vay mua ngay, kết hợp tối ưu và kịch bản xấu của từng phương án, rồi trả về thẻ hoàn chỉnh.
-5. Viết phần chữ ngắn và dán khối ```ui-json của tool ở cuối (mục "Khuôn câu trả lời").
+5. Viết phần chữ ngắn (mục "Khuôn câu trả lời"). Thẻ do hệ thống tự gắn, bạn không dán gì.
 
 ## Đầu vào của `build_goal_plan_card`
 
@@ -67,18 +67,12 @@ Nút "Chọn phương án này" tự đặt phương án làm lộ trình của 
 - Trạng thái của một mục tiêu trong `get_goals` có chữ "nợ" thì khi nhắc lại, thay bằng "vay" (ví dụ "đang trả vay").
 - Khi đề xuất điều chỉnh (kéo dài thời hạn, giảm số tiền mục tiêu), **không nêu con số cụ thể chưa tính lại**. Sai: nêu một mức tiền hoặc một số năm cụ thể mà chưa chạy lại tool, kể cả dạng "ví dụ" hay "khoảng". Đúng: "giảm số tiền mục tiêu", "kéo dài thời hạn", rồi hỏi khách muốn thử mức nào để mình tính lại; khi khách nêu con số thì gọi lại `build_goal_plan_card` với đúng con số đó.
 
-## Khuôn câu trả lời (khối thẻ là phần cuối cùng)
+## Khuôn câu trả lời (chỉ phần chữ, thẻ do hệ thống gắn)
 
 Câu đầu tiên đã là nội dung trả lời cho khách, **không** nhắc tới skill, quy tắc, công cụ hay việc "không dùng khối nút"; **cấm** câu dẫn kiểu "Tôi đã có đủ số liệu", "Giờ tôi soạn các phương án", "Tóm tắt dữ liệu:". Thẻ chỉ vẽ tên phương án, một dòng tóm tắt và các mốc, nên phần chữ **thật ngắn: 3 đến 4 câu, không quá 70 từ**, không gạch đầu dòng, không bảng:
 
 1. **Kịch bản gốc** trong một câu: dòng tiền còn dư mỗi tháng và, nếu không vay, đạt mục tiêu năm nào hoặc thiếu bao nhiêu ở hạn. Không kể lại thu nhập, chi tiêu, quỹ dự phòng.
-2. **Phương án khuyến nghị và vì sao** trong một câu, theo khẩu vị rủi ro và khả năng chịu rủi ro của khách, kèm khoản trả vay mỗi tháng nếu có vay. Nếu thẻ không có phương án nào chọn được, nói thẳng là chưa phương án nào khả thi và hỏi bằng chữ khách muốn thử cách nào (kéo dài thời hạn, giảm số tiền mục tiêu, tăng phần dành cho mục tiêu).
+2. **Phương án khuyến nghị và vì sao** trong một câu, theo khẩu vị rủi ro và khả năng chịu rủi ro của khách, kèm khoản trả vay mỗi tháng nếu có vay. Nếu thẻ không có phương án nào chọn được, nói thẳng là chưa phương án nào khả thi và hỏi bằng **một câu** khách muốn thử cách nào (kéo dài thời hạn, giảm số tiền mục tiêu, tăng phần dành cho mục tiêu), không liệt kê từng cách thành danh sách; tổng vẫn không quá 90 từ.
 3. **Một câu cuối** gộp: giả định là mặc định để minh hoạ, không phải dự báo (chỉ nêu lãi suất tiết kiệm và lãi vay đã dùng), vay thật làm ở Mục tiêu → Vay khi tới mốc, và bấm "Chọn phương án này" để đặt lộ trình đó cho mục tiêu «tên». Không nhắc ngày lưu của dữ liệu lãi suất, không trích dẫn số nguồn.
 
-**Không lặp lại các mốc hay số liệu theo từng phương án trong phần chữ**: chúng đã có trong thẻ, chỉ tên phương án và mốc, không có chip số liệu. Không kèm khối `clarify_options` trong cùng câu trả lời: thẻ đã có nút "Chọn phương án này" của riêng nó. Sau phần chữ, dán khối ```ui-json do `build_goal_plan_card` trả về **nguyên văn, không sửa một ký tự**, làm **phần cuối cùng** của câu trả lời, không viết thêm gì sau khối. Không tự viết khối `plan_roadmap`: thẻ không phải do tool dựng sẽ bị loại.
-
-Dưới đây chỉ là ví dụ về hình dạng của khối (số liệu minh hoạ, không được dùng lại); luôn dán khối của tool.
-
-```ui-json
-{"type": "plan_roadmap", "goal_id": "goal-1", "title": "Xe 300 triệu · 3 năm", "baseline": "Đạt mục tiêu ở tháng 19 (năm thứ 2), đúng hạn", "assumptions": ["Lãi tiết kiệm 6,8%/năm", "Lãi vay 8%/năm, 60 tháng", "Giá mục tiêu +2%/năm", "Quỹ dự phòng 3 tháng chi tiêu"], "plans": [{"id": "no_loan", "name": "Không vay", "verdict": "recommended", "headline": "Đạt mục tiêu ở tháng 19 (năm thứ 2), đúng hạn", "metrics": [{"label": "Lãi tiết kiệm", "value": "13,75 triệu–16,3 triệu"}], "milestones": [{"when": "Tháng 0", "kind": "reserve", "title": "Lập quỹ dự phòng", "detail": "Cần 45 triệu, đang có 45 triệu (chưa tính vào mục tiêu)"}, {"when": "Tháng 1–19", "kind": "save", "title": "Góp phần còn dư vào tiết kiệm", "action": "Góp khoảng 15 triệu/tháng vào tiết kiệm MSB"}, {"when": "Tháng 19 (năm thứ 2)", "kind": "buy", "title": "Mua mục tiêu"}], "risk": "Nếu thu nhập không tăng, lãi vay +2 điểm và lãi tiết kiệm -1 điểm: đạt mục tiêu ở tháng 20 (năm thứ 2)", "choice_text": "Tôi chọn phương án Không vay: đạt mục tiêu ở tháng 19 (năm thứ 2), đúng hạn"}, {"id": "loan_now", "name": "Vay mua ngay", "verdict": "not_recommended", "headline": "Mua ngay hôm nay, vay 285 triệu", "reason": "số vay vượt 80% giá mục tiêu", "metrics": [], "milestones": []}]}
-```
+**Không lặp lại các mốc hay số liệu theo từng phương án trong phần chữ**: chúng đã có trong thẻ, chỉ tên phương án và mốc, không có chip số liệu. Không kèm khối `clarify_options` trong cùng câu trả lời: thẻ đã có nút "Chọn phương án này" của riêng nó. Thẻ do `build_goal_plan_card` dựng và **hệ thống tự gắn** vào câu trả lời: **không dán, không viết khối `ui-json`** (viết lại thẻ vừa chậm vừa dễ sai), chỉ viết phần chữ và dừng. Không tự viết khối `plan_roadmap`.
