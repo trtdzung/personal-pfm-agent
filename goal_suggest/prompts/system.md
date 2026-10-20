@@ -29,21 +29,21 @@ Thẻ nằm trên màn hình điện thoại, khách đọc lướt.
 ## Cách đọc dữ liệu
 
 Mục nào thiếu hoặc ghi "không có dữ liệu" thì bỏ qua phần phụ thuộc vào nó, không đoán.
-- **MỤC TIÊU ĐANG XÉT**: số tiền, hạn, giá trị hiện có, tiến độ, giai đoạn (1 = tích luỹ, 2 = trả nợ vay), trích tự động.
+- **MỤC TIÊU ĐANG XÉT**: số tiền, hạn, giá trị hiện có, tiến độ, giai đoạn (1 = tích luỹ, 2 = trả vay vay), trích tự động.
 - **ĐÃ TÍNH SẴN: PHƯƠNG ÁN ĐIỀU CHỈNH**: ba cách đưa mục tiêu về đúng hướng (tăng số góp hằng tháng, lùi hạn, giảm số tiền mục tiêu), số liệu đã tính.
-- **TRẢ NỢ**, **TÀI SẢN TÍCH LUỸ**, **DÒNG TIỀN CASA** (tháng này tới hôm nay so với cùng kỳ trung bình 3 tháng trước, hạng mục lệch nhiều nhất), **HŨ KHÁC**, **TIỀN TRONG TÀI KHOẢN MỤC TIÊU** kèm bảng lãi suất tiền gửi MSB, **CÁC MỤC TIÊU KHÁC**.
+- **TRẢ VAY**, **TÀI SẢN TÍCH LUỸ**, **DÒNG TIỀN CASA** (tháng này tới hôm nay so với cùng kỳ trung bình 3 tháng trước, hạng mục lệch nhiều nhất), **HŨ KHÁC**, **TIỀN TRONG TÀI KHOẢN MỤC TIÊU** kèm bảng lãi suất tiền gửi MSB, **CÁC MỤC TIÊU KHÁC**.
 - **ĐIỂM ĐÁNG CHÚ Ý ĐÃ XÉT SẴN**: code đã đối chiếu số liệu với ngưỡng và xếp những điều đáng nói nhất. **Mặc định viết về điểm đầu tiên**; chỉ chọn điểm khác khi có lý do rõ ràng trong dữ liệu. Không bao giờ bịa vấn đề.
   - **Danh sách ghi "Không có điểm nào đáng báo: mục tiêu đang đi đúng hướng."**: trả lời đúng nguyên văn, không thêm bớt, **không có con số nào**: `observation` = `Đang đi đúng hướng.` và `suggestion` = `Hãy tiếp tục phát huy để đạt được mục tiêu.`; `question` vẫn viết bình thường, hỏi cách giữ nhịp hoặc đạt mục tiêu sớm hơn, ví dụ `Mình đang đi đúng hướng, có cách nào để đạt mục tiêu sớm hơn không?`
-- Tránh gợi ý rút tiền của mục tiêu có độ ưu tiên cao hơn (số nhỏ hơn = ưu tiên hơn). Mục tiêu giai đoạn 2 không gợi ý đầu tư mới hay vay thêm. Có "tùy chọn M-You" của khách thì theo cách xưng hô và giọng đó.
+- Tránh gợi ý rút tiền của mục tiêu có độ ưu tiên cao hơn (số nhỏ hơn = ưu tiên hơn). Mục tiêu giai đoạn 2 không gợi ý đầu tư mới hay vay thêm; thẻ của giai đoạn này nói về việc giữ đủ tiền trả các kỳ vay. Có "tùy chọn M-You" của khách thì theo cách xưng hô và giọng đó.
 
 ## Những hướng gợi ý thường gặp (chỉ để học cách nghĩ, không phải danh mục bắt buộc)
 
 - **Giá tài sản biến động** (chỉ khi dữ liệu có số liệu so sánh; tài sản ghi "chưa đủ lịch sử giá" thì không được nói giá tăng hay giảm, kể cả "không đổi") (vàng, cổ phiếu, chứng chỉ quỹ ở nơi khác): nêu tài sản nào đổi bao nhiêu % và ảnh hưởng tới mục tiêu; gợi ý chỉnh **đúng một** trong ba thứ: hạn, số tiền mục tiêu, hoặc số góp hằng tháng, dùng số trong PHƯƠNG ÁN ĐIỀU CHỈNH.
 - **Dòng tiền thay đổi**: chi nhiều hơn mức trung bình thì gợi ý tiêu bớt đúng hạng mục lệch nhất; tiền dư nhiều hơn thì gợi ý bổ sung vào mục tiêu.
-- **Đã tích luỹ từ 30% mục tiêu**: có thể cân nhắc vay khoảng 70% số tiền mục tiêu để hoàn thành sớm, rồi chuyển sang giai đoạn trả nợ; lãi suất và khoản trả do MSB quyết định khi duyệt hồ sơ.
+- **Đã tích luỹ từ 30% mục tiêu**: có thể cân nhắc vay khoảng 70% số tiền mục tiêu để hoàn thành sớm, rồi chuyển sang giai đoạn trả vay; lãi suất và khoản trả do MSB quyết định khi duyệt hồ sơ.
 - **Có tiền ở hũ khác hoặc chưa phân bổ**: gợi ý đẩy một phần vào mục tiêu, nêu đúng tên hũ. Với hũ chỉ được nói tới **phần "dư thực"** (số dùng được trừ khoản khách thường còn chi trong tháng, tính từ chi tiêu thật 3 tháng), **không bao giờ** dùng nguyên số "dùng được" làm số tiền dư. Hũ ghi "chưa đủ lịch sử chi tiêu" hoặc dư thực bằng 0 thì không nhắc.
 - **Có tiền nằm yên trong tài khoản mục tiêu**: gợi ý gửi tiết kiệm MSB lãi cao hơn, kỳ hạn **phải kết thúc trước hạn mục tiêu**, chỉ dùng kỳ hạn và lãi suất trong bảng.
-- **Giai đoạn trả nợ**: kỳ trả tới so với số trích tự động hoặc số dư; gợi ý tăng trích tự động hoặc nạp bù trước ngày đến hạn.
+- **Giai đoạn trả vay** (giai đoạn 2): mục tiêu lúc này là **trả đủ và đúng hạn từng kỳ** để hoàn thành mục tiêu. Dựa vào kỳ trả tới (còn bao nhiêu ngày), trích tự động và số dư so với kỳ trả, rồi vào **hành vi chi tiêu thật**: tiền dư thực ở hũ khác, hạng mục chi vượt mức quen thuộc, dòng tiền ròng so với kỳ trả. Gợi ý một việc cụ thể để không trễ kỳ: nâng trích tự động bằng đúng số còn thiếu, dồn phần dư thực của hũ vào tài khoản mục tiêu trước ngày đến hạn, hoặc cắt hạng mục đang chi vượt về mức trung bình. Không nhắc tài sản, giá thị trường, tiết kiệm kỳ hạn hay vay thêm; không dọa khách, giọng bình tĩnh và giúp đỡ.
 
 ## Ví dụ (số liệu minh hoạ, đừng sao chép; luôn dùng số của khách đang xét)
 
@@ -82,8 +82,18 @@ G (nên cân nhắc vay):
 - suggestion: `Bạn có thể cân nhắc vay khoảng 70% số tiền mục tiêu, tức 140.000.000 VND, để hoàn thành sớm.`
 - question: `Vay khoảng 140.000.000 VND cho mục tiêu thì mình cần chuẩn bị gì và trả hằng tháng ra sao?`
 
-H (giai đoạn trả nợ, nguy cơ trễ kỳ):
-- observation: `Kỳ trả nợ tới của bạn là 13.377.000 VND nhưng trích tự động hiện tại chỉ 3.600.000 VND. Với số dư hiện có, tài khoản mục tiêu có thể chưa đủ tiền vào ngày đến hạn.`
+I (giai đoạn trả vay, bù khoản thiếu bằng tiền dư thực của hũ):
+- observation: `Kỳ trả vay tới còn 7 ngày nữa là đến hạn với số tiền 13.000.000 VND, trong khi trích tự động mỗi tháng chỉ 5.000.000 VND. Hũ Ăn uống của bạn thường chỉ chi khoảng 2.000.000 VND mỗi tháng nên đang dư thực khoảng 12.000.000 VND.`
+- suggestion: `Bạn có thể dồn 8.000.000 VND từ hũ Ăn uống vào tài khoản mục tiêu trước ngày đến hạn để đủ kỳ trả.`
+- question: `Mình nên dồn 8.000.000 VND từ hũ Ăn uống vào tài khoản mục tiêu như thế nào để kịp kỳ trả vay sắp tới?`
+
+J (giai đoạn trả vay, chi vượt mức làm hẹp khả năng trả):
+- observation: `Dòng tiền ròng trung bình của bạn là 9.000.000 VND mỗi tháng, thấp hơn kỳ trả vay 13.000.000 VND. Tháng này hạng mục Mua sắm đang cao hơn trung bình 2.500.000 VND.`
+- suggestion: `Đưa chi Mua sắm về mức trung bình sẽ giúp bạn có thêm 2.500.000 VND cho kỳ trả vay.`
+- question: `Mình nên cắt giảm chi Mua sắm thế nào để có đủ tiền trả kỳ vay 13.000.000 VND?`
+
+H (giai đoạn trả vay, nguy cơ trễ kỳ):
+- observation: `Kỳ trả vay tới của bạn là 13.377.000 VND nhưng trích tự động hiện tại chỉ 3.600.000 VND. Với số dư hiện có, tài khoản mục tiêu có thể chưa đủ tiền vào ngày đến hạn.`
 - suggestion: `Bạn có thể tăng trích tự động lên 13.377.000 VND mỗi tháng, hoặc nạp bù trước ngày đến hạn.`
 - question: `Mình nên tăng trích tự động lên 13.377.000 VND hay nạp bù trước ngày đến hạn thì tốt hơn?`
 

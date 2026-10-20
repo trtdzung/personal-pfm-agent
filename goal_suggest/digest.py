@@ -23,6 +23,7 @@ PRICE_MOVE_30D_PCT = 5
 PRICE_MOVE_90D_PCT = 10
 SPEND_MOVE_PCT = 15
 IDLE_MIN_VND = 1_000_000
+REPAY_SOON_DAYS = 7  # an instalment due within this many days is called out as near
 TOP_CATEGORIES = 3
 _CATEGORY_FALLBACK = {"unclassified": "Chưa phân loại"}
 _GOAL_PHASE_1 = {"accumulating", "paused", "missed"}
@@ -108,7 +109,7 @@ def _customer(summary: dict) -> list[str]:
 def _goal(summary: dict, goal: dict) -> list[str]:
     today = summary["today"]
     lines = ["== MỤC TIÊU ĐANG XÉT =="]
-    lines.append(f"Tên: {goal['name']} (mã {goal['id']}). Trạng thái: {goal['status']}. Giai đoạn: {goal['phase']} ({'trả nợ vay' if goal['phase'] == 2 else 'tích luỹ'}).")
+    lines.append(f"Tên: {goal['name']} (mã {goal['id']}). Trạng thái: {goal['status']}. Giai đoạn: {goal['phase']} ({'trả vay vay' if goal['phase'] == 2 else 'tích luỹ'}).")
     lines.append(f"Số tiền mục tiêu: {vnd(goal['targetAmount'])}. Hạn: {dmy(goal['targetDate'])} (còn {months_left(today, goal['targetDate'])} tháng).")
     if goal["phase"] == 1:
         value = goal["value"]
@@ -162,10 +163,52 @@ def _adjustments(summary: dict, goal: dict) -> list[str]:
     return lines
 
 
-def _repayment(summary: dict, goal: dict, snapshot: dict) -> list[str]:
+def _repay_capacity(summary: dict, goal: dict, snapshot: dict, flow: dict | None, jars: dict | None, usage: dict[str, dict] | None) -> dict | None:
+    """Phase-2 numbers the card is about, all computed here: the next instalment, how many days away it is, what the standing
+    order leaves uncovered, and where that gap could come from (real jar surplus, categories spent above the usual)."""
+    loan = next((l for l in snapshot["world"].get("loans") or [] if l["goalId"] == goal["id"] and l.get("status") == "active"), None)
+    unpaid = [r for r in (loan or {}).get("schedule") or [] if r.get("status") != "paid"]
+    if not unpaid:
+        return None
+    payment = unpaid[0]["payment"]
+    so = goal.get("standingOrder")
+    saving = so["amount"] if so and so.get("active") else 0
+    idle_total, idle_parts = _idle_other_money(jars, usage)
+    over = [c for c in (flow or {}).get("by_category", []) if c["diff"] > 0][:2]
+    income = (flow or {}).get("avg", {}).get("income") or summary.get("monthlyIncome") or 0
+    return {
+        "payment": payment,
+        "days": (date.fromisoformat(unpaid[0]["dueDate"]) - date.fromisoformat(summary["today"])).days,
+        "gap": max(0, payment - saving),
+        "short_now": max(0, payment - goal["balance"]),
+        "idle_total": idle_total,
+        "idle_parts": idle_parts,
+        "over": over,
+        "income": income,
+        "net": (flow or {}).get("avg", {}).get("net"),
+    }
+
+
+def _repay_ability(cap: dict | None) -> list[str]:
+    """Can the customer carry the instalments? Printed under TRẢ VAY, from the same numbers the highlights use."""
+    if not cap:
+        return []
+    lines = []
+    if cap["days"] >= 0:
+        lines.append(f"Kỳ tới còn {cap['days']} ngày nữa là đến hạn.")
+    if cap["income"]:
+        lines.append(f"Kỳ trả bằng {pct(cap['payment'] / cap['income'] * 100)} thu nhập trung bình vào CASA ({vnd(cap['income'])}/tháng).")
+    if cap["net"] is not None:
+        lines.append(f"Dòng tiền ròng CASA trung bình {vnd(cap['net'])}/tháng (sau chi tiêu và tiền chuyển vào mục tiêu) so với kỳ trả {vnd(cap['payment'])}: " + ("đủ gánh kỳ trả." if cap["net"] >= cap["payment"] else "chưa đủ gánh kỳ trả."))
+    if cap["gap"]:
+        lines.append(f"Để trích tự động đủ một kỳ trả cần nâng thêm {vnd(cap['gap'])} mỗi tháng.")
+    return lines
+
+
+def _repayment(summary: dict, goal: dict, snapshot: dict, cap: dict | None = None) -> list[str]:
     if goal["phase"] != 2:
         return []
-    lines = ["== TRẢ NỢ (GIAI ĐOẠN 2) =="]
+    lines = ["== TRẢ VAY (GIAI ĐOẠN 2) =="]
     loan = next((l for l in snapshot["world"].get("loans") or [] if l["goalId"] == goal["id"] and l.get("status") == "active"), None)
     if not loan:
         return lines + ["Không có khoản vay đang hoạt động."]
@@ -186,7 +229,7 @@ def _repayment(summary: dict, goal: dict, snapshot: dict) -> list[str]:
     lines.append(f"Số dư tài khoản mục tiêu: {vnd(balance)}. Trích tự động: {vnd(saving)} mỗi tháng.")
     if payment:
         lines.append(f"Thiếu so với kỳ tới nếu chỉ có số dư hiện tại: {vnd(max(0, payment - balance))}. Trích tự động thấp hơn kỳ trả: {vnd(max(0, payment - saving))} mỗi tháng.")
-    return lines
+    return lines + _repay_ability(cap)
 
 
 HISTORY_SLACK_DAYS = 3  # weekends and holidays have no quote
@@ -488,7 +531,7 @@ def _idle_other_money(jars: dict | None, usage: dict[str, dict] | None = None) -
 ON_TRACK_NOTE = "Không có điểm nào đáng báo: mục tiêu đang đi đúng hướng."
 
 
-def _highlights(summary: dict, goal: dict, snapshot: dict, flow: dict | None, jars: dict | None, usage: dict[str, dict] | None = None) -> list[str]:
+def _highlights(summary: dict, goal: dict, snapshot: dict, flow: dict | None, jars: dict | None, usage: dict[str, dict] | None = None, cap: dict | None = None) -> list[str]:
     """What is worth telling this customer today, already judged against thresholds, most important first. No labels or types:
     the model reads them as plain observations and writes the card about the first one (or says the goal is on track)."""
     phase = goal["phase"]
@@ -509,7 +552,16 @@ def _highlights(summary: dict, goal: dict, snapshot: dict, flow: dict | None, ja
         if payment and goal["balance"] < payment:
             reasons.append(f"số dư tài khoản mục tiêu {vnd(goal['balance'])} chưa đủ kỳ trả {vnd(payment)}")
         if reasons:
-            found.append("Nguy cơ trễ kỳ trả nợ: " + "; ".join(reasons) + ".")
+            soon = f" (kỳ tới còn {cap['days']} ngày)" if cap and 0 <= cap["days"] <= REPAY_SOON_DAYS else ""
+            found.append("Nguy cơ trễ kỳ trả vay" + soon + ": " + "; ".join(reasons) + ".")
+        if cap and cap["gap"]:
+            # Where the monthly shortfall can come from, from the customer's own behaviour: spare money first, then overspending.
+            if cap["idle_total"] >= cap["gap"]:
+                found.append(f"Có thể bù khoản thiếu {vnd(cap['gap'])} mỗi tháng từ tiền dư thực ngoài mục tiêu: " + "; ".join(cap["idle_parts"]) + f". Tổng cộng {vnd(cap['idle_total'])}: gợi ý nâng trích tự động hoặc dồn phần dư vào tài khoản mục tiêu trước kỳ trả.")
+            if cap["over"]:
+                found.append("Chi tiêu vượt mức quen thuộc, cắt về trung bình sẽ giải phóng tiền trả vay: " + "; ".join(f"{c['label']} cao hơn trung bình {vnd(c['diff'])}" for c in cap["over"]) + ".")
+        if cap and cap["net"] is not None and cap["net"] < cap["payment"] and cap["income"]:
+            found.append(f"Dòng tiền ròng CASA trung bình {vnd(cap['net'])}/tháng thấp hơn kỳ trả {vnd(cap['payment'])}: cần giảm chi hoặc bổ sung nguồn để không trễ kỳ.")
 
     if phase == 1:
         big = []
@@ -520,7 +572,8 @@ def _highlights(summary: dict, goal: dict, snapshot: dict, flow: dict | None, ja
         if big:
             found.append("Giá tài sản biến động mạnh: " + "; ".join(big) + ". Xem mục TÀI SẢN và PHƯƠNG ÁN ĐIỀU CHỈNH.")
 
-    if flow:
+    funding_needed = phase == 1 or bool(cap and (cap["gap"] or cap["short_now"]))
+    if flow and phase == 1:  # for a repaying goal the same cash-flow facts come through the repayment points above
         this, avg = flow["this"], flow["avg"]
         spend_pct = (this["spend"] - avg["spend"]) / avg["spend"] * 100 if avg["spend"] else 0
         net_pct = (this["net"] - avg["net"]) / avg["net"] * 100 if avg["net"] > 0 else 0
@@ -536,7 +589,7 @@ def _highlights(summary: dict, goal: dict, snapshot: dict, flow: dict | None, ja
 
     idle_total, idle_parts = _idle_other_money(jars, usage)
     short = phase == 1 and goal["requiredMonthly"] > saving
-    if idle_total >= IDLE_MIN_VND and (short or phase == 2):
+    if idle_total >= IDLE_MIN_VND and (short or (phase == 2 and funding_needed and not (cap and cap["gap"] and cap["idle_total"] >= cap["gap"]))):
         found.append("Có tiền nhàn rỗi ngoài mục tiêu có thể đẩy vào: " + "; ".join(idle_parts) + f". Tổng cộng {vnd(idle_total)}.")
 
     account = next((a for a in snapshot["world"].get("accounts") or [] if a["goalId"] == goal["id"] and a.get("status") == "open"), None)
@@ -581,12 +634,13 @@ def build_full(raw: dict, goal_id: str | None, goal_name: str | None) -> tuple[d
     transactions, accounts = raw.get("transactions"), raw.get("accounts")
     flow = cash_flow(transactions, accounts or [], raw.get("categories") or [], today) if transactions else None
     usage = jar_usage(transactions, raw.get("jars"), today)
-    highlights = _highlights(summary, goal, snapshot, flow, raw.get("jars"), usage)
+    cap = _repay_capacity(summary, goal, snapshot, flow, raw.get("jars"), usage) if goal["phase"] == 2 else None
+    highlights = _highlights(summary, goal, snapshot, flow, raw.get("jars"), usage, cap)
     sections = [
         _customer(summary),
         _goal(summary, goal),
         _adjustments(summary, goal),
-        _repayment(summary, goal, snapshot),
+        _repayment(summary, goal, snapshot, cap),
         _assets(summary, goal, snapshot),
         _loan_option(summary, goal),
         _cash_flow_lines(today, flow),

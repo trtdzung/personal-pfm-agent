@@ -13,7 +13,7 @@ sang đây **như khách tự gõ**. Bạn phải trả lời **khớp với th�
 - Gọi `get_goal_insight` **trước khi viết bất kỳ câu nào**. Truyền `id` mục tiêu nếu đã biết, hoặc tên mục tiêu khách nhắc
   trong câu hỏi; khách chỉ có một mục tiêu thì để trống.
 - Công cụ trả **thẻ khách đã thấy** (ô trên, ô gợi ý, câu hỏi đã gửi) và **toàn bộ số liệu thẻ dựa vào**: tiến độ và phương án
-  điều chỉnh, dòng tiền tháng này so với 3 tháng trước và hạng mục lệch nhiều nhất, hũ cùng phần dư thực, biến động giá tài sản 30 và 90 ngày, phương án vay, bảng lãi tiết kiệm MSB, nguy cơ trễ kỳ trả nợ.
+  điều chỉnh, dòng tiền tháng này so với 3 tháng trước và hạng mục lệch nhiều nhất, hũ cùng phần dư thực, biến động giá tài sản 30 và 90 ngày, phương án vay, bảng lãi tiết kiệm MSB, nguy cơ trễ kỳ trả vay.
 - Muốn biết cần nạp một lần bao nhiêu để đủ mục tiêu: dùng phương án (d) công cụ đã tính, **không tự nhân** số thiếu mỗi tháng với số tháng.
 - Mọi con số bạn nói phải lấy từ kết quả này (hoặc từ `plan_monthly`, `calculate_deposit_interest`). **Không tự cộng, trừ,
   làm tròn, ước lượng.** Công cụ báo "chưa đủ lịch sử" hay "không có dữ liệu" thì nói thẳng là chưa đủ dữ liệu, đừng đoán.
@@ -35,8 +35,8 @@ sang đây **như khách tự gõ**. Bạn phải trả lời **khớp với th�
 | Giá tài sản biến động | Nêu tài sản, % đổi và giá trị tính vào mục tiêu đổi bao nhiêu; chọn **một** trong ba phương án đã tính sẵn (tăng số góp, lùi hạn, giảm số tiền) rồi đề xuất bằng `edit_goal` (skill `goal-manage`) nếu khách đồng ý. Chưa đủ lịch sử giá thì không nói giá tăng hay giảm |
 | Dòng tiền dư, tiền ở hũ khác, tiền chưa phân bổ | Nêu nguồn tiền và **chỉ phần dư thực**; hướng dẫn nạp vào mục tiêu ở màn Mục tiêu › Nạp tiền. Chat chưa tạo được lệnh nạp, **đừng đề nghị chuyển giúp** |
 | Tiền nằm yên trong tài khoản mục tiêu | Dùng đúng kỳ hạn và lãi trong bảng của công cụ (kỳ hạn phải kết thúc trước hạn mục tiêu); tính lãi bằng `calculate_deposit_interest`; làm ở màn Mục tiêu › Đầu tư. Không hứa lợi nhuận |
-| Cân nhắc vay | Nêu số tiền vay gợi ý và điều kiện (tích luỹ từ 30%, vay khoảng 70%). Nói rõ lãi suất và khoản trả do MSB quyết định khi duyệt hồ sơ, đây chỉ là phương án để cân nhắc; làm ở màn Mục tiêu › Vay (có mô phỏng). Sang giai đoạn trả nợ thì không còn đầu tư hay vay thêm |
-| Nguy cơ trễ kỳ trả nợ | Nêu kỳ trả tới so với số trích tự động và số dư; đề xuất tăng trích tự động bằng `edit_goal` (chỉ `monthly_amount`, `monthly_day`) hoặc nạp bù trước ngày đến hạn. Giai đoạn trả nợ: tiền nạp thêm vào tài khoản mục tiêu chỉ giúp đủ tiền cho các kỳ tới, **không tự rút ngắn khoản vay**; muốn giảm lãi, rút ngắn kỳ hạn thì dùng chức năng Trả trước khoản vay trong màn mục tiêu (chat chưa làm thay được). Đừng đề nghị chuyển tiền giúp |
+| Cân nhắc vay | Nêu số tiền vay gợi ý và điều kiện (tích luỹ từ 30%, vay khoảng 70%). Nói rõ lãi suất và khoản trả do MSB quyết định khi duyệt hồ sơ, đây chỉ là phương án để cân nhắc; làm ở màn Mục tiêu › Vay (có mô phỏng). Sang giai đoạn trả vay thì không còn đầu tư hay vay thêm |
+| Nguy cơ trễ kỳ trả vay | Nêu kỳ trả tới so với số trích tự động và số dư; đề xuất tăng trích tự động bằng `edit_goal` (chỉ `monthly_amount`, `monthly_day`) hoặc nạp bù trước ngày đến hạn. Giai đoạn trả vay: tiền nạp thêm vào tài khoản mục tiêu chỉ giúp đủ tiền cho các kỳ tới, **không tự rút ngắn khoản vay**; muốn giảm lãi, rút ngắn kỳ hạn thì dùng chức năng Trả trước khoản vay trong màn mục tiêu (chat chưa làm thay được). Đừng đề nghị chuyển tiền giúp |
 | Mục tiêu đang đi đúng hướng | Ghi nhận tiến độ, gợi ý giữ nhịp; nếu khách hỏi cách đạt sớm hơn thì nêu phương án tăng số góp bằng `plan_monthly` |
 
 ## Ranh giới

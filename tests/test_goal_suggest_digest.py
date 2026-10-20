@@ -164,10 +164,10 @@ def test_phase_two_goal_gets_the_repayment_section_and_the_risk_scenario():
                      {"period": 2, "dueDate": "2026-10-01", "payment": 13_000_000, "status": "upcoming"}],
     }]
     _, text = build(r)
-    assert "== TRẢ NỢ (GIAI ĐOẠN 2) ==" in text and "Đang quá hạn: 1 kỳ, tổng 13.000.000 VND" in text
+    assert "== TRẢ VAY (GIAI ĐOẠN 2) ==" in text and "Đang quá hạn: 1 kỳ, tổng 13.000.000 VND" in text
     assert "Trích tự động thấp hơn kỳ trả: 8.000.000 VND mỗi tháng" in text
-    assert has(text, "Nguy cơ trễ kỳ trả nợ: 1 kỳ quá hạn") and not has(text, "cân nhắc vay") and not has(text, "nằm yên")
-    assert highlights(text)[0].startswith("Nguy cơ trễ kỳ trả nợ")  # the most important point comes first
+    assert has(text, "Nguy cơ trễ kỳ trả vay: 1 kỳ quá hạn") and not has(text, "cân nhắc vay") and not has(text, "nằm yên")
+    assert highlights(text)[0].startswith("Nguy cơ trễ kỳ trả vay")  # the most important point comes first
 
 
 def test_nothing_worth_saying_is_stated_as_on_track():
@@ -210,3 +210,41 @@ def test_a_goal_sharing_its_name_with_another_tells_the_model_to_name_its_deadli
     _, text = build(r)
     assert "LƯU Ý: khách còn 1 mục tiêu khác cùng tên" in text and "15/09/2031" in text and "PHẢI nêu hạn" in text
     assert "LƯU Ý" not in build()[1]
+
+
+def repaying(due="2026-09-22", payment=13_000_000, balance=None):
+    r = raw()
+    goal = r["snapshot"]["world"]["goals"][0]
+    goal.update({"status": "repaying", "phase": 2, "loanId": "loan-1"})
+    if balance is not None:
+        goal["balance"] = balance
+    r["snapshot"]["world"]["loans"] = [{
+        "id": "loan-1", "goalId": "goal-1", "principal": 100_000_000, "monthlyPayment": payment, "termMonths": 12, "prepaid": 0, "status": "active",
+        "schedule": [{"period": 2, "dueDate": due, "payment": payment, "status": "upcoming"}],
+    }]
+    return r
+
+
+def test_repayment_ability_is_worked_out_from_cash_flow_and_jar_behaviour():
+    r = repaying(balance=2_000_000)
+    r["jars"] = {"unallocated": 0, "jars": [{"id": "food", "label": "Ăn uống", "categoryIds": ["dining"], "spendable": 12_000_000, "balance": 12_000_000}]}
+    txns = []
+    for month in ("06", "07", "08"):
+        txns += [tx(2, 30_000_000, month=month, direction="credit", kind="income", category="salary"), tx(5, 2_000_000, month=month)]
+    txns += [tx(5, 4_000_000, month="09")]  # food is above the usual this month
+    r.update(transactions=txns, accounts=[{"id": "acc_current", "type": "current", "balance": 1}], categories=[{"id": "dining", "label": "Ăn uống"}])
+    _, text = build(r)
+    assert "Kỳ tới còn 7 ngày nữa là đến hạn." in text and "Kỳ trả bằng 43,33% thu nhập trung bình vào CASA (30.000.000 VND/tháng)." in text
+    assert "Để trích tự động đủ một kỳ trả cần nâng thêm 8.000.000 VND mỗi tháng" in text
+    points = highlights(text)
+    assert points[0].startswith("Nguy cơ trễ kỳ trả vay (kỳ tới còn 7 ngày)")
+    assert any("bù khoản thiếu 8.000.000 VND mỗi tháng từ tiền dư thực" in h and "Ăn uống" in h for h in points)
+    assert any("Ăn uống cao hơn trung bình 2.000.000 VND" in h for h in points)
+    assert not any("cân nhắc vay" in h or "nằm yên" in h or "Giá tài sản" in h for h in points)
+
+
+def test_a_repaying_goal_whose_instalment_is_covered_is_on_track_even_with_idle_money():
+    r = repaying(payment=4_000_000, balance=6_000_000)  # standing order 5.000.000 and a balance already cover the instalment
+    r["jars"] = {"unallocated": 9_000_000, "jars": []}
+    _, text = build(r)
+    assert highlights(text) == [] and "mục tiêu đang đi đúng hướng" in text
