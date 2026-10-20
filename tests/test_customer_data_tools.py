@@ -710,3 +710,18 @@ def test_fetch_jar_spending_raises_when_pfm_fails_so_the_caller_can_go_on_withou
         pass
     else:
         raise AssertionError("expected httpx.HTTPError")
+
+
+def test_the_pfm_address_comes_from_the_environment_and_has_no_trailing_slash(monkeypatch):
+    import importlib
+
+    import tools.customer_data_tools as mod
+
+    try:
+        monkeypatch.setenv("PFM_BASE_URL", "https://pfm.example.test/")
+        assert importlib.reload(mod).PFM_BASE_URL == "https://pfm.example.test"
+        monkeypatch.delenv("PFM_BASE_URL")
+        assert importlib.reload(mod).PFM_BASE_URL.startswith("https://endpoint-")
+    finally:
+        monkeypatch.delenv("PFM_BASE_URL", raising=False)
+        importlib.reload(mod)

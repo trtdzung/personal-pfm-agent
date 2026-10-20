@@ -34,6 +34,7 @@ jars or beneficiaries.
 """
 
 import logging
+import os
 import re
 from datetime import date
 
@@ -42,7 +43,9 @@ from langchain_core.tools import tool
 
 from middleware.seed_customer_context import _resolve_customer_id
 
-PFM_BASE_URL = "https://endpoint-6529c773-a2b3-4a42-b28a-6bcdced3ceff.agentbase-runtime.aiplatform.vngcloud.vn"
+# The pfm app the agent reads the customer's data from (goals, jars, accounts...). It was hard-coded, so when pfm moved to a new
+# endpoint the agent kept reading the OLD one and `get_goals` never saw a goal created in the new UI: set PFM_BASE_URL per deployment.
+PFM_BASE_URL = (os.environ.get("PFM_BASE_URL") or "https://endpoint-7dce6768-af9b-488b-aaf4-fcbfad42be15.agentbase-runtime.aiplatform.vngcloud.vn").rstrip("/")
 PFM_REQUEST_TIMEOUT_SECONDS = 10.0
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
