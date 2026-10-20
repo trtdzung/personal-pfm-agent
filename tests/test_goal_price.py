@@ -38,7 +38,12 @@ GOOD_POINTS = [
 ]
 
 
+def _no_guess(system, human):
+    raise RuntimeError("no model estimate in this test")
+
+
 def run(request, **kw):
+    kw.setdefault("guess_generator", _no_guess)  # never reach the real model
     return asyncio.run(service.run(request, **kw))
 
 
@@ -158,3 +163,41 @@ def test_endpoint_auth_validation_and_degraded_200(monkeypatch):
     monkeypatch.setattr(api, "run", fake_run)
     resp = client.post("/goal-price-estimates", json={**body, "answers": {}}, headers=headers)
     assert resp.status_code == 200 and resp.json() == {"reason": "not_enough_prices", "degraded": True}
+
+
+def test_when_the_web_has_no_usable_price_the_model_estimates_without_sources():
+    guess = service._Guess(amount_vnd=650_000_000, low_vnd=550_000_000, high_vnd=750_000_000)
+    seen = []
+
+    def generate(system, human):
+        seen.append((system, human))
+        return guess
+
+    resp = run(req(template="car"), extract_generator=lambda s, h: extraction([]), search=fake_search, guess_generator=generate)
+    est = resp.estimate
+    assert est.amount == 650_000_000 and est.low == 550_000_000 and est.high == 750_000_000 and est.sources == []
+    assert "chưa tra được giá trên web" in est.summary and "chưa có nguồn" in est.summary and not resp.degraded
+    assert "Loại mục tiêu: xe ô tô" in seen[0][1]
+    # the same when the search itself is down
+    def down(query, refresh=False):
+        raise research.ResearchUnavailable("HTTPError")
+
+    assert run(req(), extract_generator=lambda s, h: extraction([]), search=down, guess_generator=generate).estimate.sources == []
+
+
+def test_a_model_estimate_that_is_not_a_price_is_refused():
+    for bad in (
+        service._Guess(amount_vnd=1_000, low_vnd=500, high_vnd=2_000),  # absurdly small
+        service._Guess(amount_vnd=600_000_000, low_vnd=700_000_000, high_vnd=800_000_000),  # amount outside its own range
+        service._Guess(amount_vnd=600_000_000, low_vnd=100_000_000, high_vnd=2_000_000_000),  # a shrug, not a range
+    ):
+        resp = run(req(), extract_generator=lambda s, h: extraction([]), search=fake_search, guess_generator=lambda s, h, b=bad: b)
+        assert resp.estimate is None and resp.degraded and resp.reason == "not_enough_prices"
+
+
+def test_a_web_price_wins_over_the_model_estimate():
+    def never(system, human):
+        raise AssertionError("the model must not be asked when the web has prices")
+
+    resp = run(req(), extract_generator=lambda s, h: extraction(GOOD_POINTS), search=fake_search, guess_generator=never)
+    assert resp.estimate.sources and "chưa có nguồn" not in resp.estimate.summary

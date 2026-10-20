@@ -70,6 +70,12 @@ class _Point(BaseModel):
     per_m2: bool = False
 
 
+class _Guess(BaseModel):
+    amount_vnd: int
+    low_vnd: int
+    high_vnd: int
+
+
 class _Extraction(BaseModel):
     area_m2: float | None = None
     points: list[_Point]
@@ -218,7 +224,34 @@ def propose(totals: list[tuple[int, research.Snippet]], area_assumed: bool = Fal
     return Estimate(amount=amount, low=low, high=high, summary=summary, sources=sources)
 
 
-def research_price(req: PriceEstimateRequest, generate: Generator, search: Searcher) -> tuple[Estimate | None, str | None]:
+# Web research found nothing usable for these reasons: the model then estimates from its own knowledge (no sources).
+GUESS_AFTER = ("not_enough_prices", "no_results", "search_unavailable")
+MAX_GUESS_SPREAD = 5  # high / low above this is not a price, it is a shrug
+
+
+def model_guess(req: PriceEstimateRequest, guess: Generator) -> Estimate | None:
+    try:
+        raw = guess((_PROMPTS / "guess.md").read_text(encoding="utf-8"), f"<yeu_cau>\n{_request_text(req)}\n</yeu_cau>")
+        g = raw if isinstance(raw, _Guess) else _Guess.model_validate(raw)
+    except Exception as exc:
+        logger.warning("goal_price guess failed: %s", type(exc).__name__)
+        return None
+    if not (MIN_VND <= g.low_vnd <= g.amount_vnd <= g.high_vnd <= MAX_VND) or g.high_vnd > g.low_vnd * MAX_GUESS_SPREAD:
+        return None
+    amount, low, high = _round(g.amount_vnd), _round(g.low_vnd), _round(g.high_vnd)
+    summary = f"M-You chưa tra được giá trên web nên ước tính theo mức phổ biến: khoảng {_money(amount)}" + (f" (từ {_money(low)} đến {_money(high)})" if low != high else "") + ". Đây là ước tính, chưa có nguồn đối chiếu."
+    return Estimate(amount=amount, low=low, high=high, summary=summary, sources=[])
+
+
+def research_price(req: PriceEstimateRequest, generate: Generator, search: Searcher, guess: Generator | None = None) -> tuple[Estimate | None, str | None]:
+    """Web prices first; when they are not enough, the model's own estimate (marked as such) instead of nothing."""
+    estimate, reason = _web_price(req, generate, search)
+    if estimate is None and guess is not None and reason and reason.startswith(GUESS_AFTER):
+        return model_guess(req, guess), reason
+    return estimate, reason
+
+
+def _web_price(req: PriceEstimateRequest, generate: Generator, search: Searcher) -> tuple[Estimate | None, str | None]:
     snippets: list[research.Snippet] = []
     try:
         for query in queries_for(req):
@@ -247,8 +280,9 @@ async def run(
     *,
     form_generator: Generator | None = None,
     extract_generator: Generator | None = None,
+    guess_generator: Generator | None = None,
     search: Searcher | None = None,
-    timeout: float = MODEL_TIMEOUT_SECONDS * 2 + 40,
+    timeout: float = MODEL_TIMEOUT_SECONDS * 3 + 40,
 ) -> PriceEstimateResponse:
     """Never raises for model or search trouble: that comes back as `degraded` with a reason."""
     if req.answers is None:
@@ -256,7 +290,10 @@ async def run(
         return PriceEstimateResponse(questions=questions, reason=reason)
     try:
         estimate, reason = await asyncio.wait_for(
-            asyncio.to_thread(research_price, req, extract_generator or generate_with_llm(_Extraction), search or research.search), timeout
+            asyncio.to_thread(
+                research_price, req, extract_generator or generate_with_llm(_Extraction), search or research.search, guess_generator or generate_with_llm(_Guess)
+            ),
+            timeout,
         )
     except asyncio.TimeoutError:
         return PriceEstimateResponse(reason="timeout", degraded=True)
