@@ -23,6 +23,7 @@ class TurnFacts:
     expense_category_ids: set[str] | None
     goals: dict | None = None  # `get_goals` artifact (tools/goal_tools.py `summarize_goals`)
     market: dict[str, dict] | None = None  # `get_goal_market` artifact by instrument id
+    plan_cards: list[dict] | None = None  # artifacts of `build_goal_plan_card` this turn
 
 
 def read_turn_facts(messages: list) -> TurnFacts:
@@ -35,6 +36,7 @@ def read_turn_facts(messages: list) -> TurnFacts:
     categories: list | None = None
     goals: dict | None = None
     market: list | None = None
+    plan_cards: list[dict] = []
     for message in reversed(messages):
         if isinstance(message, HumanMessage):
             break
@@ -49,11 +51,13 @@ def read_turn_facts(messages: list) -> TurnFacts:
             goals = message.artifact
         elif message.name == "get_goal_market" and market is None and isinstance(message.artifact, list):
             market = message.artifact
+        elif message.name == "build_goal_plan_card" and isinstance(message.artifact, dict):
+            plan_cards.append(message.artifact)
     expense_ids = None
     if categories is not None:
         expense_ids = {c["id"] for c in categories if isinstance(c, dict) and c.get("kind") == "expense" and "id" in c}
     market_by_id = None if market is None else {i["id"]: i for i in market if isinstance(i, dict) and "id" in i}
-    return TurnFacts(jar_summary=summary, expense_category_ids=expense_ids, goals=goals, market=market_by_id)
+    return TurnFacts(jar_summary=summary, expense_category_ids=expense_ids, goals=goals, market=market_by_id, plan_cards=plan_cards or None)
 
 
 def _jar_ids(summary: dict) -> set[str]:
@@ -88,6 +92,9 @@ def ui_matches_facts(ui: dict, facts: TurnFacts) -> bool:
         return _categories_known([ui["category"]], facts)
     if kind in _GOAL_KINDS:
         return _goal_ui_matches(ui, facts)
+    if kind == "plan_roadmap":
+        # the card is built by code: only the exact block `build_goal_plan_card` returned this turn is real
+        return facts.plan_cards is not None and ui in facts.plan_cards
     return True
 
 

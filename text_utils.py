@@ -543,6 +543,73 @@ def _is_valid_edit_asset(raw: dict) -> bool:
     return False
 
 
+_PLAN_IDS = {"no_loan", "loan_now", "optimized"}
+_PLAN_VERDICTS = {"recommended", "ok", "late", "not_recommended"}
+_MILESTONE_KINDS = {"reserve", "save", "switch", "buy", "loan", "repay", "done"}
+
+
+def _str_len(value: object, max_len: int, min_len: int = 1) -> bool:
+    return isinstance(value, str) and (bool(value.strip()) if min_len else True) and len(value) <= max_len
+
+
+def _is_valid_plan_metric(raw: object) -> bool:
+    return isinstance(raw, dict) and set(raw) == {"label", "value"} and _str_len(raw["label"], 30) and _str_len(raw["value"], 40)
+
+
+def _is_valid_plan_milestone(raw: object) -> bool:
+    if not isinstance(raw, dict):
+        return False
+    required = {"when", "kind", "title"}
+    if not required <= set(raw) or not set(raw) <= required | {"detail", "action"}:
+        return False
+    return (
+        _str_len(raw["when"], 30)
+        and raw["kind"] in _MILESTONE_KINDS
+        and _str_len(raw["title"], 60)
+        and ("detail" not in raw or _str_len(raw["detail"], 200))
+        and ("action" not in raw or _str_len(raw["action"], 120))
+    )
+
+
+def _is_valid_plan_option(raw: object) -> bool:
+    if not isinstance(raw, dict):
+        return False
+    required = {"id", "name", "verdict", "headline", "metrics", "milestones"}
+    if not required <= set(raw) or not set(raw) <= required | {"reason", "risk", "choice_text"}:
+        return False
+    if raw["id"] not in _PLAN_IDS or raw["verdict"] not in _PLAN_VERDICTS:
+        return False
+    if not (_str_len(raw["name"], 40) and _str_len(raw["headline"], 160)):
+        return False
+    if "reason" in raw and not _str_len(raw["reason"], 200):
+        return False
+    if "risk" in raw and not _str_len(raw["risk"], 240):
+        return False
+    metrics, milestones = raw["metrics"], raw["milestones"]
+    if not isinstance(metrics, list) or len(metrics) > 4 or not all(_is_valid_plan_metric(m) for m in metrics):
+        return False
+    if not isinstance(milestones, list) or len(milestones) > 10 or not all(_is_valid_plan_milestone(m) for m in milestones):
+        return False
+    if raw["verdict"] == "not_recommended":
+        return "choice_text" not in raw and _str_len(raw.get("reason"), 200)
+    return bool(milestones) and _str_len(raw.get("choice_text"), 120)
+
+
+def _is_valid_plan_roadmap(raw: dict) -> bool:
+    required = {"type", "title", "baseline", "assumptions", "plans"}
+    if set(raw) != required:
+        return False
+    if not (_str_len(raw["title"], 80) and _str_len(raw["baseline"], 200)):
+        return False
+    assumptions, plans = raw["assumptions"], raw["plans"]
+    if not isinstance(assumptions, list) or len(assumptions) > 8 or not all(_str_len(a, 80) for a in assumptions):
+        return False
+    if not isinstance(plans, list) or not 1 <= len(plans) <= 3 or not all(_is_valid_plan_option(p) for p in plans):
+        return False
+    ids = [p["id"] for p in plans]
+    return len(set(ids)) == len(ids) and sum(p["verdict"] == "recommended" for p in plans) <= 1
+
+
 # Dispatch table: ui block "type" -> validator. Add an entry here (and a new
 # _is_valid_<type> function above) for each new widget type -- every type
 # shares the same ```ui-json fence and the same envelope shape
@@ -560,6 +627,7 @@ _UI_VALIDATORS = {
     "close_goal": _is_valid_close_goal,
     "add_asset": _is_valid_add_asset,
     "edit_asset": _is_valid_edit_asset,
+    "plan_roadmap": _is_valid_plan_roadmap,
 }
 
 

@@ -37,6 +37,8 @@ from text_utils import extract_final_text, extract_ui_block, strip_foreign_scrip
 from ui_guard import read_turn_facts, ui_matches_facts
 from tools.customer_data_tools import get_categories, get_jar_summary, query_beneficiaries
 from tools.goal_insight_tools import get_goal_insight
+from tools.goal_price_tools import estimate_goal_price
+from tools.goal_plan_tools import build_goal_plan_card, loan_quote, project_target, savings_projection, simulate_goal_plan
 from tools.goal_tools import get_goal_market, get_goals, plan_monthly
 from tools.security_tools import check_fraud_watchlist, check_official_channel, search_msb_promotions
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
@@ -139,7 +141,13 @@ def build_agent(
             get_goals,
             get_goal_market,
             get_goal_insight,
+            estimate_goal_price,
             plan_monthly,
+            loan_quote,
+            savings_projection,
+            project_target,
+            simulate_goal_plan,
+            build_goal_plan_card,
             query_beneficiaries,
             project_investment_growth,
             calculate_deposit_interest,

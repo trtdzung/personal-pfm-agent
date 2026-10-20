@@ -1,6 +1,6 @@
 ---
 name: goal-manage
-description: Dùng khi khách muốn đặt mục tiêu tiết kiệm mới, đổi ngày hoặc số tiền của mục tiêu đang có, hoặc đóng mục tiêu — ví dụ "tôi muốn mua xe 600 triệu cuối năm 2027", "tạo mục tiêu du lịch 30 triệu trong 6 tháng", "lùi hạn mục tiêu mua xe sang tháng 3 năm sau", "giảm mục tiêu du lịch xuống 25 triệu", "đóng mục tiêu du lịch". Đề xuất form create_goal, edit_goal hoặc close_goal, kèm kế hoạch góp hằng tháng (số tiền và ngày trích tự động) khi tạo hoặc đổi mục tiêu; khách tự xem, sửa và xác nhận trên giao diện, khi đó pfm mới ghi. Không dùng để thêm/sửa tài sản của mục tiêu (skill goal-asset). Chưa hỗ trợ đổi tên, tạm dừng, đổi thứ tự ưu tiên, nạp hay rút tiền. Chỉ đề xuất, không thực thi.
+description: Dùng khi khách muốn đặt mục tiêu tiết kiệm mới, đổi ngày hoặc số tiền của mục tiêu đang có, hoặc đóng mục tiêu — ví dụ "tôi muốn mua xe 600 triệu cuối năm 2027", "tạo mục tiêu du lịch 30 triệu trong 6 tháng", "lùi hạn mục tiêu mua xe sang tháng 3 năm sau", "giảm mục tiêu du lịch xuống 25 triệu", "đóng mục tiêu du lịch". Khách chưa rõ cần bao nhiêu tiền cho thứ muốn mua ("tôi muốn mua nhà nhưng không biết cần bao nhiêu", "mua VF6 hết bao nhiêu") thì hỏi thuộc tính rồi tra giá thị trường bằng estimate_goal_price để điền số tiền mục tiêu. Đề xuất form create_goal, edit_goal hoặc close_goal, kèm kế hoạch góp hằng tháng (số tiền và ngày trích tự động) khi tạo hoặc đổi mục tiêu; khách tự xem, sửa và xác nhận trên giao diện, khi đó pfm mới ghi. Không dùng để thêm/sửa tài sản của mục tiêu (skill goal-asset). Chưa hỗ trợ đổi tên, tạm dừng, đổi thứ tự ưu tiên, nạp hay rút tiền. Chỉ đề xuất, không thực thi.
 ---
 
 # Tạo, đổi và đóng mục tiêu tiết kiệm (chỉ đề xuất, không thực thi)
@@ -55,6 +55,21 @@ Khách bấm "Chi tiết" trên thẻ M-You gợi ý, hoặc hỏi vì sao mục
   - **Số góp đề xuất lấy từ công cụ `plan_monthly`, không tự chia.** Gọi `plan_monthly(target_amount, target_date, initial_deposit)` (mục tiêu mới: để trống `goal_id`) và dùng nguyên `monthly` làm `monthly_amount`, `suggestedDay` làm `monthly_day` (trừ khi khách nói ngày khác). Công cụ trả cả số tháng, phần còn thiếu và việc số góp có vượt phần còn dư không.
   - `monthly_day`: ngày 1–28, nên là **ngày sau ngày nhận lương** (ngày nhận lương + 1, tối đa 28) để tài khoản chính đủ tiền; khách nói ngày khác thì theo khách.
   - So với **còn dư** hằng tháng của khách: số góp lớn hơn còn dư → vẫn đề xuất đúng số tính được nhưng **nói rõ** nó vượt phần còn dư (nêu hai con số) và gợi ý lùi hạn hoặc giảm số tiền; đừng hứa là đạt được. Khách không muốn cài trích tự động hoặc chưa đủ dữ liệu thu chi (còn dư "chưa đủ dữ liệu") thì bỏ cả hai field.
+
+### Sau khi khách xác nhận thẻ tạo mục tiêu
+
+Khách bấm xác nhận thẻ `create_goal` thì pfm tự gửi tin "Mình đã tạo mục tiêu «tên»." Lượt đó **thuộc skill `goal-plan`** (hỏi tài sản sẵn có rồi gợi ý lộ trình). Đừng hỏi hay gợi ý lộ trình ngay trong lượt đề xuất thẻ `create_goal`, và đừng tự thêm câu như vậy vào cuối câu trả lời có thẻ.
+
+### Khách chưa rõ giá — tra giá thị trường bằng `estimate_goal_price`
+
+Dùng khi khách **nói thẳng là chưa rõ giá** ("không biết cần bao nhiêu", "mua nhà hết khoảng bao nhiêu", "VF6 giá bao nhiêu thì đặt mục tiêu") **hoặc nêu một sản phẩm cụ thể mà không nói số tiền** ("tôi muốn mua căn hộ 2 phòng ngủ ở Thủ Đức", "mua VF6"). Khách đã nói số tiền, hoặc chỉ nói "mua nhà / mua xe" chung chung và không hỏi giá, thì vẫn dùng các mốc cố định ở mục bên dưới.
+
+1. Gọi `get_goals` như mọi lượt.
+2. **Hỏi thuộc tính bằng đúng một khối `clarify_options`** (skill `clarify-options`): tối đa 4 câu độc lập, mỗi câu 2–4 lựa chọn ngắn, **các lựa chọn của một câu loại trừ nhau và không trùng ý với câu khác** (ví dụ đã hỏi loại hình thì không đưa diện tích vào lựa chọn của câu khác). Chỉ hỏi điều làm giá thay đổi nhiều nhất và điều khách chưa nói: **tối đa 3 câu thuộc tính**, và **câu cuối cùng của khối LUÔN là thời hạn nếu khách chưa nói** (không bỏ câu này). Gợi ý: `house` khu vực, loại hình (căn hộ / nhà phố / đất nền), diện tích ("Dưới 50 m²", "50–70 m²", "70–100 m²", "Trên 100 m²"), tình trạng; `car` hãng hoặc phân khúc, xăng hay điện, mới hay cũ; loại khác 1–2 câu về mức độ hoặc quy mô. Lựa chọn của câu thời hạn lấy theo bảng của `template`. Không hỏi thu nhập, số dư hay thông tin cá nhân.
+3. Khách trả lời xong → gọi **`estimate_goal_price(template, description, details)`**: `description` là sản phẩm theo lời khách, `details` là các lựa chọn khách đã chọn (**không** gồm thời hạn), **chỉ chữ công khai về sản phẩm**, tuyệt đối không đưa tên, số dư, thu nhập của khách.
+4. Dùng giá tool trả về làm `target_amount` (đúng số `amount` đó), rồi `plan_monthly` và trả `create_goal` như "Tạo — đủ thông tin". **Lượt này vẫn phải gọi `get_goals` trước khi trả `create_goal`.**
+5. Trong câu trả lời nói ngắn: mức giá tham khảo, khoảng giá, và có nguồn web hay không. Tool ghi "KHÔNG có nguồn web" thì phải nói rõ **đây là ước tính của M-You, chưa có nguồn đối chiếu**, và nhắc khách tự chỉnh số trên form. Không hứa giá chắc chắn; đây không phải báo giá chính thức.
+6. Tool báo chưa ước tính được hoặc lỗi → quay lại hỏi số tiền bằng các mốc cố định (mục bên dưới), không tự bịa giá.
 
 ### Hỏi lại khi thiếu số tiền hoặc thời hạn — dùng skill `clarify-options` (nút bấm)
 
@@ -179,6 +194,18 @@ Câu trả lời: "Mình cần hỏi thêm hai điều để lên mục tiêu mu
 Khách bấm xong, tin nhắn tiếp theo là "Khoảng 2 tỷ đồng. Trong 10 năm." → lượt sau trả `create_goal` mua nhà 2.000.000.000đ, hạn `today` cộng 10 năm (xem "Tạo — đủ thông tin").
 
 Chỉ thiếu thời hạn ("Tôi muốn mua xe 600 triệu."): chỉ một câu về thời hạn, lựa chọn của `car`.
+
+### Tạo — khách chưa rõ giá: hỏi thuộc tính rồi tra giá (`estimate_goal_price`)
+
+Khách hỏi: "Tôi muốn mua căn hộ ở TP.HCM nhưng không biết cần bao nhiêu." — chưa có số tiền nên không đoán; hỏi thuộc tính và thời hạn trong một khối.
+
+Câu trả lời: "Bạn chọn giúp mình vài điều để mình tra giá thị trường nhé."
+
+```ui-json
+{"type": "clarify_options", "questions": [{"question": "Loại hình bạn muốn mua?", "options": ["Căn hộ chung cư", "Nhà phố", "Đất nền"]}, {"question": "Diện tích mong muốn?", "options": ["Dưới 50 m²", "50–70 m²", "70–100 m²", "Trên 100 m²"]}, {"question": "Bạn dự kiến đạt mục tiêu trong bao lâu?", "options": ["Trong 5 năm", "Trong 7 năm", "Trong 10 năm", "Trong 15 năm"]}]}
+```
+
+Khách bấm xong: "Căn hộ chung cư. 50–70 m². Trong 10 năm." → gọi `get_goals`, rồi `estimate_goal_price(template="house", description="căn hộ ở TP. Hồ Chí Minh", details=["Căn hộ chung cư", "50–70 m²"])`, rồi `plan_monthly` với số tiền tool trả về và hạn `today` cộng 10 năm, rồi trả `create_goal`. Câu trả lời: "Căn hộ 50–70 m² ở TP.HCM đang vào khoảng 3,6 tỷ đồng (tham khảo từ các trang rao bán, khoảng 3,3 đến 3,9 tỷ). Mình đề xuất mục tiêu 3,6 tỷ đồng trong 10 năm, góp khoảng … mỗi tháng; bạn xem lại và chỉnh số nếu cần rồi xác nhận." (số lấy từ kết quả tool, ví dụ chỉ để học cách nói.)
 
 ### Lùi hạn
 

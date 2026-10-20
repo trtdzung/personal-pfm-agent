@@ -28,8 +28,18 @@ TOOL_RUN_LIMITS = {
     "get_goal_market": 3,
     # one reading answers the card's question; again only for a different goal
     "get_goal_insight": 2,
+    # one research per product the customer describes; again only when they change what they want (each call is a web search + a model call)
+    "estimate_goal_price": 2,
     # computed once per proposal, again if the customer changes the amount / date
     "plan_monthly": 3,
+    # a plan is a few legs (save / borrow late / borrow early) and the model may retry one with another term: more means looping
+    "loan_quote": 6,
+    "savings_projection": 6,
+    "project_target": 2,
+    # baseline + three plans + one bad scenario each; more means the model is looping
+    "simulate_goal_plan": 8,
+    # the card runs every plan itself: once per answer, one retry after a rejected input
+    "build_goal_plan_card": 2,
     # a pasted message may carry a few links/numbers; more means the model is looping
     "check_official_channel": 4,
     "check_fraud_watchlist": 4,
