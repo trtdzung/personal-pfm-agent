@@ -117,6 +117,35 @@ def _default_model() -> BaseChatModel:
     return default_model(AI_PLATFORM_API_KEY)
 
 
+def _default_tools() -> list:
+    """The tools the chat agent gets (shared with /health, which reports what the running container really has)."""
+    return [
+        remember_preference,
+        recall_preference,
+        get_jar_summary,
+        get_categories,
+        get_goals,
+        get_goal_market,
+        get_goal_insight,
+        estimate_goal_price,
+        plan_monthly,
+        loan_quote,
+        savings_projection,
+        project_target,
+        simulate_goal_plan,
+        build_goal_plan_card,
+        query_beneficiaries,
+        project_investment_growth,
+        calculate_deposit_interest,
+        search_market_news,
+        read_market_article,
+        search_msb_knowledge,
+        check_official_channel,
+        check_fraud_watchlist,
+        search_msb_promotions,
+    ]
+
+
 def build_agent(
     model: object | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
@@ -163,33 +192,7 @@ def build_agent(
     patch_delete_events_reads_page_one_every_time()
     return create_deep_agent(
         model=model or _default_model(),
-        tools=tools
-        if tools is not None
-        else [
-            remember_preference,
-            recall_preference,
-            get_jar_summary,
-            get_categories,
-            get_goals,
-            get_goal_market,
-            get_goal_insight,
-            estimate_goal_price,
-            plan_monthly,
-            loan_quote,
-            savings_projection,
-            project_target,
-            simulate_goal_plan,
-            build_goal_plan_card,
-            query_beneficiaries,
-            project_investment_growth,
-            calculate_deposit_interest,
-            search_market_news,
-            read_market_article,
-            search_msb_knowledge,
-            check_official_channel,
-            check_fraud_watchlist,
-            search_msb_promotions,
-        ],
+        tools=tools if tools is not None else _default_tools(),
         middleware=[
             log_tool_calls,
             log_model_calls,
@@ -275,7 +278,10 @@ def _default_thread_id(user_id: str) -> str:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    """Liveness plus what this container really runs (model, skills found on disk, tools registered): compare with the repo
+    when a deployment behaves differently from a local run. Nothing secret."""
+    skills = sorted(p.parent.name for p in (SKILLS_DIR / "project").glob("*/SKILL.md"))
+    return {"status": "ok", "model": LLM_MODEL, "skills": skills, "tools": [t.name for t in _default_tools()]}
 
 
 def _resume_after_content_filter(thread_id: str, actor_id: str, first_error: Exception) -> dict:

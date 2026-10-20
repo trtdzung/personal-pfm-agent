@@ -68,7 +68,12 @@ def test_health_endpoint_requires_no_auth():
     client = TestClient(server.app)
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    # what the container really runs, to compare a deployment with a local run
+    assert body["model"] == server.LLM_MODEL
+    assert {"goal-plan", "goal-manage", "goal-asset"} <= set(body["skills"])
+    assert {"build_goal_plan_card", "simulate_goal_plan", "get_goals", "plan_monthly"} <= set(body["tools"])
 
 
 def test_chat_endpoint_rejects_missing_api_key():
