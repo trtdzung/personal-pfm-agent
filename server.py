@@ -35,6 +35,7 @@ from middleware.tool_limits import tool_call_limits
 from text_utils import extract_final_text, extract_ui_block, strip_foreign_script
 from ui_guard import read_turn_facts, ui_matches_facts
 from tools.customer_data_tools import get_categories, get_jar_summary, query_beneficiaries
+from tools.goal_tools import get_goal_market, get_goals, plan_monthly
 from tools.security_tools import check_fraud_watchlist, check_official_channel, search_msb_promotions
 from tools.investment_tools import calculate_deposit_interest, project_investment_growth
 from tools.market_news_tools import read_market_article, search_market_news
@@ -133,6 +134,9 @@ def build_agent(
             recall_preference,
             get_jar_summary,
             get_categories,
+            get_goals,
+            get_goal_market,
+            plan_monthly,
             query_beneficiaries,
             project_investment_growth,
             calculate_deposit_interest,

@@ -216,6 +216,30 @@ thống). Danh mục đã lưu trữ chỉ hiện khi thêm `&includeArchived=1`
 
 ---
 
+## 3. `GET /api/goals-v2?cif=` — mục tiêu tiết kiệm và tài sản (Agent đọc từ 2026-10-18)
+
+Dùng cho các form mục tiêu trong chat (tool `get_goals`, `get_goal_market`; contract `ui` ở `agent-to-backend/goals/README.md`). Phản hồi `200`:
+`{ "world": WorldState, "market": { "instruments": [...], "asOf": string | null, "refreshing": boolean } }`. Agent chỉ GET; mọi ghi do `pfm` làm khi khách xác nhận.
+
+| Agent dùng | Trường |
+|---|---|
+| hôm nay (theo đồng hồ của `pfm`, **không phải ngày thật**) | `world.clock.today` |
+| số dư tài khoản chính | `world.customer.mainCasaBalance` |
+| mục tiêu | `world.goals[]`: `id`, `name`, `template`, `targetAmount`, `targetDate`, `flexibility`, `status` (`draft`, `accumulating`, `paused`, `achieved`, `repaying`, `completed`, `missed`, `closed`), `priority`, `accountId` |
+| số dư tài khoản mục tiêu | `world.accounts[]` (`id`, `balance`) nối với `goal.accountId` |
+| tài sản | `world.assets[]`: `id`, `goalId`, `type` (`fixed` tự khai, `liquid` sản phẩm MSB), `category`, `name`, `value`, `countPercent`, `instrumentId`, `quantity`, `accrual`, `institution`, `status` |
+| khoản vay còn mở | `world.loans[]` có `status = "active"` theo `goalId` |
+| giá thị trường | `world.market.fundPriceShiftPct` và `market.instruments[]` (`id`, `kind` = `gold`/`stock`/`external_fund`, `name`, `unit`, `fractional`, `priceSeries[]`) |
+
+Lưu ý khi đọc:
+
+- **`value` của tài sản cố định không phải giá trị hiện tại** với tài sản tính theo mã (lưu `0`) hay có `accrual` (lưu gốc): giá trị hôm nay = `quantity` × giá mới nhất không sau
+  `clock.today` (trước điểm giá đầu tiên thì lấy giá đầu; rồi nhân `1 + fundPriceShiftPct/100`), hoặc `principal` + lãi đơn `principal × ratePa/100 × số ngày / 365` (số ngày tính tới
+  `maturityDate` nếu đã qua). Agent lặp lại đúng công thức của `goals-preview/engine/value.ts`; tài sản `liquid` dùng `value` ghi nhận gần nhất.
+- Phản hồi lớn (~1 MB do `priceSeries` của ~100 mã); Agent chỉ giữ giá hôm nay của từng mã. Nếu thấy chậm, `pfm` có thể thêm một endpoint tóm tắt — Agent đóng gói việc đọc ở một chỗ nên đổi nguồn không đổi skill.
+- Một lần đọc có thể làm `pfm` chạy bù các ngày đã trôi qua và đồng bộ giá nền (ghi bút toán/giá phía `pfm`); không ảnh hưởng dữ liệu khách ngoài việc đó.
+- `404` = khách không có trong `pfm`; lỗi khác → Agent không đoán số và không trả form.
+
 # Phần B — Contract `ui` Agent trả ra
 
 Khung chung: Agent trả `answer` (text) + `ui` (object có `type`). `pfm` **validate

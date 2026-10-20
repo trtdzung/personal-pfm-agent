@@ -21,6 +21,8 @@ class TurnFacts:
 
     jar_summary: dict | None
     expense_category_ids: set[str] | None
+    goals: dict | None = None  # `get_goals` artifact (tools/goal_tools.py `summarize_goals`)
+    market: dict[str, dict] | None = None  # `get_goal_market` artifact by instrument id
 
 
 def read_turn_facts(messages: list) -> TurnFacts:
@@ -31,6 +33,8 @@ def read_turn_facts(messages: list) -> TurnFacts:
     """
     summary: dict | None = None
     categories: list | None = None
+    goals: dict | None = None
+    market: list | None = None
     for message in reversed(messages):
         if isinstance(message, HumanMessage):
             break
@@ -41,10 +45,15 @@ def read_turn_facts(messages: list) -> TurnFacts:
             summary = message.artifact
         elif message.name == "get_categories" and categories is None and isinstance(message.artifact, list):
             categories = message.artifact
+        elif message.name == "get_goals" and goals is None and isinstance(message.artifact, dict):
+            goals = message.artifact
+        elif message.name == "get_goal_market" and market is None and isinstance(message.artifact, list):
+            market = message.artifact
     expense_ids = None
     if categories is not None:
         expense_ids = {c["id"] for c in categories if isinstance(c, dict) and c.get("kind") == "expense" and "id" in c}
-    return TurnFacts(jar_summary=summary, expense_category_ids=expense_ids)
+    market_by_id = None if market is None else {i["id"]: i for i in market if isinstance(i, dict) and "id" in i}
+    return TurnFacts(jar_summary=summary, expense_category_ids=expense_ids, goals=goals, market=market_by_id)
 
 
 def _jar_ids(summary: dict) -> set[str]:
@@ -77,4 +86,54 @@ def ui_matches_facts(ui: dict, facts: TurnFacts) -> bool:
         return all(a["to_jar_id"] in known for a in ui["allocations"])
     if kind == "transfer_form" and "category" in ui:
         return _categories_known([ui["category"]], facts)
+    if kind in _GOAL_KINDS:
+        return _goal_ui_matches(ui, facts)
+    return True
+
+
+# --- goals -----------------------------------------------------------------------------------------------------------
+# Unlike the jar forms, a goal form is refused when `get_goals` was not read this turn: the date check needs pfm's today.
+
+_GOAL_KINDS = {"create_goal", "edit_goal", "close_goal", "add_asset", "edit_asset"}
+_CHANGEABLE_STATUSES = {"accumulating", "paused", "achieved", "repaying", "missed"}
+
+
+def _goal_ui_matches(ui: dict, facts: TurnFacts) -> bool:
+    goals = facts.goals
+    if goals is None:
+        return False
+    today = goals["today"]
+    by_goal = {g["id"]: g for g in goals["goals"]}
+    kind = ui["type"]
+    if kind == "create_goal":
+        return ui["target_date"] > today
+    if kind == "edit_goal":
+        goal = by_goal.get(ui["goal_id"])
+        if goal is None or goal["status"] not in _CHANGEABLE_STATUSES:
+            return False
+        return "new_target_date" not in ui or ui["new_target_date"] > today
+    if kind == "close_goal":
+        goal = by_goal.get(ui["goal_id"])
+        return goal is not None and goal["status"] != "closed" and not goal["hasActiveLoan"]
+    if kind == "add_asset":
+        goal = by_goal.get(ui["goal_id"])
+        if goal is None or goal["status"] == "closed":
+            return False
+        if ui["category"] in {"gold", "stock", "external_fund"}:
+            instrument = (facts.market or {}).get(ui["instrument_id"])
+            if instrument is None or instrument["kind"] != ui["category"]:
+                return False
+            return instrument["fractional"] or ui["quantity"] == int(ui["quantity"])
+        return True
+    # edit_asset
+    asset = next((a for a in goals["assets"] if a["id"] == ui["asset_id"]), None)
+    if asset is None or asset["readOnly"]:
+        return False
+    if ui["change"] == "revalue":
+        return not asset["autoValued"]
+    if ui["change"] == "quantity":
+        if asset["quantity"] is None or asset["instrumentId"] is None:
+            return False
+        instrument = (facts.market or {}).get(asset["instrumentId"])
+        return instrument is None or instrument["fractional"] or ui["quantity"] == int(ui["quantity"])
     return True

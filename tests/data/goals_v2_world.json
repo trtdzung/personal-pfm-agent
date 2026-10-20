@@ -1,0 +1,210 @@
+{
+ "world": {
+  "version": 1,
+  "scenarioId": "real",
+  "customer": {
+   "name": "Ly Lã",
+   "cif": "CIF_0001",
+   "monthlyIncome": 34600000,
+   "monthlySurplus": 16233333,
+   "monthlyExpenses": 14866667,
+   "existingDebtPayment": 3500000,
+   "mainCasaNumber": "001001003100",
+   "mainCasaBalance": 16396000,
+   "salaryDay": 5,
+   "riskProfile": "conservative",
+   "dataMonths": 6,
+   "riskProfileAsked": false
+  },
+  "goals": [
+   {
+    "id": "goal-1",
+    "name": "Mua xe",
+    "template": "car",
+    "targetAmount": 600000000,
+    "targetDate": "2027-12-31",
+    "flexibility": "date_flexible",
+    "priority": 1,
+    "status": "accumulating",
+    "createdAt": "2026-09-15",
+    "accountId": "goalacc-goal-1",
+    "standingOrder": {
+     "amount": 5000000,
+     "dayOfMonth": 6,
+     "active": true,
+     "nextRunDate": "2026-10-06",
+     "lastResult": "ok",
+     "failedCount": 0
+    }
+   }
+  ],
+  "accounts": [
+   {
+    "id": "goalacc-goal-1",
+    "goalId": "goal-1",
+    "number": "880001000002",
+    "name": "TK mục tiêu – Mua xe",
+    "balance": 5000000,
+    "interestRatePa": 0,
+    "openedAt": "2026-09-15",
+    "status": "open"
+   }
+  ],
+  "assets": [
+   {
+    "id": "asset-4",
+    "goalId": "goal-1",
+    "type": "declared",
+    "name": "Xe máy Honda",
+    "category": "motorbike",
+    "costBasis": 30000000,
+    "value": 30000000,
+    "valuationDate": "2026-09-15",
+    "countPercent": 100,
+    "source": "self_reported",
+    "status": "held",
+    "createdAt": "2026-09-15"
+   },
+   {
+    "id": "asset-5",
+    "goalId": "goal-1",
+    "type": "declared",
+    "name": "Vàng nhẫn",
+    "category": "gold",
+    "costBasis": 0,
+    "value": 0,
+    "valuationDate": "2026-09-15",
+    "countPercent": 100,
+    "source": "estimated",
+    "status": "held",
+    "createdAt": "2026-09-15",
+    "instrumentId": "gold-ring",
+    "quantity": 2
+   },
+   {
+    "id": "asset-6",
+    "goalId": "goal-1",
+    "type": "declared",
+    "name": "Cổ phiếu ACB",
+    "category": "stock",
+    "costBasis": 0,
+    "value": 0,
+    "valuationDate": "2026-09-15",
+    "countPercent": 80,
+    "source": "estimated",
+    "status": "held",
+    "createdAt": "2026-09-15",
+    "instrumentId": "stock-acb",
+    "quantity": 1000,
+    "institution": "SSI"
+   },
+   {
+    "id": "asset-7",
+    "goalId": "goal-1",
+    "type": "declared",
+    "name": "Gửi tiết kiệm VCB",
+    "category": "deposit",
+    "costBasis": 50000000,
+    "value": 50000000,
+    "valuationDate": "2026-09-15",
+    "countPercent": 100,
+    "source": "estimated",
+    "status": "held",
+    "createdAt": "2026-09-15",
+    "accrual": {
+     "principal": 50000000,
+     "ratePa": 5.2,
+     "startDate": "2026-06-01",
+     "maturityDate": "2027-06-01"
+    },
+    "institution": "Vietcombank"
+   }
+  ],
+  "loans": [],
+  "clock": {
+   "today": "2026-09-15"
+  },
+  "market": {
+   "fundPriceShiftPct": 0
+  },
+  "seq": 7,
+  "txns": []
+ },
+ "market": {
+  "instruments": [
+   {
+    "id": "fund-ABBF",
+    "kind": "external_fund",
+    "name": "QUỸ ĐẦU TƯ TRÁI PHIẾU AN BÌNH",
+    "unit": "CCQ",
+    "fractional": true,
+    "priceSeries": [
+     {
+      "date": "2026-09-11",
+      "price": 14626.51
+     },
+     {
+      "date": "2026-09-14",
+      "price": 14636.16
+     },
+     {
+      "date": "2026-09-15",
+      "price": 14639.85
+     },
+     {
+      "date": "2026-09-16",
+      "price": 14642.36
+     },
+     {
+      "date": "2026-09-17",
+      "price": 14645.21
+     }
+    ]
+   },
+   {
+    "id": "gold-ring",
+    "kind": "gold",
+    "name": "Vàng nhẫn 9999",
+    "unit": "chỉ",
+    "fractional": true,
+    "priceSeries": [
+     {
+      "date": "2026-10-18",
+      "price": 14010000
+     }
+    ]
+   },
+   {
+    "id": "stock-acb",
+    "kind": "stock",
+    "name": "ACB",
+    "unit": "cổ phiếu",
+    "fractional": false,
+    "priceSeries": [
+     {
+      "date": "2026-09-11",
+      "price": 22050
+     },
+     {
+      "date": "2026-09-14",
+      "price": 22050
+     },
+     {
+      "date": "2026-09-15",
+      "price": 22100
+     },
+     {
+      "date": "2026-09-16",
+      "price": 22600
+     },
+     {
+      "date": "2026-09-17",
+      "price": 22800
+     }
+    ]
+   }
+  ],
+  "asOf": "2026-10-18",
+  "refreshing": false
+ }
+}

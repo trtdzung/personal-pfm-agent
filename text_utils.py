@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import math
@@ -408,6 +409,140 @@ def _is_valid_clarify_options(raw: dict) -> bool:
     return set(raw) == {"type", "questions"}
 
 
+# --- goals ("Mục tiêu", pfm goals-v2) ---------------------------------------------------------------------------------
+# Same "no auto-fixing" rule as the jar forms; every form lists its keys, so a field of pfm's own action (or a stray one)
+# is a model slip and drops the form. Whether an id exists / a date is after pfm's today is `ui_guard`'s and pfm's check.
+
+_GOAL_TEMPLATES = {"car", "house", "travel", "education", "emergency", "wedding", "retirement", "other"}
+_GOAL_FLEXIBILITIES = {"date_fixed", "date_flexible", "amount_flexible"}
+_HAND_VALUED_ASSETS = {"house", "car", "motorbike", "other"}
+_MARKET_ASSETS = {"gold", "stock", "external_fund"}
+_ACCRUING_ASSETS = {"deposit", "bond"}
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _non_empty_str(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_whole_money(value: object, minimum: int = 1) -> bool:
+    return _is_finite_number(value) and value == int(value) and value >= minimum
+
+
+def _is_iso_date(value: object) -> bool:
+    if not isinstance(value, str) or not _ISO_DATE_RE.match(value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_percent(value: object) -> bool:
+    return _is_finite_number(value) and 0 <= value <= 100
+
+
+def _has_goal_reason(raw: dict) -> bool:
+    return _non_empty_str(raw.get("reason"))
+
+
+_MONTHLY_DAY_MAX = 28  # pfm sets the auto-debit on day 1..28
+
+
+def _has_valid_monthly_plan(raw: dict) -> bool:
+    """`monthly_amount` and `monthly_day` (the monthly saving plan = pfm's auto-debit) are both present or both absent."""
+    has_amount, has_day = "monthly_amount" in raw, "monthly_day" in raw
+    if has_amount != has_day:
+        return False
+    if not has_amount:
+        return True
+    day = raw["monthly_day"]
+    return _is_whole_money(raw["monthly_amount"]) and isinstance(day, int) and not isinstance(day, bool) and 1 <= day <= _MONTHLY_DAY_MAX
+
+
+def _is_valid_create_goal(raw: dict) -> bool:
+    # `flexibility` is no longer asked for (pfm treats every goal as flexible); it is still accepted so an old habit does not drop the form.
+    required = {"type", "goal_name", "template", "target_amount", "target_date", "initial_deposit", "reason"}
+    if not required <= set(raw) or not set(raw) <= required | {"flexibility", "monthly_amount", "monthly_day"}:
+        return False
+    return (
+        _non_empty_str(raw["goal_name"])
+        and raw["template"] in _GOAL_TEMPLATES
+        and _is_whole_money(raw["target_amount"])
+        and _is_iso_date(raw["target_date"])
+        and ("flexibility" not in raw or raw["flexibility"] in _GOAL_FLEXIBILITIES)
+        and _is_whole_money(raw["initial_deposit"], 0)
+        and _has_valid_monthly_plan(raw)
+        and _has_goal_reason(raw)
+    )
+
+
+def _is_valid_edit_goal(raw: dict) -> bool:
+    if not set(raw) <= {"type", "goal_id", "goal_name", "new_target_date", "new_target_amount", "monthly_amount", "monthly_day", "reason"}:
+        return False
+    if not ({"new_target_date", "new_target_amount", "monthly_amount"} & set(raw)):
+        return False
+    if not _has_valid_monthly_plan(raw):
+        return False
+    if "new_target_date" in raw and not _is_iso_date(raw["new_target_date"]):
+        return False
+    if "new_target_amount" in raw and not _is_whole_money(raw["new_target_amount"]):
+        return False
+    return _non_empty_str(raw.get("goal_id")) and _non_empty_str(raw.get("goal_name")) and _has_goal_reason(raw)
+
+
+def _is_valid_close_goal(raw: dict) -> bool:
+    return set(raw) == {"type", "goal_id", "goal_name", "reason"} and all(_non_empty_str(raw[k]) for k in ("goal_id", "goal_name", "reason"))
+
+
+def _is_valid_accrual(value: object) -> bool:
+    if not isinstance(value, dict) or not set(value) <= {"principal", "rate_pa", "start_date", "maturity_date"}:
+        return False
+    if not ({"principal", "rate_pa", "start_date"} <= set(value)):
+        return False
+    if not (_is_whole_money(value["principal"]) and _is_finite_number(value["rate_pa"]) and value["rate_pa"] >= 0 and _is_iso_date(value["start_date"])):
+        return False
+    if "maturity_date" in value:
+        return _is_iso_date(value["maturity_date"]) and value["maturity_date"] >= value["start_date"]
+    return True
+
+
+def _is_valid_add_asset(raw: dict) -> bool:
+    category = raw.get("category")
+    common = {"type", "goal_id", "category", "asset_name", "count_percent", "reason", "institution"}
+    if category in _HAND_VALUED_ASSETS:
+        allowed, specific = common | {"value"}, _is_whole_money(raw.get("value"))
+    elif category in _MARKET_ASSETS:
+        allowed = common | {"instrument_id", "quantity"}
+        quantity = raw.get("quantity")
+        specific = _non_empty_str(raw.get("instrument_id")) and _is_finite_number(quantity) and quantity > 0
+    elif category in _ACCRUING_ASSETS:
+        allowed, specific = common | {"accrual"}, _is_valid_accrual(raw.get("accrual"))
+    else:
+        return False
+    if not set(raw) <= allowed or not specific:
+        return False
+    if "institution" in raw and not isinstance(raw["institution"], str):
+        return False
+    return _non_empty_str(raw.get("goal_id")) and _non_empty_str(raw.get("asset_name")) and _is_percent(raw.get("count_percent")) and _has_goal_reason(raw)
+
+
+def _is_valid_edit_asset(raw: dict) -> bool:
+    if not (_non_empty_str(raw.get("asset_id")) and _non_empty_str(raw.get("asset_name")) and _has_goal_reason(raw)):
+        return False
+    change, base = raw.get("change"), {"type", "asset_id", "asset_name", "change", "reason"}
+    if change == "revalue":
+        if not set(raw) <= base | {"value", "count_percent"} or not _is_whole_money(raw.get("value")):
+            return False
+        return "count_percent" not in raw or _is_percent(raw["count_percent"])
+    if change == "quantity":
+        return set(raw) == base | {"quantity"} and _is_finite_number(raw["quantity"]) and raw["quantity"] > 0
+    if change == "remove":
+        return set(raw) == base
+    return False
+
+
 # Dispatch table: ui block "type" -> validator. Add an entry here (and a new
 # _is_valid_<type> function above) for each new widget type -- every type
 # shares the same ```ui-json fence and the same envelope shape
@@ -420,6 +555,11 @@ _UI_VALIDATORS = {
     "rebalance_jars": _is_valid_rebalance_jars,
     "distribute_amount": _is_valid_distribute_amount,
     "clarify_options": _is_valid_clarify_options,
+    "create_goal": _is_valid_create_goal,
+    "edit_goal": _is_valid_edit_goal,
+    "close_goal": _is_valid_close_goal,
+    "add_asset": _is_valid_add_asset,
+    "edit_asset": _is_valid_edit_asset,
 }
 
 
