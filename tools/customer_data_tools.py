@@ -33,6 +33,7 @@ prompt-injected or simply mistaken value read another customer's
 jars or beneficiaries.
 """
 
+import logging
 import re
 from datetime import date
 
@@ -45,6 +46,26 @@ PFM_BASE_URL = "https://endpoint-6529c773-a2b3-4a42-b28a-6bcdced3ceff.agentbase-
 PFM_REQUEST_TIMEOUT_SECONDS = 10.0
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+_LOGGER = logging.getLogger(__name__)
+
+
+def fetch_customer_today(customer_id: str, fallback_today: date | None = None) -> date:
+    """Read the customer's business date from pfm; fall back to the real date on failure."""
+    try:
+        response = httpx.get(
+            f"{PFM_BASE_URL}/api/clock",
+            params={"cif": customer_id},
+            timeout=PFM_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        clock = response.json()
+        today = clock.get("today") if isinstance(clock, dict) else None
+        if not isinstance(today, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", today):
+            raise ValueError("unexpected clock response shape")
+        return date.fromisoformat(today)
+    except (httpx.HTTPError, ValueError):
+        _LOGGER.warning("Cannot read pfm clock; falling back to the real date")
+        return fallback_today if fallback_today is not None else date.today()
 
 
 def _vnd(amount: float | None, unknown: str) -> str:
@@ -239,7 +260,7 @@ def fetch_jar_spending(customer_id: str, summary: dict, today: date | None = Non
     """The last 3 calendar months (this one and the 2 before) of the customer's transactions, grouped per jar
     (`jar_spending_by_month`). Raises `httpx.HTTPError`/`ValueError` when pfm fails: the caller decides whether to
     go on without this context (it only informs the split, every proposal is still checked against the summary)."""
-    today = today or date.today()
+    today = today or fetch_customer_today(customer_id)
     year, month = today.year, today.month - 2
     if month < 1:
         year, month = year - 1, month + 12
