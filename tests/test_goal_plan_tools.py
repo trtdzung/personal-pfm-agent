@@ -146,7 +146,7 @@ CARD_ARGS = {k: v for k, v in ARGS.items()}
 
 
 def card_call(**over):
-    msg = gp.build_goal_plan_card.invoke({"name": "build_goal_plan_card", "args": {"goal_name": "Căn hộ", **CARD_ARGS, **over}, "id": "c1", "type": "tool_call"})
+    msg = gp.build_goal_plan_card.invoke({"name": "build_goal_plan_card", "args": {"goal_name": "Căn hộ", "goal_id": "goal-1", **CARD_ARGS, **over}, "id": "c1", "type": "tool_call"})
     return msg.content, msg.artifact
 
 
@@ -190,3 +190,21 @@ def test_build_goal_plan_card_extra_assets_are_counted_and_validated():
     assert any("tài sản sẵn có" in a for a in rich["assumptions"]) and rich != plain
     content, art = card_call(extra_assets_vnd=-1)
     assert "không hợp lệ" in content and art is None
+
+
+def test_build_goal_plan_card_puts_the_goal_id_on_the_card():
+    content, art = card_call(goal_id="goal-7")
+    assert art["goal_id"] == "goal-7" and is_valid_ui(art) and '"goal_id": "goal-7"' in content
+
+
+def test_build_goal_plan_card_without_a_goal_builds_nothing_and_says_to_create_the_goal_first():
+    for blank in ("", "   "):
+        content, art = card_call(goal_id=blank)
+        assert art is None and "ui-json" not in content
+        assert "Chưa có mục tiêu" in content and "goal-manage" in content
+
+
+def test_build_goal_plan_card_rejects_a_bad_goal_id():
+    for bad in ("x" * 65, "a\nb", "a\x00b", "a\tb"):
+        content, art = card_call(goal_id=bad)
+        assert "không hợp lệ" in content and art is None and "ui-json" not in content, repr(bad)

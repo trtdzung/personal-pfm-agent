@@ -53,7 +53,7 @@ def _strings(node):
 
 @pytest.mark.parametrize("name", sorted(INPUTS))
 def test_every_card_is_valid_and_consistent(name):
-    card = build_card(INPUTS[name], "Căn hộ")
+    card = build_card(INPUTS[name], "Căn hộ", "goal-1")
     assert is_valid_ui(card), json.dumps(card, ensure_ascii=False, indent=1)
     ids = [x["id"] for x in card["plans"]]
     assert 1 <= len(ids) <= 3 and ids[0] == "no_loan" and len(set(ids)) == len(ids) and set(ids) <= {"no_loan", "loan_now", "optimized"}
@@ -66,7 +66,7 @@ def test_every_card_is_valid_and_consistent(name):
 
 
 def test_feasible_recommends_the_optimized_plan():
-    card = build_card(FEASIBLE, "Căn hộ 1,2 tỷ")
+    card = build_card(FEASIBLE, "Căn hộ 1,2 tỷ", "goal-1")
     plans = _plans(card)
     assert plans["optimized"]["verdict"] == "recommended"
     assert plans["no_loan"]["verdict"] == "late"
@@ -83,7 +83,7 @@ def test_feasible_recommends_the_optimized_plan():
 
 
 def test_tight_has_no_recommendation_and_no_stray_choice_text():
-    card = build_card(TIGHT, "Căn hộ 2 tỷ")
+    card = build_card(TIGHT, "Căn hộ 2 tỷ", "goal-1")
     plans = _plans(card)
     assert all(x["verdict"] != "recommended" for x in card["plans"])
     assert list(plans) == ["no_loan"]  # no feasible loan plan: only the saving plan is shown
@@ -93,7 +93,7 @@ def test_tight_has_no_recommendation_and_no_stray_choice_text():
 
 
 def test_small_goal_is_reached_without_a_loan_and_recommended():
-    card = build_card(INPUTS["SMALL"], "Du lịch")
+    card = build_card(INPUTS["SMALL"], "Du lịch", "goal-1")
     plans = _plans(card)
     assert plans["no_loan"]["verdict"] == "recommended" and plans["no_loan"]["headline"].startswith("Đạt mục tiêu ở tháng 7 (năm thứ 1), đúng hạn")
     assert [m["kind"] for m in plans["no_loan"]["milestones"]] == ["reserve", "save", "buy"]
@@ -102,7 +102,7 @@ def test_small_goal_is_reached_without_a_loan_and_recommended():
 
 
 def test_enough_cash_now_says_there_is_no_need_to_borrow():
-    card = build_card(RICH, "Du lịch")
+    card = build_card(RICH, "Du lịch", "goal-1")
     plans = _plans(card)
     assert list(plans) == ["no_loan"]
     assert plans["no_loan"]["verdict"] == "recommended" and "đủ tiền" in plans["no_loan"]["headline"]
@@ -110,7 +110,7 @@ def test_enough_cash_now_says_there_is_no_need_to_borrow():
 
 def test_never_reaching_the_goal_gives_no_milestones():
     p = sim.Inputs(target=50_000_000_000, months=24, start_cash=0, income=20_000_000, spending=15_000_000)
-    card = build_card(p, "Đảo riêng")
+    card = build_card(p, "Đảo riêng", "goal-1")
     assert is_valid_ui(card)
     nl = _plans(card)["no_loan"]
     assert nl["verdict"] == "not_recommended" and nl["milestones"] == [] and nl["headline"] == "Chưa đạt mục tiêu"
@@ -119,17 +119,17 @@ def test_never_reaching_the_goal_gives_no_milestones():
 
 
 def test_long_goal_names_are_cut_to_fit_the_title():
-    card = build_card(INPUTS["SMALL"], "x" * 200)
+    card = build_card(INPUTS["SMALL"], "x" * 200, "goal-1")
     assert len(card["title"]) <= 80 and card["title"].endswith(" · 1 năm") and is_valid_ui(card)
 
 
 def test_deadline_in_months_when_not_whole_years():
-    card = build_card(replace(INPUTS["SMALL"], months=18), "Du lịch")
+    card = build_card(replace(INPUTS["SMALL"], months=18), "Du lịch", "goal-1")
     assert card["title"] == "Du lịch · 18 tháng" and is_valid_ui(card)
 
 
 def test_savings_interest_range_compares_the_same_horizon_for_base_and_bad_scenario():
-    card = build_card(FEASIBLE, "Mua căn hộ")
+    card = build_card(FEASIBLE, "Mua căn hộ", "goal-1")
     by_id = {pl["id"]: {m["label"]: m["value"] for m in pl["metrics"]} for pl in card["plans"]}
     assert by_id["optimized"]["Lãi tiết kiệm"] == "175,26 triệu–437,35 triệu"
     assert by_id["no_loan"]["Lãi tiết kiệm"] == "224,34 triệu–640,41 triệu"
@@ -137,16 +137,16 @@ def test_savings_interest_range_compares_the_same_horizon_for_base_and_bad_scena
 
 def test_no_loan_on_time_is_recommended_over_borrowing():
     p = sim.Inputs(target=2e9, months=84, start_cash=600e6, income=80e6, spending=25e6, loan_term=240, target_growth=6, income_growth=5, spending_growth=4)
-    plans = _plans(build_card(p, "Nhà"))
+    plans = _plans(build_card(p, "Nhà", "goal-1"))
     assert plans["no_loan"]["verdict"] == "recommended"
     assert all(plans[k]["verdict"] == "ok" for k in ("loan_now", "optimized") if k in plans)
     p2 = sim.Inputs(target=300e6, months=36, start_cash=150e6, income=40e6, spending=15e6, loan_term=60)
-    assert _plans(build_card(p2, "Xe"))["no_loan"]["verdict"] == "recommended"
+    assert _plans(build_card(p2, "Xe", "goal-1"))["no_loan"]["verdict"] == "recommended"
 
 
 def test_risk_text_for_goal_reachable_now_has_no_year_zero():
     p = sim.Inputs(target=50e6, months=12, start_cash=200e6, income=40e6, spending=15e6, loan_term=60)
-    card = build_card(p, "Du lịch")
+    card = build_card(p, "Du lịch", "goal-1")
     assert not any("năm thứ 0" in s for s in _strings(card))
     assert "đã đủ tiền ngay từ bây giờ" in _plans(card)["no_loan"]["risk"]
 
@@ -158,16 +158,67 @@ def test_short_vnd_rounds_before_choosing_the_unit():
 
 
 def test_assets_the_customer_already_has_for_the_goal_move_the_plan_earlier():
-    without = build_card(FEASIBLE, "Căn hộ")
-    rich = build_card(replace(FEASIBLE, extra_assets=500_000_000), "Căn hộ")
+    without = build_card(FEASIBLE, "Căn hộ", "goal-1")
+    rich = build_card(replace(FEASIBLE, extra_assets=500_000_000), "Căn hộ", "goal-1")
     assert is_valid_ui(rich)
     assert "Đã tính 500 triệu tài sản sẵn có cho mục tiêu" in rich["assumptions"]
     nl_without, nl_rich = _plans(without)["no_loan"], _plans(rich)["no_loan"]
     assert nl_without["verdict"] == "late" and nl_rich["verdict"] == "recommended" and "tháng 88" in nl_rich["headline"]
     # with enough assets nobody needs a loan, so only the saving plan is left
-    assert [x["id"] for x in build_card(replace(FEASIBLE, extra_assets=1_500_000_000), "Căn hộ")["plans"]] == ["no_loan"]
+    assert [x["id"] for x in build_card(replace(FEASIBLE, extra_assets=1_500_000_000), "Căn hộ", "goal-1")["plans"]] == ["no_loan"]
 
 
 def test_the_extra_assets_never_fill_the_emergency_reserve():
     states, reserve = sim.accumulate(replace(FEASIBLE, extra_assets=100_000_000), 0)
     assert states[0][0] == min(FEASIBLE.start_cash, reserve) and states[0][1] >= 100_000_000
+
+
+def _month_checks(card):
+    for plan in card["plans"]:
+        for m in plan["milestones"]:
+            assert "month" in m, m
+            nums = [int(x) for x in re.findall(r"\d+", m["when"].split("(")[0])]
+            if m["kind"] == "reserve":
+                assert m["month"] == 0
+            elif m["kind"] in ("save", "repay") and len(nums) == 2:
+                assert (m["month"], m["end_month"]) == (nums[0], nums[1])
+            elif m["kind"] == "save":
+                assert m["month"] == 1 and "end_month" not in m
+            elif m["kind"] == "buy" and "hôm nay" not in m["when"] and nums:
+                assert m["month"] == nums[0]
+            elif m["kind"] in ("switch", "loan", "done"):
+                assert m["month"] == nums[0]
+            assert 0 <= m["month"] <= 480 and m.get("end_month", m["month"]) >= m["month"]
+
+
+@pytest.mark.parametrize("name", sorted(INPUTS))
+def test_every_milestone_has_months_matching_its_when(name):
+    card = build_card(INPUTS[name], "Căn hộ", "goal-1")
+    assert is_valid_ui(card)
+    _month_checks(card)
+
+
+def test_months_follow_the_story_of_the_optimized_plan():
+    card = build_card(FEASIBLE, "Căn hộ", "goal-1")
+    for plan in card["plans"]:
+        ms = {m["kind"]: m for m in plan["milestones"]}
+        if "loan" in ms:
+            pm = ms["buy"]["month"]
+            assert ms["loan"]["month"] == pm and ms["repay"]["month"] == pm + 1
+            assert ms["done"]["month"] == ms["repay"]["end_month"] == pm + FEASIBLE.loan_term
+        if "switch" in ms:
+            assert ms["switch"]["month"] == ms["buy"]["month"] - 12
+
+
+def test_months_are_clamped_to_480():
+    card = build_card(replace(FEASIBLE, months=470), "Căn hộ", "goal-1")
+    assert is_valid_ui(card)
+    assert all(m["month"] <= 480 and m.get("end_month", 0) <= 480 for x in card["plans"] for m in x["milestones"])
+
+
+def test_goal_id_is_required_and_cleaned():
+    card = build_card(FEASIBLE, "Căn hộ", goal_id="  g-42 ")
+    assert card["goal_id"] == "g-42" and is_valid_ui(card)
+    for bad in ("", "   ", "x" * 65):
+        with pytest.raises(ValueError):
+            build_card(FEASIBLE, "Căn hộ", goal_id=bad)

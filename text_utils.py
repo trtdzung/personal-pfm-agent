@@ -556,11 +556,21 @@ def _is_valid_plan_metric(raw: object) -> bool:
     return isinstance(raw, dict) and set(raw) == {"label", "value"} and _str_len(raw["label"], 30) and _str_len(raw["value"], 40)
 
 
+def _is_month(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 480
+
+
 def _is_valid_plan_milestone(raw: object) -> bool:
     if not isinstance(raw, dict):
         return False
     required = {"when", "kind", "title"}
-    if not required <= set(raw) or not set(raw) <= required | {"detail", "action"}:
+    if not required <= set(raw) or not set(raw) <= required | {"detail", "action", "month", "end_month"}:
+        return False
+    if "end_month" in raw and "month" not in raw:
+        return False
+    if "month" in raw and not _is_month(raw["month"]):
+        return False
+    if "end_month" in raw and not (_is_month(raw["end_month"]) and raw["end_month"] >= raw["month"]):
         return False
     return (
         _str_len(raw["when"], 30)
@@ -596,8 +606,10 @@ def _is_valid_plan_option(raw: object) -> bool:
 
 
 def _is_valid_plan_roadmap(raw: dict) -> bool:
-    required = {"type", "title", "baseline", "assumptions", "plans"}
-    if set(raw) != required:
+    # a roadmap is always tied to ONE existing goal (`goal_id`): no goal, no roadmap
+    if set(raw) != {"type", "goal_id", "title", "baseline", "assumptions", "plans"}:
+        return False
+    if not _str_len(raw["goal_id"], 64):
         return False
     if not (_str_len(raw["title"], 80) and _str_len(raw["baseline"], 200)):
         return False

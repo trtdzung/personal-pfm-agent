@@ -1,3 +1,4 @@
+from dataclasses import replace
 import hmac
 import inspect
 import logging
@@ -64,21 +65,22 @@ def _fresh_goals_read(user_id: str):
 
 
 def _ui_matches_turn(ui: dict, messages: list, user_id: str) -> bool:
-    """`ui_matches_facts` on what the turn read; a goal form from a turn that did NOT read the goals is checked against a fresh
-    read instead (same checks: the date is after pfm's today, ids exist), so a valid form is not lost to a skipped tool call."""
+    """`ui_matches_facts` on what the turn read; a goal form or plan roadmap from a turn that did NOT read the goals is checked
+    against a fresh read instead (same checks: the date is after pfm's today, the goal id exists), so a valid card is not lost to a
+    skipped tool call. Everything else the turn read (market, the plan card built by the tool) still counts."""
     facts = read_turn_facts(messages)
     if ui_matches_facts(ui, facts):
         return True
     if is_goal_form(ui) and facts.goals is None:
         fresh = _fresh_goals_read(user_id)
-        if fresh is not None and ui_matches_facts(ui, read_turn_facts([fresh])):
-            logger.info("goal form kept: checked against a fresh get_goals read, the model had skipped it")
+        if fresh is not None and ui_matches_facts(ui, replace(facts, goals=read_turn_facts([fresh]).goals)):
+            logger.info("goal card kept: checked against a fresh get_goals read, the model had skipped it")
             return True
     return False
 
 
 FORM_DROPPED_NOTE = (
-    "Lưu ý: mình chưa hiện được form ở lượt này vì chưa kiểm tra lại dữ liệu mục tiêu của bạn. "
+    "Lưu ý: mình chưa hiện được form hoặc lộ trình ở lượt này vì chưa kiểm tra lại dữ liệu mục tiêu của bạn. "
     "Bạn nhắn lại yêu cầu một lần nữa để mình đề xuất lại nhé."
 )
 

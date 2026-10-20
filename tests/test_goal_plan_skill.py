@@ -18,8 +18,9 @@ def test_frontmatter_says_when_to_use_it_and_that_it_only_proposes():
 def test_the_skill_carries_the_rules_the_card_flow_needs():
     for needle in (
         "build_goal_plan_card", "plan_roadmap", "quỹ dự phòng", "kịch bản gốc", "khẩu vị rủi ro", "trả vay", "get_goals",
-        "search_msb_knowledge", "other_goals_monthly_vnd", "extra_assets_vnd", "Mình đã tạo mục tiêu", "Có, mình có tài sản sẵn có", "từ **1 đến 3** phương án", "cần góp mỗi tháng", "12 đến 360", "tiền gửi online kỳ 12 tháng",
-        "simulate_goal_plan", "create_goal", "edit_goal", "Mục tiêu → Vay",
+        "search_msb_knowledge", "other_goals_monthly_vnd", "extra_assets_vnd", "Lộ trình luôn gắn với một mục tiêu đã có", "Chưa có mục tiêu khớp", "Có, mình có tài sản sẵn có", "từ **1 đến 3** phương án", "cần góp mỗi tháng", "12 đến 360", "tiền gửi online kỳ 12 tháng",
+        "simulate_goal_plan", "create_goal", "edit_goal", "Mục tiêu → Vay", "goal_id",
+        "không gửi tin nào về cho bạn", "không bao giờ", 'bấm "Chọn phương án này" để đặt lộ trình đó cho mục tiêu',
     ):
         assert needle in SKILL, needle
     assert "trả nợ" not in SKILL

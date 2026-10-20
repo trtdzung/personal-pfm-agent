@@ -239,6 +239,7 @@ _VERDICT_TEXT = {"recommended": "khuyến nghị", "ok": "phù hợp", "late": "
 @tool(response_format="content_and_artifact")
 def build_goal_plan_card(
     goal_name: str,
+    goal_id: str,
     target_amount_vnd: float,
     months_to_deadline: int,
     start_cash_vnd: float,
@@ -271,7 +272,13 @@ def build_goal_plan_card(
         deposit_rate_pct: Savings rate %/year (online 12 months). loan_rate_pct, loan_term_months (12-360): the loan.
         target_growth_pct, income_growth_pct, spending_growth_pct: yearly growth assumptions in percent (-20 to 30).
         reserve_months: Emergency reserve in months of spending (default 3).
+        goal_id: Id of the customer's EXISTING goal this roadmap is for, copied from get_goals (matched by name). Required: a roadmap always belongs to a goal; when the customer has no such goal yet, do not call this tool, propose creating the goal first (skill goal-manage).
     """
+    gid = (goal_id or "").strip()
+    if not gid:
+        return "Chưa có mục tiêu để gắn lộ trình: đề xuất khách tạo mục tiêu trước (skill goal-manage), rồi mới lập lộ trình. Đừng tự dựng thẻ.", None
+    if len(gid) > 64 or any(ord(ch) < 32 or ord(ch) == 127 for ch in goal_id or ""):
+        return _invalid("goal_id phải là mã mục tiêu từ get_goals (tối đa 64 ký tự, không có ký tự điều khiển)"), None
     if not _finite(
         target_amount_vnd, start_cash_vnd, monthly_income_vnd, monthly_spending_vnd, existing_debt_payment_vnd, deposit_rate_pct,
         loan_rate_pct, target_growth_pct, income_growth_pct, spending_growth_pct, reserve_months, other_goals_monthly_vnd, extra_assets_vnd,
@@ -299,7 +306,7 @@ def build_goal_plan_card(
         loan_term=loan_term_months, target_growth=target_growth_pct, income_growth=income_growth_pct,
         spending_growth=spending_growth_pct, reserve_months=reserve_months, other_goals=other_goals_monthly_vnd, extra_assets=extra_assets_vnd,
     )
-    card = build_card(p, goal_name)
+    card = build_card(p, goal_name, gid)
     lines = [f"Kịch bản gốc: {card['baseline']}."]
     lines += [f"- {x['name']} ({_VERDICT_TEXT[x['verdict']]}): {x['headline']}." for x in card["plans"]]
     best = next((x for x in card["plans"] if x["verdict"] == "recommended"), None)

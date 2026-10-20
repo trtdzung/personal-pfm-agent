@@ -27,6 +27,7 @@ def _plan(pid="optimized", verdict="recommended", **over):
 def _card(**over):
     card = {
         "type": "plan_roadmap",
+        "goal_id": "goal-1",
         "title": "Căn hộ 1,2 tỷ · 10 năm",
         "baseline": "Đạt mục tiêu ở tháng 150, trễ 30 tháng so với hạn",
         "assumptions": ["Lãi tiết kiệm 6,8%/năm", "Lãi vay 8%/năm"],
@@ -130,3 +131,34 @@ def test_blank_optional_strings_are_rejected():
             card = _card()
             card["plans"][0]["milestones"][0][key] = blank
             assert not is_valid_ui(card), (key, blank)
+
+
+def _with_ms(**extra):
+    card = copy.deepcopy(_card())
+    card["plans"][0]["milestones"][1].update(extra)
+    return card
+
+
+def test_milestone_months_are_optional_and_validated_and_the_goal_id_is_kept():
+    card = _card(goal_id="g-1")
+    card["plans"][0]["milestones"][0].update(month=0)
+    card["plans"][0]["milestones"][1].update(month=120, end_month=120)
+    assert is_valid_ui(card)
+    assert is_valid_ui(_with_ms(month=0)) and is_valid_ui(_with_ms(month=480, end_month=480)) and is_valid_ui(_with_ms(month=3, end_month=9))
+    assert is_valid_ui(_card(goal_id="x" * 64))
+
+
+@pytest.mark.parametrize("bad", [
+    _card(goal_id=""), _card(goal_id="  "), _card(goal_id="x" * 65), _card(goal_id=5), _card(goal_id=None),
+    _with_ms(month=True), _with_ms(month=1.0), _with_ms(month="1"), _with_ms(month=-1), _with_ms(month=481),
+    _with_ms(end_month=5), _with_ms(month=5, end_month=4), _with_ms(month=5, end_month=481), _with_ms(month=5, end_month=True),
+    _with_ms(month=5, end_month=6.0), _with_ms(month=None), _with_ms(month=1, extra=1),
+])
+def test_bad_goal_id_or_months_are_rejected(bad):
+    assert not is_valid_ui(bad)
+
+
+def test_a_roadmap_without_a_goal_id_is_refused():
+    card = _card()
+    del card["goal_id"]
+    assert not is_valid_ui(card)

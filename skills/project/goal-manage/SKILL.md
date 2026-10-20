@@ -61,7 +61,7 @@ Khách bấm "Chi tiết" trên thẻ M-You gợi ý, hoặc hỏi vì sao mục
 
 ### Sau khi khách xác nhận thẻ tạo mục tiêu
 
-Khách bấm xác nhận thẻ `create_goal` thì pfm tự gửi tin "Mình đã tạo mục tiêu «tên»." Lượt đó **thuộc skill `goal-plan`** (hỏi tài sản sẵn có rồi gợi ý lộ trình). Đừng hỏi hay gợi ý lộ trình ngay trong lượt đề xuất thẻ `create_goal`, và đừng tự thêm câu như vậy vào cuối câu trả lời có thẻ.
+Khách bấm xác nhận thẻ `create_goal` thì pfm tự tạo mục tiêu và **không gửi tin nào về cho bạn**. Khi khách muốn lộ trình cho mục tiêu đó, họ tự nhắn và lượt đó thuộc skill `goal-plan`. Đừng hỏi hay gợi ý lộ trình ngay trong lượt đề xuất thẻ `create_goal`, và đừng tự thêm câu như vậy vào cuối câu trả lời có thẻ.
 
 ### Khách chưa rõ giá — tra giá thị trường bằng `estimate_goal_price`
 

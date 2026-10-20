@@ -70,8 +70,9 @@ def _categories_known(category_ids: list, facts: TurnFacts) -> bool:
 
 
 def is_goal_form(ui: dict) -> bool:
-    """True for the goal / asset forms (`create_goal`, `edit_goal`, ...): the cards the customer is told to review and confirm."""
-    return isinstance(ui, dict) and ui.get("type") in _GOAL_KINDS
+    """True for the cards bound to the customer's goals: the goal / asset forms (`create_goal`, `edit_goal`, ...) and the plan
+    roadmap (it belongs to one goal). The customer is told to review and confirm them."""
+    return isinstance(ui, dict) and (ui.get("type") in _GOAL_KINDS or ui.get("type") == "plan_roadmap")
 
 
 def ui_matches_facts(ui: dict, facts: TurnFacts) -> bool:
@@ -98,8 +99,12 @@ def ui_matches_facts(ui: dict, facts: TurnFacts) -> bool:
     if kind in _GOAL_KINDS:
         return _goal_ui_matches(ui, facts)
     if kind == "plan_roadmap":
-        # the card is built by code: only the exact block `build_goal_plan_card` returned this turn is real
-        return facts.plan_cards is not None and ui in facts.plan_cards
+        # the card is built by code: only the exact block `build_goal_plan_card` returned this turn is real, and it must be
+        # for a goal the customer really has (read this turn)
+        if facts.plan_cards is None or ui not in facts.plan_cards or facts.goals is None:
+            return False
+        goal = next((g for g in facts.goals["goals"] if g["id"] == ui.get("goal_id")), None)
+        return goal is not None and goal["status"] in _CHANGEABLE_STATUSES
     return True
 
 

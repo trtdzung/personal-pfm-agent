@@ -43,6 +43,12 @@ BAD_LOAN_RATE_DELTA = 2
 BAD_DEPOSIT_RATE_DELTA = 1
 RISK_PREFIX = "Nếu thu nhập không tăng, lãi vay +2 điểm và lãi tiết kiệm -1 điểm: "
 MAX_MILESTONES = 10
+MAX_MONTH = 480
+MAX_GOAL_ID = 64
+
+
+def _mo(m: int) -> int:
+    return max(0, min(MAX_MONTH, m))
 
 
 def _year(m: int) -> int:
@@ -96,7 +102,7 @@ def _milestones(p: sim.Inputs, pm: int, reserve: float, loan: dict | None, loan_
     out: list[dict] = []
     if reserve > 0:
         have = min(p.start_cash, reserve)
-        out.append(dict(when="Tháng 0", kind="reserve", title="Lập quỹ dự phòng", detail=f"Cần {short_vnd(reserve)}, đang có {short_vnd(have)} (chưa tính vào mục tiêu)"))
+        out.append(dict(when="Tháng 0", kind="reserve", title="Lập quỹ dự phòng", month=0, detail=f"Cần {short_vnd(reserve)}, đang có {short_vnd(have)} (chưa tính vào mục tiêu)"))
     s1 = sim.surplus(p, 1)
     if pm >= 1:
         save = dict(when="Tháng 1" if pm == 1 else f"Tháng 1–{pm}", kind="save", title="Góp phần còn dư vào tiết kiệm")
@@ -105,15 +111,18 @@ def _milestones(p: sim.Inputs, pm: int, reserve: float, loan: dict | None, loan_
             save["action"] = f"Góp khoảng {short_vnd(s1)}/tháng vào tiết kiệm MSB"
         else:
             save["detail"] = "Phần còn dư hằng tháng chưa dương"
+        save["month"] = 1
+        if pm > 1:
+            save["end_month"] = _mo(pm)
         out.append(save)
     if pm > 12:
-        out.append(dict(when=f"Tháng {pm - 12}", kind="switch", title="Còn 12 tháng đến lúc mua", action="Chuyển phần tiết kiệm sang kỳ hạn ngắn"))
-    out.append(dict(when="Tháng 0" if pm == 0 else f"Tháng {pm} (năm thứ {_year(pm)})", kind="buy", title="Mua mục tiêu"))
+        out.append(dict(when=f"Tháng {pm - 12}", kind="switch", month=_mo(pm - 12), title="Còn 12 tháng đến lúc mua", action="Chuyển phần tiết kiệm sang kỳ hạn ngắn"))
+    out.append(dict(when="Tháng 0" if pm == 0 else f"Tháng {pm} (năm thứ {_year(pm)})", kind="buy", month=_mo(pm), title="Mua mục tiêu"))
     if loan is not None and loan["loan"] > 0:
         term = p.loan_term
-        out.append(dict(when=f"Tháng {pm}", kind="loan", title=f"Vay {short_vnd(loan['loan'])}", detail=loan_why, action="Làm hồ sơ vay ở Mục tiêu → Vay"))
-        out.append(dict(when=f"Tháng {pm + 1}–{pm + term}", kind="repay", title="Trả vay", detail=f"Trả vay {short_vnd(loan['payment'])}/tháng"))
-        out.append(dict(when=f"Tháng {pm + term}", kind="done", title="Tất toán khoản vay"))
+        out.append(dict(when=f"Tháng {pm}", kind="loan", month=_mo(pm), title=f"Vay {short_vnd(loan['loan'])}", detail=loan_why, action="Làm hồ sơ vay ở Mục tiêu → Vay"))
+        out.append(dict(when=f"Tháng {pm + 1}–{pm + term}", kind="repay", month=_mo(pm + 1), end_month=_mo(pm + term), title="Trả vay", detail=f"Trả vay {short_vnd(loan['payment'])}/tháng"))
+        out.append(dict(when=f"Tháng {pm + term}", kind="done", month=_mo(pm + term), title="Tất toán khoản vay"))
     for m in out:
         if not m.get("detail"):
             m.pop("detail", None)
@@ -156,7 +165,7 @@ def _deadline(months: int) -> str:
     return f"{months // 12} năm" if months >= 12 and months % 12 == 0 else f"{months} tháng"
 
 
-def build_card(p: sim.Inputs, goal_name: str) -> dict:
+def build_card(p: sim.Inputs, goal_name: str, goal_id: str) -> dict:
     base = _runs(p)
     bad = _runs(replace(p, income_growth=0, loan_rate=p.loan_rate + BAD_LOAN_RATE_DELTA, deposit_rate=max(0, p.deposit_rate - BAD_DEPOSIT_RATE_DELTA)))
     nl, now, opt = base["nl"], base["now"], base["opt"]
@@ -236,4 +245,7 @@ def build_card(p: sim.Inputs, goal_name: str) -> dict:
     name = goal_name.strip() or "Mục tiêu"
     if len(name) + len(suffix) > 80:
         name = name[: 80 - len(suffix) - 1].rstrip() + "…"
-    return dict(type="plan_roadmap", title=name + suffix, baseline=baseline[:200], assumptions=assumptions[:8], plans=plans)
+    gid = (goal_id or "").strip()
+    if not gid or len(gid) > MAX_GOAL_ID:
+        raise ValueError("a roadmap needs the id (<= 64 chars) of the goal it is for")
+    return dict(type="plan_roadmap", goal_id=gid, title=name + suffix, baseline=baseline[:200], assumptions=assumptions[:8], plans=plans)
