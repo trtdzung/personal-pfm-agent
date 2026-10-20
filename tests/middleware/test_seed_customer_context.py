@@ -20,13 +20,14 @@ def _raise_connect_error(*args, **kwargs):
 
 
 def _pfm_router(account_summary=None, transactions=None, categories=None, fail_url_substring=None):
-    """Fake httpx.get() dispatching by URL suffix, matching the 3 real calls
-    fetch_live_account_snapshot makes (tools/customer_data_tools.py)."""
+    """Fake httpx.get() dispatching the clock and live account snapshot calls by URL suffix."""
 
     def _get(url, params=None, timeout=None):
         if fail_url_substring and fail_url_substring in url:
             raise httpx.ConnectError(f"pfm unreachable (test): {url}")
-        if url.endswith("/api/account-summary"):
+        if url.endswith("/api/clock"):
+            payload = {"today": "2026-09-15"}
+        elif url.endswith("/api/account-summary"):
             payload = account_summary
         elif url.endswith("/api/transactions-full"):
             payload = transactions
