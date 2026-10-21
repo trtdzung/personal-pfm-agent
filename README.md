@@ -47,6 +47,19 @@ Mô hình chỉ diễn giải và soạn lời. Mọi con số tài chính (số
 | Kịch bản lừa đảo `data/fraud_playbook.json` | Tự soạn (nhãn `source: mock`) | Do đội soạn, phiên bản 2026-10-15. |
 | Dữ liệu khách theo thời gian thực | API của repo `pfm` | Agent đọc qua `PFM_BASE_URL`; nguồn gốc dữ liệu pfm xem README của repo `pfm`. |
 
+## Ghi chú bảo mật: thông tin xác thực đã lộ trong lịch sử git đã bị thu hồi
+
+Notebook thử nghiệm `notebooks/greennode_agentbase_test.ipynb` từng chứa trực tiếp Client Secret của ứng dụng xác thực máy-với-máy dùng để gọi agent, cùng một token truy cập (đã hết hạn từ trước). Hai commit liên quan là `0a25fc0` và `8b162b3` (17/10/2026), nên giá trị này vẫn đọc được trong lịch sử git.
+
+Cách xử lý, hoàn tất ngày 21/10/2026:
+
+- **Đã thu hồi (xoay) Client Secret** trên nhà cung cấp xác thực, rồi cập nhật secret mới vào biến môi trường của các dịch vụ dùng nó.
+- **Đã xóa notebook** khỏi nhánh hiện tại. Thông tin xác thực chỉ đi qua biến môi trường; `.env` nằm trong `.gitignore`.
+- **Đã kiểm chứng:** lúc 08:51 ngày 21/10/2026, gửi yêu cầu cấp token (client credentials) tới nhà cung cấp xác thực với đúng secret lấy từ commit `8b162b3` thì bị từ chối bằng **HTTP 401 `access_denied`**. Vì vậy các commit cũ chỉ còn chứa một khóa vô hiệu, không dùng được để truy cập hệ thống.
+- **Tự kiểm tra lại:** đọc secret cũ bằng `git show 8b162b3:notebooks/greennode_agentbase_test.ipynb`, rồi gửi yêu cầu cấp token với secret đó tới tenant xác thực của dự án, kết quả vẫn là 401.
+
+Lịch sử git không bị viết lại, nên hai commit trên vẫn tồn tại; việc thu hồi khóa là biện pháp bảo vệ, không phải việc xóa commit.
+
 ## Prerequisites
 
 - Python 3.11+ and [`uv`](https://docs.astral.sh/uv/)
