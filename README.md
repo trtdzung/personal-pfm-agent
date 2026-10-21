@@ -1,4 +1,4 @@
-# personal-card-agent — Managed Deep Agents personal card assistant
+# personal-pfm-agent — Managed Deep Agents personal finance assistant
 
 A [Managed Deep Agents](https://docs.langchain.com/langsmith/python/managed-deep-agents-overview)
 (MDA) project: a card-finance assistant that answers a customer's spending,
@@ -13,11 +13,44 @@ projects — in this layout, **the directory a file lives in determines its
 role** (tools, middleware, identity, memory, schedules, ...). This repo is
 hand-authored to match the same shape `mda init` would scaffold, so you can
 use it as a reference or delete pieces you don't need.
+lệch
+
+## Khai báo xuất xứ code và nguồn dữ liệu
+
+### 1. Xuất xứ code
+
+| Thành phần | Nguồn |
+| ---------- | ----- |
+| Khung dự án | Cấu trúc thư mục theo mẫu quickstart của [Managed Deep Agents](https://docs.langchain.com/langsmith/python/managed-deep-agents-quickstart) (LangChain, mẫu `research-assistant`), dựng lại thủ công theo cùng hình dạng rồi sửa thành trợ lý tài chính MSB. Tài liệu tham khảo nằm ở mục `Sources` cuối README. |
+| Thư viện bên thứ ba | `deepagents`, `langchain`, `langchain-core`, `langchain-openai`, `fastapi`, `uvicorn`, `greennode-agent-bridge` (phiên bản ghim trong `requirements.txt`). |
+| Do đội viết trong repo này | Máy chủ `server.py`; các tool trong `tools/` (đọc dữ liệu pfm, mô phỏng lộ trình tiết kiệm và vay `tools/goal_plan_*`, tra cứu kiến thức MSB); các skill nghiệp vụ `skills/` và `instructions.md`; phát hiện lừa đảo `fraud/`; kiểm tra đầu ra `ui_guard.py`, `guardrails.py`; các bản vá chạy lúc khởi động cho `greennode-agent-bridge` (`checkpointer_*.py`); bộ kiểm thử `tests/`. |
+| Công cụ AI hỗ trợ lập trình | Một phần mã được viết với sự hỗ trợ của Claude (Anthropic) và Cursor; các dòng `Co-Authored-By` trong lịch sử git ghi lại những commit có sự tham gia đó. Đội chịu trách nhiệm về toàn bộ mã nộp, phần logic tài chính quan trọng có kiểm thử trong `tests/`. |
+
+### 2. Mô hình LLM sử dụng
+
+| Mục đích | Mô hình | Nơi chạy |
+| -------- | ------- | -------- |
+| Trợ lý chat chính (`POST /chat`) | `z-ai/glm-5.2-hackathon` (mặc định, đổi bằng `LLM_MODEL`) | GreenNode / VNG Cloud AI Platform (Model-as-a-Service) |
+| Gợi ý mục tiêu, ước tính giá, hiểu ý định của coach mục tiêu | `google/gemma-4-31b-it` (đổi bằng `GOAL_COACH_MODEL`, `GOAL_PRICE_MODEL`, `GOAL_SUGGEST_MODEL`) | GreenNode / VNG Cloud MaaS |
+| Các tính năng phụ còn lại (cân đối hũ, chống lừa đảo, insight, proactive) | Mô hình mặc định của agent (GLM-5.2) | GreenNode / VNG Cloud MaaS |
+
+Mô hình chỉ diễn giải và soạn lời. Mọi con số tài chính (số dư, lộ trình, khoản trả vay, lãi) do code tính trong `tools/`, và thẻ lộ trình do tool dựng rồi máy chủ gắn vào câu trả lời, không do mô hình tự viết.
+
+### 3. Nguồn dữ liệu
+
+| Dữ liệu | Loại | Chi tiết |
+| ------- | ---- | -------- |
+| Hồ sơ khách hàng `data/customers/CIF_0001` đến `CIF_0004` | Giả lập (synthetic) | Bốn persona mẫu. Tài khoản, giao dịch và tổng hợp chi tiêu được đồng bộ từ cơ sở dữ liệu prototype của repo `pfm` (bản ghi gắn nhãn `source: mock`); thẻ, sao kê và thông tin cá nhân là dữ liệu minh họa. Không dùng dữ liệu khách hàng thật của MSB. |
+| Kiến thức sản phẩm MSB `data/msb_knowledge/pages/` | Crawl từ nguồn công khai | 77 trang của `www.msb.com.vn/khach-hang-ca-nhan/` cùng các PDF biểu phí có lớp chữ, lấy ngày 19/09/2026 bằng TinyFish Fetch (`scripts/sync_msb_knowledge.py`). Mỗi đoạn trích dẫn kèm URL nguồn và ngày lấy. |
+| Lãi suất tiền gửi `data/msb_knowledge/curated/*.md` | Chép tay từ văn bản công khai | Các quyết định lãi suất của MSB phát hành dưới dạng ảnh scan (ví dụ QĐ 4144, QĐ 2896) được đội chép tay; mỗi bản chép ghi mã sha256 của PDF gốc để phát hiện văn bản đổi. |
+| Tin tức thị trường (tool `search_market_news`) | Crawl lúc chạy, tùy chọn | `cafef.vn`, `vietstock.vn`, `tuoitre.vn` qua TinyFish; không có khóa thì tool trả "chưa cấu hình". |
+| Kịch bản lừa đảo `data/fraud_playbook.json` | Tự soạn (nhãn `source: mock`) | Do đội soạn, phiên bản 2026-10-15. |
+| Dữ liệu khách theo thời gian thực | API của repo `pfm` | Agent đọc qua `PFM_BASE_URL`; nguồn gốc dữ liệu pfm xem README của repo `pfm`. |
 
 ## Prerequisites
 
 - Python 3.11+ and [`uv`](https://docs.astral.sh/uv/)
-- An OpenAI API key (the example agent uses `openai:gpt-5.5`)
+- A GreenNode AI Platform (MaaS) API key (`AI_PLATFORM_API_KEY`)
 - A [LangSmith](https://smith.langchain.com/) account + API key (needed to
   run `mda dev` / `mda deploy`, even for local dev)
 
@@ -31,7 +64,7 @@ uv tool install managed-deepagents
 uv sync
 
 # 3. Fill in your keys
-#    edit .env and set OPENAI_API_KEY and LANGSMITH_API_KEY
+#    edit .env and set AI_PLATFORM_API_KEY and LANGSMITH_API_KEY
 ```
 
 ## Testing
@@ -105,18 +138,11 @@ its own `Dockerfile`.
 `AI_PLATFORM_API_KEY`):
 
 - `AI_PLATFORM_API_KEY` -- API key for GreenNode's VNG Cloud AI Platform
-  (Model-as-a-Service) endpoint, used via `ChatOpenAI(base_url=..., api_key=...)`
-  pointed at `https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1` (OpenAI-compatible).
+  (Model-as-a-Service) endpoint, called through the chat-completions client of
+  `langchain-openai` pointed at `https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1`.
   Get it from the GreenNode console's API key / Model as a Service section.
 - `LLM_MODEL` -- optional, model path passed to the MaaS endpoint. Defaults
   to `z-ai/glm-5.2-hackathon` if unset.
-- `CHAT_LLM_PROVIDER=openai` + `OPENAI_API_KEY` -- optional, run the `/chat` agent on
-  OpenAI (`gpt-5.5`, reasoning `none`; override with `CHAT_LLM_OPENAI_MODEL` /
-  `CHAT_LLM_OPENAI_REASONING`) instead of GLM. Both are needed: without the flag or with an
-  empty key the agent falls back to GLM. While it runs on OpenAI, a call that fails
-  (connection, timeout, rate limit, 5xx, auth) is answered by GLM instead, and OpenAI is skipped for
-  60s after a failure. Only the main chat agent changes; jar rebalance,
-  fraud, coach and the other side features stay on GLM. `/health` shows the active model.
 - `TINYFISH_API_KEY` -- optional at runtime. Only `tools/market_news_tools.py`
   (public Vietnamese market news from cafef.vn / vietstock.vn / tuoitre.vn, as
   background for the `investment-guidance` skill) calls TinyFish while the agent
@@ -245,7 +271,7 @@ its own conversation history, persisted in GreenNode AgentBase Memory (via
 never see each other's history even if they reuse the same `thread_id`.
 `user_id` is supplied by the caller (this server does not attempt to derive
 it from GreenNode's injected `X-GreenNode-AgentBase-User-Id` header, since
-this deployment authenticates callers via a single Auth0 machine-to-machine
+this deployment authenticates callers via a single machine-to-machine
 client rather than per-end-user tokens).
 
 CI (`.github/workflows/docker-build.yml`) runs the server's tests, builds,
@@ -283,7 +309,7 @@ done. Tail logs with `mda logs .`, remove the deployment with `mda delete .`.
 │   ├── jar_rebalance.md      #   POST /jar-rebalance: one jar gives money to other jars
 │   └── jar_distribute.md     #   POST /jar-distribute: unallocated money into jars
 ├── pyproject.toml           # dependencies + packaging (includes data/customer_data.json)
-├── .env                     # OPENAI_API_KEY / LANGSMITH_API_KEY (never committed)
+├── .env                     # AI_PLATFORM_API_KEY / LANGSMITH_API_KEY (never committed)
 │
 ├── data/
 │   └── customer_data.json   # sample customer data, re-read into every session
