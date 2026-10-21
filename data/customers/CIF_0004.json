@@ -34,8 +34,8 @@
       "card_number_last4": "3391",
       "card_type": "credit",
       "credit_limit_vnd": 80000000,
-      "current_balance_vnd": 34500000,
-      "available_credit_vnd": 45500000,
+      "current_balance_vnd": 0,
+      "available_credit_vnd": 80000000,
       "annual_fee_vnd": 1200000,
       "interest_rate_annual_percent": 26.4,
       "statement_closing_day": 20,
@@ -89,10 +89,10 @@
       "total_due_vnd": 18200000,
       "due_date": "2026-07-10",
       "min_payment_vnd": 910000,
-      "amount_paid_vnd": 9100000,
-      "paid_percent": 50,
-      "interest_charged_next_cycle_vnd": 245000,
-      "status": "paid_partial"
+      "amount_paid_vnd": 18200000,
+      "paid_percent": 100,
+      "interest_charged_next_cycle_vnd": 0,
+      "status": "paid_full"
     },
     {
       "card_id": "card_001",
@@ -101,10 +101,10 @@
       "total_due_vnd": 21400000,
       "due_date": "2026-08-10",
       "min_payment_vnd": 1070000,
-      "amount_paid_vnd": 0,
-      "paid_percent": 0,
-      "interest_charged_next_cycle_vnd": null,
-      "status": "current_unpaid"
+      "amount_paid_vnd": 21400000,
+      "paid_percent": 100,
+      "interest_charged_next_cycle_vnd": 0,
+      "status": "paid_full"
     }
   ],
   "monthly_spending_summary": {

@@ -305,6 +305,9 @@ def get_goal_market(query: str = "") -> tuple[str, list | None]:
     Call this before add_asset for gold / stock / external_fund, to get the exact `id` (`instrumentId`) and the unit. `query`
     narrows the list by name, id or kind ("vàng", "ACB", "quỹ"); only the first lines are shown, so narrow it when the list is
     long. The price is information for the customer, never a price you set. Copy ids exactly.
+
+    Also use it to ANSWER a customer who asks for today's price of gold, a stock or a fund: give the name, unit and price and say it
+    is a reference price from the system's data, possibly delayed. No match: say there is no data for that instrument.
     """
     try:
         items = market_list(fetch_goals_snapshot(_resolve_customer_id()))

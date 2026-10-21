@@ -117,13 +117,18 @@ def test_instructions_no_longer_describes_research_assistant():
     assert "internet search" not in text
 
 
-def test_instructions_mark_plain_market_news_as_out_of_scope_and_tools_as_background_only():
+def test_instructions_let_customers_ask_for_market_prices_and_news_without_giving_advice():
     text = _text()
-    assert "Tin tức/diễn biến thị trường đơn thuần không phải phạm vi hỗ trợ" in text
-    assert "chỉ làm bối cảnh cho gợi ý đầu tư" in text
-    # boundary: an investment decision that merely mentions the market is NOT plain news
-    assert "**không phải** tin tức đơn thuần" in text
+    assert "Khách được hỏi thông tin thị trường — hãy trả lời, đừng từ chối" in text
+    assert "không phải phạm vi hỗ trợ" not in text and "chỉ làm bối cảnh cho gợi ý đầu tư" not in text
+    # prices come from get_goal_market, news from search_market_news / read_market_article
+    assert "gọi `get_goal_market` với từ khoá khách nói" in text and "gọi `search_market_news` với từ khoá công khai" in text
+    # information only: no buy/sell advice, no price targets, no guaranteed returns
+    assert "**Không** khuyên mua/bán một mã cụ" in text and "**không** dự đoán giá" in text
+    # boundary: an investment decision that merely mentions the market goes to investment-guidance
+    assert "**không phải** hỏi đáp thị trường thuần túy" in text
     assert "Đừng từ chối cả câu chỉ vì có nhắc tới diễn biến thị trường" in text
+    assert "**Thông tin thị trường**" in text  # listed among the supported topics
     # market-news is no longer a skill customers can trigger
     assert "`market-news`" not in text
     assert not (SKILLS_DIR / "market-news").exists()

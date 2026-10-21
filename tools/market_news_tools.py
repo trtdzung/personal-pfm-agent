@@ -1,9 +1,9 @@
 """Public market-news tools backed by TinyFish Search + Fetch (free tier).
 
-Scope is deliberately narrow: these tools exist ONLY as background for the
-investment-guidance skill (skills/project/investment-guidance/SKILL.md) --
-customers are not meant to ask for plain market news (instructions.md, "Quy
-tắc cứng"). Three guardrails live in code, not in the prompt, so a
+These tools answer customers' questions about market developments and news
+(instructions.md, "Quy tắc cứng" 4) and also serve as background for the
+investment-guidance skill (skills/project/investment-guidance/SKILL.md).
+Information only: no buy/sell advice. Three guardrails live in code, not in the prompt, so a
 prompt-injected page or a confused model cannot bypass them:
 
 - The searchable/fetchable domains are a fixed allowlist (`ALLOWED_DOMAINS`);
@@ -122,9 +122,9 @@ def search_market_news(query: str, days: int = DEFAULT_DAYS) -> str:
     tuoitre.vn only) for a public market topic, e.g. "VN-Index", "lãi suất
     Fed", "cổ phiếu ngân hàng".
 
-    Only as background for investment guidance -- not for answering plain
-    market-news questions. Returns a numbered list of headlines with
-    publisher, date and URL. Use `read_market_article` on 1-2 of the URLs
+    Use it to answer a customer's question about market developments or news,
+    and as background for investment guidance. Returns a numbered list of
+    headlines with publisher, date and URL. Use `read_market_article` on 1-2 of the URLs
     when you need the details.
 
     The query is sent to a third-party search service: put only generic,

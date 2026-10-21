@@ -5,9 +5,9 @@ description: Dùng khi khách hàng hỏi nên đầu tư / tiết kiệm / làm
 
 # Investment guidance — trả lời câu hỏi trước, lựa chọn sau, tình hình khách cuối
 
-Tin tức thị trường chỉ là **nguyên liệu nội bộ**; khách không hỏi tin tức đơn
-thuần (xem Quy tắc cứng trong `instructions.md`). Câu có quyết định/mục tiêu đầu
-tư của khách thuộc skill này.
+Khách được hỏi thông tin thị trường thuần túy (giá, tin tức): trả lời theo Quy
+tắc cứng 4 trong `instructions.md`, không cần skill này. Câu có quyết định/mục
+tiêu đầu tư của khách thuộc skill này, và tin tức chỉ là bối cảnh cho gợi ý.
 
 ## Được phép và giới hạn cứng
 
