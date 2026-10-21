@@ -48,6 +48,10 @@ MAX_ARTICLE_AGE_DAYS = 4
 MAX_RESULTS = 8
 MAX_ARTICLE_CHARS = 6000
 SEARCH_TIMEOUT_SECONDS = 15.0
+# TinyFish Search intermittently answers 200 with an empty list for the same query. Measured 2026-10-21 against the live API:
+# with `domain_type=news` only 4 of 10 searches returned articles, without it 10 of 10, so that parameter is NOT sent (the
+# allowlist is enforced by `include_domains` and again on every result), and an empty answer is retried once.
+EMPTY_RETRIES = 1
 FETCH_TIMEOUT_SECONDS = 40.0
 SEARCH_CACHE_TTL_SECONDS = 300.0
 
@@ -163,22 +167,26 @@ def search_market_news(query: str, days: int = DEFAULT_DAYS) -> str:
     if cached and time.monotonic() - cached[0] < SEARCH_CACHE_TTL_SECONDS:
         return cached[1]
 
+    results: list = []
     try:
-        response = httpx.get(
-            SEARCH_URL,
-            params={
-                "query": query,
-                "domain_type": "news",
-                "location": "VN",
-                "language": "vi",
-                "include_domains": ",".join(ALLOWED_DOMAINS),
-                "recency_minutes": days * 24 * 60,
-            },
-            headers={"X-API-Key": key},
-            timeout=SEARCH_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        results = response.json().get("results", [])
+        for _attempt in range(EMPTY_RETRIES + 1):
+            response = httpx.get(
+                SEARCH_URL,
+                params={
+                    "query": query,
+                    "location": "VN",
+                    "language": "vi",
+                    "include_domains": ",".join(ALLOWED_DOMAINS),
+                    "recency_minutes": days * 24 * 60,
+                },
+                headers={"X-API-Key": key},
+                timeout=SEARCH_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            # keep only the allowlisted publishers: the search does not always honour `include_domains`
+            results = [item for item in response.json().get("results", []) if _host_allowed(item.get("url") or "")]
+            if results:
+                break
     except httpx.HTTPError as exc:
         return (
             "Không tra cứu được tin tức thị trường lúc này (lỗi kết nối tới "
@@ -187,22 +195,22 @@ def search_market_news(query: str, days: int = DEFAULT_DAYS) -> str:
         )
 
     if not results:
-        text = f"Không tìm thấy tin nào về \"{query}\" trong {days} ngày gần đây."
-    else:
-        lines = []
-        for item in results:
-            age = _age_days(item.get("published_date"))
-            if age is not None and age > MAX_ARTICLE_AGE_DAYS:
-                continue
-            publisher = item.get("publisher") or item.get("site_name") or ""
-            meta = " | ".join(part for part in (publisher, item.get("published_date")) if part)
-            lines.append(f"{len(lines) + 1}. {item.get('title', '')} ({meta})\n   {item.get('url', '')}")
-            if len(lines) >= MAX_RESULTS:
-                break
-        text = "\n".join(lines) or (
-            f"Không có bài nào trong {MAX_ARTICLE_AGE_DAYS} ngày gần đây về \"{query}\" -- "
-            "không có bối cảnh thị trường mới; đừng dùng tin cũ."
-        )
+        # NOT cached: an empty answer is often a hiccup of the search service, not a fact about the news
+        return f"Không tìm thấy tin nào về \"{query}\" trong {days} ngày gần đây."
+    lines = []
+    for item in results:
+        age = _age_days(item.get("published_date"))
+        if age is not None and age > MAX_ARTICLE_AGE_DAYS:
+            continue
+        publisher = item.get("publisher") or item.get("site_name") or ""
+        meta = " | ".join(part for part in (publisher, item.get("published_date")) if part)
+        lines.append(f"{len(lines) + 1}. {item.get('title', '')} ({meta})\n   {item.get('url', '')}")
+        if len(lines) >= MAX_RESULTS:
+            break
+    text = "\n".join(lines) or (
+        f"Không có bài nào trong {MAX_ARTICLE_AGE_DAYS} ngày gần đây về \"{query}\" -- "
+        "không có bối cảnh thị trường mới; đừng dùng tin cũ."
+    )
     _search_cache[cache_key] = (time.monotonic(), text)
     return text
 

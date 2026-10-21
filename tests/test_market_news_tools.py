@@ -42,7 +42,7 @@ def test_search_sends_fixed_allowlist_and_vietnam_filters(monkeypatch):
     assert captured["url"] == mnt.SEARCH_URL
     assert captured["headers"] == {"X-API-Key": "test-key"}
     assert captured["params"]["include_domains"] == ",".join(ALLOWED_DOMAINS)
-    assert captured["params"]["domain_type"] == "news"
+    assert "domain_type" not in captured["params"]  # it made TinyFish return empty lists (4/10 vs 10/10 without)
     assert captured["params"]["location"] == "VN"
     assert captured["params"]["language"] == "vi"
     assert captured["params"]["recency_minutes"] == 2 * 24 * 60
@@ -72,7 +72,7 @@ def test_search_clamps_days_to_allowed_range(monkeypatch):
 
     def _fake_get(url, params=None, headers=None, timeout=None):
         seen.append(params["recency_minutes"])
-        return httpx.Response(200, json={"results": []}, request=httpx.Request("GET", url))
+        return httpx.Response(200, json={"results": [{"title": "T", "url": "https://cafef.vn/a.chn"}]}, request=httpx.Request("GET", url))
 
     monkeypatch.setattr("tools.market_news_tools.httpx.get", _fake_get)
     search_market_news.invoke({"query": "a", "days": 9999})
@@ -129,7 +129,7 @@ def test_search_caches_identical_queries(monkeypatch):
 
     def _fake_get(url, params=None, headers=None, timeout=None):
         calls.append(1)
-        return httpx.Response(200, json={"results": []}, request=httpx.Request("GET", url))
+        return httpx.Response(200, json={"results": [{"title": "T", "url": "https://cafef.vn/a.chn"}]}, request=httpx.Request("GET", url))
 
     monkeypatch.setattr("tools.market_news_tools.httpx.get", _fake_get)
     search_market_news.invoke({"query": "VN-Index", "days": 3})
@@ -140,6 +140,44 @@ def test_search_caches_identical_queries(monkeypatch):
 def test_search_reports_no_results(monkeypatch):
     monkeypatch.setattr("tools.market_news_tools.httpx.get", _search_response([]))
     assert "Không tìm thấy tin nào" in search_market_news.invoke({"query": "zzz"})
+
+
+def test_search_retries_once_when_the_service_answers_with_an_empty_list(monkeypatch):
+    answers = [[], [{"title": "VN-Index tăng", "url": "https://cafef.vn/a.chn"}]]
+    calls = []
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        calls.append(1)
+        return httpx.Response(200, json={"results": answers[len(calls) - 1]}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.market_news_tools.httpx.get", _fake_get)
+    assert "1. VN-Index tăng" in search_market_news.invoke({"query": "VN-Index"})
+    assert len(calls) == 2
+
+
+def test_an_empty_answer_is_not_cached(monkeypatch):
+    calls = []
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        calls.append(1)
+        return httpx.Response(200, json={"results": []}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("tools.market_news_tools.httpx.get", _fake_get)
+    for _ in range(2):
+        assert "Không tìm thấy tin nào" in search_market_news.invoke({"query": "VN-Index"})
+    assert len(calls) == 2 * (mnt.EMPTY_RETRIES + 1)  # nothing remembered between the two searches
+
+
+def test_results_from_outside_the_allowlist_are_dropped(monkeypatch):
+    monkeypatch.setattr(
+        "tools.market_news_tools.httpx.get",
+        _search_response([
+            {"title": "Ngoài danh sách", "url": "https://evil.example.com/x"},
+            {"title": "Trong danh sách", "url": "https://vietstock.vn/y.htm"},
+        ]),
+    )
+    result = search_market_news.invoke({"query": "VN-Index"})
+    assert "Trong danh sách" in result and "Ngoài danh sách" not in result and "evil.example.com" not in result
 
 
 # --- read_market_article ---
