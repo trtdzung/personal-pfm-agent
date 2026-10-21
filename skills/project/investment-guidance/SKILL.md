@@ -98,8 +98,9 @@ Thứ tự **bắt buộc**:
    không liệt kê từng mốc.
 3. **Tình hình hiện tại của khách (1–2 câu)**: dư nợ thẻ lãi cao, quỹ dự phòng, vốn
    đề xuất; đưa ra hành động ưu tiên (ví dụ dùng nửa còn lại để trả nợ trước). Cuối
-   cùng một câu cảnh báo: đầu tư có thể lỗ, đây là gợi ý tham khảo, điều kiện cụ thể
-   xác nhận tại app MSB/tư vấn viên.
+   cùng một câu cảnh báo: đầu tư có thể lỗ, điều kiện cụ thể xác nhận tại app
+   MSB/tư vấn viên. Sau đó xuống dòng, kết thúc bằng đúng dòng riêng:
+   "*Thông tin chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.*"
 
 **In đậm** 3–5 cụm quan trọng nhất (con số kết luận, tên phương án/sản phẩm, hành động
 ưu tiên); không in đậm cả câu, không in đậm chữ thường.
@@ -137,7 +138,9 @@ Bạn cũng có thể **để dành ~3 triệu mỗi tháng** từ khoản dư c
 
 Bạn đang nợ thẻ **21,4 triệu** lãi ~26%/năm, nên hãy dùng phần 30 triệu còn lại để **trả nợ trước**.
 
-Đầu tư có thể lỗ vốn; đây chỉ là gợi ý tham khảo, bạn nên xác nhận với tư vấn viên MSB.
+Đầu tư có thể lỗ vốn; bạn nên xác nhận với tư vấn viên MSB.
+
+*Thông tin chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.*
 ```
 
 (Trong câu trả lời thật KHÔNG có dấu ``` — đó chỉ để ví dụ này hiển thị đúng các dòng trống.)
