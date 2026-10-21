@@ -13,11 +13,12 @@ projects — in this layout, **the directory a file lives in determines its
 role** (tools, middleware, identity, memory, schedules, ...). This repo is
 hand-authored to match the same shape `mda init` would scaffold, so you can
 use it as a reference or delete pieces you don't need.
-lệch
 
 ## Khai báo xuất xứ code và nguồn dữ liệu
 
 ### 1. Xuất xứ code
+
+**Lịch sử phát triển.** Nền tảng ban đầu của agent (máy chủ, bộ nhớ hội thoại, các tool đọc dữ liệu, cân đối hũ) được đội xây từ 08/2026 trong repo `personal-card-agent`, khởi đầu từ mẫu quickstart của Managed Deep Agents. Trong giai đoạn thi (từ 16/10/2026), đội chuyển sang repo này và phát triển thêm các phần chính: workflow mục tiêu, chống gian lận, tra cứu tin tức thị trường, cùng việc nối agent với pfm. Repo này hiện có hơn 100 commit.
 
 | Thành phần | Nguồn |
 | ---------- | ----- |
